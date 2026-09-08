@@ -11,9 +11,8 @@ class Participant(Base):
     __tablename__ = "participants"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    participant_code: Mapped[str] = mapped_column(String(32), unique=True, nullable=False)
+    participant_code: Mapped[str] = mapped_column(String(5), unique=True, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
     )
-
