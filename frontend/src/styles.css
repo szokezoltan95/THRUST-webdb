@@ -135,3 +135,34 @@ h1 { max-width: 880px; margin: 20px 0; font-size: clamp(42px, 7vw, 84px); line-h
   .modal-form label:last-of-type { grid-column: auto; }
   .workbench-header { display: grid; }
 }
+
+
+/* Compact administration density */
+.app-main .workspace { max-width: 1560px; padding-top: 24px; padding-bottom: 48px; }
+.panel { padding: 18px; }
+.admin-grid { gap: 12px; margin-top: 12px; }
+.stats { margin-top: 28px; }
+.empty { margin-top: 18px; padding: 18px; }
+.measurement-panel { margin-top: 12px; }
+.workbench { gap: 12px; }
+.workbench-list, .workbench-detail { min-height: 0; }
+.workbench-header h2 { margin-top: 4px; }
+.filters { grid-template-columns: minmax(180px, 1.5fr) repeat(4, minmax(110px, 1fr)); gap: 6px; margin: 14px 0 8px; }
+.filters input, .filters select { padding: 8px 9px; font-size: .82rem; }
+.selection-toolbar { min-height: 30px; font-size: .78rem; }
+.measurement-list { max-height: 620px; gap: 0; margin-top: 5px; }
+.measurement-item { grid-template-columns: 20px minmax(0, 1fr) auto; gap: 8px; min-height: 38px; padding: 7px 8px; border-radius: 3px; }
+.measurement-item .measurement-main { display: flex; align-items: baseline; gap: 10px; min-width: 0; overflow: hidden; white-space: nowrap; }
+.measurement-item .measurement-main strong { flex: 0 0 58px; color: #eef5ff; }
+.measurement-item .measurement-main span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #9db0c4; font-size: .8rem; }
+.measurement-item .measurement-status { display: block; color: #78dcae; white-space: nowrap; font-size: .74rem; }
+.detail-grid { margin: 18px 0; }
+.empty-list { padding: 36px 16px; }
+@media (max-width: 1050px) {
+  .filters { grid-template-columns: 1fr 1fr 1fr; }
+}
+@media (max-width: 650px) {
+  .filters { grid-template-columns: 1fr 1fr; }
+  .measurement-item .measurement-main { display: block; }
+  .measurement-item .measurement-main strong { display: block; }
+}
