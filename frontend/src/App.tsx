@@ -12,6 +12,7 @@ type Overview = { participant_count: number; measurement_count: number };
 type Participant = { id: string; participant_code: string; is_active: boolean; created_at: string };
 type TestDefinition = { id: string; test_code: string; name: string; version: string; status: string; analysis_profile: string; configuration: Record<string, unknown>; is_active: boolean };
 type ParticipantDetail = { participant: Participant; measurements: { id: string; test_type: string; status: string; started_at: string }[] };
+type AdminSection = "overview" | "participants" | "tests" | "measurements";
 
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(url, { credentials: "same-origin", ...options });
@@ -56,6 +57,7 @@ export function App() {
   const [measurementMessage, setMeasurementMessage] = useState("");
   const [loginOpen, setLoginOpen] = useState(false);
   const [error, setError] = useState("");
+  const [activeSection, setActiveSection] = useState<AdminSection>("overview");
 
   useEffect(() => {
     request<PublicMetrics>("/api/public/metrics").then(setMetrics).catch(() => setMetrics(null));
@@ -161,73 +163,39 @@ export function App() {
 
   return (
     <main>
-      <header>
-        <div className="brand"><span className="mark">T</span><div><strong>THRUST</strong><small>UAV Human Performance Research</small></div></div>
-        {user ? <button className="quiet" onClick={logout}>Odhlásiť {user.username}</button> : <button className="quiet" onClick={() => setLoginOpen(true)}>Administrácia</button>}
-      </header>
-
       {user ? (
-        <section className="workspace">
-          <div className="eyebrow">ADMINISTRÁCIA · {user.role.toUpperCase()}</div>
-          <h1>Prehľad meraní</h1>
-          <div className="stats">
-            <Metric label="Účastníci" value={overview?.participant_count ?? "—"} />
-            <Metric label="Merania" value={overview?.measurement_count ?? "—"} />
-            <Metric label="Čakajúce synchronizácie" value="0" />
-          </div>
-          <div className="empty"><span>01</span><div><h2>Databáza je pripravená</h2><p>Vytvor účastníkov a následne k nim priradíme jednotlivé merania.</p></div></div>
-          <div className="admin-grid">
-            <section className="panel">
-              <div className="eyebrow">NOVÝ ÚČASTNÍK</div>
-              <h2>Vytvoriť účastníka</h2>
-              <p className="muted">Na serveri sa ukladá iba pseudonymné ID.</p>
-              <form className="participant-form" onSubmit={createParticipant}>
-                <label>Jedinečný kód<input value={participantCode} onChange={(event) => setParticipantCode(event.target.value.toUpperCase())} maxLength={5} pattern="[A-Za-z0-9]{5}" placeholder="ABCDE" required /></label>
-                <div className="actions"><button type="button" className="quiet" onClick={generateParticipantCode}>Generovať ID</button><button type="submit" className="primary">Vytvoriť</button></div>
-              </form>
-              {participantMessage && <p className="notice">{participantMessage}</p>}
-            </section>
-            <section className="panel">
-              <div className="eyebrow">EVIDENCIA</div>
-              <h2>Účastníci</h2>
-              {participants.length === 0 ? <p className="muted">Zatiaľ nie sú evidovaní žiadni účastníci.</p> : <div className="participant-list">{participants.map((participant) => <button className="participant-row" key={participant.id} onClick={() => openParticipant(participant)}><strong>{participant.participant_code}</strong><span>{participant.is_active ? "Aktívny" : "Archivovaný"}</span></button>)}</div>}
-            </section>
-          </div>
-          <div className="admin-grid">
-            <section className="panel">
-              <div className="eyebrow">KATALÓG TESTOV</div>
-              <h2>Nový typ testu</h2>
-              <form className="participant-form" onSubmit={createTest}>
-                <label>Kód testu<input value={testForm.test_code} onChange={(event) => setTestForm({ ...testForm, test_code: event.target.value.toUpperCase() })} placeholder="SCOPE_HARD" required /></label>
-                <label>Názov<input value={testForm.name} onChange={(event) => setTestForm({ ...testForm, name: event.target.value })} placeholder="SCoPE HARD" required /></label>
-                <label>Verzia<input value={testForm.version} onChange={(event) => setTestForm({ ...testForm, version: event.target.value })} required /></label>
-                <label>Analytický profil<input value={testForm.analysis_profile} onChange={(event) => setTestForm({ ...testForm, analysis_profile: event.target.value })} required /></label>
-                <label>Konfigurácia testu (JSON)<textarea className="config-editor" value={testForm.configuration} onChange={(event) => setTestForm({ ...testForm, configuration: event.target.value })} rows={12} required /></label>
-                <button className="primary" type="submit">Pridať test</button>
-              </form>
-              {testMessage && <p className="notice">{testMessage}</p>}
-            </section>
-            <section className="panel">
-              <div className="eyebrow">DOSTUPNÉ TESTY</div>
-              <h2>Katalóg</h2>
-              {tests.length === 0 ? <p className="muted">Zatiaľ nie sú definované žiadne testy.</p> : <div className="participant-list">{tests.map((test) => <div className="participant-row" key={test.id}><strong>{test.name}</strong><span>{test.test_code} · v{test.version} · {test.status}</span></div>)}</div>}
+        <div className="app-shell">
+          <aside className="sidebar">
+            <div className="brand"><span className="mark">T</span><div><strong>THRUST</strong><small>UAV Human Performance Research</small></div></div>
+            <nav className="side-nav" aria-label="Administrácia">
+              <button className={activeSection === "overview" ? "nav-item active" : "nav-item"} onClick={() => setActiveSection("overview")}><span>⌂</span>Prehľad</button>
+              <button className={activeSection === "participants" ? "nav-item active" : "nav-item"} onClick={() => setActiveSection("participants")}><span>◎</span>Účastníci</button>
+              <button className={activeSection === "tests" ? "nav-item active" : "nav-item"} onClick={() => setActiveSection("tests")}><span>▣</span>Testy a konfigurácie</button>
+              <button className={activeSection === "measurements" ? "nav-item active" : "nav-item"} onClick={() => setActiveSection("measurements")}><span>↗</span>Merania a výsledky</button>
+            </nav>
+            <div className="sidebar-footer"><span>{user.username} · {user.role}</span><button className="quiet" onClick={logout}>Odhlásiť</button></div>
+          </aside>
+          <div className="app-main">
+            <header className="topbar"><div><div className="eyebrow">ADMINISTRÁCIA · {user.role.toUpperCase()}</div><h1>{activeSection === "overview" ? "Prehľad meraní" : activeSection === "participants" ? "Účastníci" : activeSection === "tests" ? "Testy a konfigurácie" : "Merania a výsledky"}</h1></div><span className="status-dot">Systém online</span></header>
+            <section className="workspace">
+              {activeSection === "overview" && <>
+                <div className="stats"><Metric label="Účastníci" value={overview?.participant_count ?? "—"} /><Metric label="Merania" value={overview?.measurement_count ?? "—"} /><Metric label="Čakajúce synchronizácie" value="0" /></div>
+                <div className="empty"><span>01</span><div><h2>Databáza je pripravená</h2><p>Vyber sekciu vľavo alebo začni vytvorením účastníka.</p></div></div>
+                <div className="admin-grid"><section className="panel quick-panel"><div className="eyebrow">RÝCHLA AKCIA</div><h2>Nový účastník</h2><p className="muted">Vytvor pseudonymné ID a priraď k nemu neskoršie merania.</p><button className="primary" onClick={() => setActiveSection("participants")}>Otvoriť administráciu účastníkov</button></section><section className="panel quick-panel"><div className="eyebrow">RÝCHLA AKCIA</div><h2>Nové meranie</h2><p className="muted">Eviduj meranie z lokálneho THRUST/SCoPE klienta.</p><button className="primary" onClick={() => setActiveSection("measurements")}>Otvoriť evidenciu meraní</button></section></div>
+              </>}
+              {activeSection === "participants" && <>
+                <div className="admin-grid"><section className="panel"><div className="eyebrow">NOVÝ ÚČASTNÍK</div><h2>Vytvoriť účastníka</h2><p className="muted">Na serveri sa ukladá iba pseudonymné ID.</p><form className="participant-form" onSubmit={createParticipant}><label>Jedinečný kód<input value={participantCode} onChange={(event) => setParticipantCode(event.target.value.toUpperCase())} maxLength={5} pattern="[A-Za-z0-9]{5}" placeholder="ABCDE" required /></label><div className="actions"><button type="button" className="quiet" onClick={generateParticipantCode}>Generovať ID</button><button type="submit" className="primary">Vytvoriť</button></div></form>{participantMessage && <p className="notice">{participantMessage}</p>}</section><section className="panel"><div className="eyebrow">EVIDENCIA</div><h2>Registrovaní účastníci</h2>{participants.length === 0 ? <p className="muted">Zatiaľ nie sú evidovaní žiadni účastníci.</p> : <div className="participant-list">{participants.map((participant) => <button className="participant-row" key={participant.id} onClick={() => openParticipant(participant)}><strong>{participant.participant_code}</strong><span>{participant.is_active ? "Aktívny" : "Archivovaný"}</span></button>)}</div>}</section></div>
+                {selectedParticipant && <section className="panel detail-panel"><div className="eyebrow">DETAIL ÚČASTNÍKA</div><h2>{selectedParticipant.participant.participant_code}</h2>{selectedParticipant.measurements.length === 0 ? <p className="muted">Účastník zatiaľ nemá evidované merania.</p> : <div className="participant-list">{selectedParticipant.measurements.map((measurement) => <div className="participant-row" key={measurement.id}><strong>{measurement.test_type}</strong><span>{new Date(measurement.started_at).toLocaleString("sk-SK")}</span></div>)}</div>}</section>}
+              </>}
+              {activeSection === "tests" && <div className="admin-grid"><section className="panel"><div className="eyebrow">KATALÓG TESTOV</div><h2>Nový typ testu</h2><form className="participant-form" onSubmit={createTest}><label>Kód testu<input value={testForm.test_code} onChange={(event) => setTestForm({ ...testForm, test_code: event.target.value.toUpperCase() })} placeholder="SCOPE_HARD" required /></label><label>Názov<input value={testForm.name} onChange={(event) => setTestForm({ ...testForm, name: event.target.value })} placeholder="SCoPE HARD" required /></label><label>Verzia<input value={testForm.version} onChange={(event) => setTestForm({ ...testForm, version: event.target.value })} required /></label><label>Analytický profil<input value={testForm.analysis_profile} onChange={(event) => setTestForm({ ...testForm, analysis_profile: event.target.value })} required /></label><label>Konfigurácia testu (JSON)<textarea className="config-editor" value={testForm.configuration} onChange={(event) => setTestForm({ ...testForm, configuration: event.target.value })} rows={12} required /></label><button className="primary" type="submit">Pridať test</button></form>{testMessage && <p className="notice">{testMessage}</p>}</section><section className="panel"><div className="eyebrow">DOSTUPNÉ TESTY</div><h2>Katalóg</h2>{tests.length === 0 ? <p className="muted">Zatiaľ nie sú definované žiadne testy.</p> : <div className="participant-list">{tests.map((test) => <div className="participant-row" key={test.id}><strong>{test.name}</strong><span>{test.test_code} · v{test.version} · {test.status}</span></div>)}</div>}</section></div>}
+              {activeSection === "measurements" && <><section className="panel measurement-panel"><div className="eyebrow">EVIDENCIA MERANIA</div><h2>Nový záznam merania</h2><form className="measurement-form" onSubmit={createMeasurement}><label>Účastník<select value={measurementForm.participant_id} onChange={(event) => setMeasurementForm({ ...measurementForm, participant_id: event.target.value })} required><option value="">Vyber účastníka</option>{participants.map((participant) => <option key={participant.id} value={participant.id}>{participant.participant_code}</option>)}</select></label><label>Test<select value={measurementForm.test_definition_id} onChange={(event) => setMeasurementForm({ ...measurementForm, test_definition_id: event.target.value })} required><option value="">Vyber test</option>{tests.filter((test) => test.is_active).map((test) => <option key={test.id} value={test.id}>{test.name} · v{test.version}</option>)}</select></label><label>Dátum a čas<input type="datetime-local" value={measurementForm.started_at} onChange={(event) => setMeasurementForm({ ...measurementForm, started_at: event.target.value })} required /></label><button className="primary" type="submit">Evidovať meranie</button></form>{measurementMessage && <p className="notice">{measurementMessage}</p>}</section><section className="panel detail-panel"><div className="eyebrow">VÝSLEDKY</div><h2>Výsledky budú dostupné po synchronizácii</h2><p className="muted">Po pripojení lokálneho THRUST klienta sa tu zobrazia agregované údaje a odkazy na históriu účastníkov.</p></section></>}
             </section>
           </div>
-          <section className="panel measurement-panel">
-            <div className="eyebrow">EVIDENCIA MERANIA</div>
-            <h2>Nový záznam merania</h2>
-            <form className="measurement-form" onSubmit={createMeasurement}>
-              <label>Účastník<select value={measurementForm.participant_id} onChange={(event) => setMeasurementForm({ ...measurementForm, participant_id: event.target.value })} required><option value="">Vyber účastníka</option>{participants.map((participant) => <option key={participant.id} value={participant.id}>{participant.participant_code}</option>)}</select></label>
-              <label>Test<select value={measurementForm.test_definition_id} onChange={(event) => setMeasurementForm({ ...measurementForm, test_definition_id: event.target.value })} required><option value="">Vyber test</option>{tests.filter((test) => test.is_active).map((test) => <option key={test.id} value={test.id}>{test.name} · v{test.version}</option>)}</select></label>
-              <label>Dátum a čas<input type="datetime-local" value={measurementForm.started_at} onChange={(event) => setMeasurementForm({ ...measurementForm, started_at: event.target.value })} required /></label>
-              <button className="primary" type="submit">Evidovať meranie</button>
-            </form>
-            {measurementMessage && <p className="notice">{measurementMessage}</p>}
-          </section>
-          {selectedParticipant && <section className="panel detail-panel"><div className="eyebrow">DETAIL ÚČASTNÍKA</div><h2>{selectedParticipant.participant.participant_code}</h2>{selectedParticipant.measurements.length === 0 ? <p className="muted">Účastník zatiaľ nemá evidované merania.</p> : <div className="participant-list">{selectedParticipant.measurements.map((measurement) => <div className="participant-row" key={measurement.id}><strong>{measurement.test_type}</strong><span>{new Date(measurement.started_at).toLocaleString("sk-SK")}</span></div>)}</div>}</section>}
-        </section>
+        </div>
       ) : (
-        <section className="public">
+        <>
+          <header><div className="brand"><span className="mark">T</span><div><strong>THRUST</strong><small>UAV Human Performance Research</small></div></div><button className="quiet" onClick={() => setLoginOpen(true)}>Administrácia</button></header>
+          <section className="public">
           <div className="eyebrow">TESTING HUB FOR RESEARCH IN UAV SIMULATION AND TRAINING</div>
           <h1>Merateľný pohľad na výkon pilotov UAV.</h1>
           <p className="lead">THRUST spája štandardizované experimenty, lokálne analytické modely a anonymizované skupinové výsledky.</p>
@@ -237,7 +205,8 @@ export function App() {
             <Metric label="Aktívne testy" value="SCoPE" />
           </div>
           {metrics && !metrics.publishable && <p className="privacy">Verejné štatistiky sa zobrazia po dosiahnutí minimálnej skupiny {metrics.minimum_group_size} účastníkov.</p>}
-        </section>
+          </section>
+        </>
       )}
 
       {loginOpen && <div className="backdrop" onMouseDown={() => setLoginOpen(false)}><form className="login" onSubmit={login} onMouseDown={(e) => e.stopPropagation()}><div className="eyebrow">CHRÁNENÝ PRÍSTUP</div><h2>Administrácia</h2><label>Používateľské meno<input name="username" autoComplete="username" required autoFocus /></label><label>Heslo<input name="password" type="password" autoComplete="current-password" required /></label>{error && <p className="error">{error}</p>}<div className="actions"><button type="button" className="quiet" onClick={() => setLoginOpen(false)}>Zrušiť</button><button type="submit" className="primary">Prihlásiť</button></div></form></div>}
