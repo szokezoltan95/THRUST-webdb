@@ -219,7 +219,9 @@ async def overview(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     participants = await db.scalar(select(func.count()).select_from(Participant)) or 0
-    measurements = await db.scalar(select(func.count()).select_from(Measurement)) or 0
+    measurements = await db.scalar(
+        select(func.count()).select_from(Measurement).where(Measurement.raw_storage_path.is_not(None))
+    ) or 0
     return {
         "username": auth.user.username,
         "role": auth.user.role,
