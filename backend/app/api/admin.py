@@ -7,8 +7,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import AuthContext, require_admin
 from app.db.session import get_db
-from app.models import Measurement, Participant
+from app.models import Measurement, Participant, TestDefinition
 from app.schemas.participant import ParticipantCreate, ParticipantResponse
+from app.schemas.test_definition import TestDefinitionCreate, TestDefinitionResponse
 
 router = APIRouter(prefix="/admin", tags=["administration"])
 
@@ -55,6 +56,63 @@ async def generate_code(
         if existing is None:
             return {"participant_code": code}
     raise HTTPException(status_code=503, detail="Nové ID sa nepodarilo vygenerovať.")
+
+
+@router.get("/tests", response_model=list[TestDefinitionResponse])
+async def list_tests(
+    auth: AuthContext = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+) -> list[TestDefinition]:
+    result = await db.scalars(select(TestDefinition).order_by(TestDefinition.test_code, TestDefinition.version))
+    return list(result)
+
+
+@router.post("/tests", response_model=TestDefinitionResponse, status_code=status.HTTP_201_CREATED)
+async def create_test(
+    payload: TestDefinitionCreate,
+    auth: AuthContext = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+) -> TestDefinition:
+    existing = await db.scalar(
+        select(TestDefinition).where(
+            TestDefinition.test_code == payload.test_code,
+            TestDefinition.version == payload.version,
+        )
+    )
+    if existing:
+        raise HTTPException(status_code=409, detail="Táto verzia testu už existuje.")
+    test = TestDefinition(**payload.model_dump())
+    db.add(test)
+    await db.commit()
+    await db.refresh(test)
+    return test
+
+
+@router.get("/participants/{participant_id}")
+async def participant_detail(
+    participant_id: str,
+    auth: AuthContext = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    participant = await db.get(Participant, participant_id)
+    if participant is None:
+        raise HTTPException(status_code=404, detail="Účastník neexistuje.")
+    measurements = await db.scalars(
+        select(Measurement).where(Measurement.participant_id == participant_id).order_by(Measurement.started_at.desc())
+    )
+    return {
+        "participant": ParticipantResponse.model_validate(participant).model_dump(mode="json"),
+        "measurements": [
+            {
+                "id": item.id,
+                "test_type": item.test_type,
+                "status": item.status,
+                "started_at": item.started_at,
+                "created_at": item.created_at,
+            }
+            for item in measurements
+        ],
+    }
 
 
 @router.get("/overview")
