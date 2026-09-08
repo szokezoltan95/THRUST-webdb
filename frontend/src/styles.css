@@ -60,3 +60,31 @@ h1 { max-width: 880px; margin: 20px 0; font-size: clamp(42px, 7vw, 84px); line-h
 .actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 28px; }
 .error { color: #ff8897; }
 @media (max-width: 700px) { header { padding: 0 20px; } .brand small { display: none; } .public,.workspace { padding: 70px 20px; } .stats { grid-template-columns: 1fr; margin-top: 42px; } .metric { min-height: 110px; } h1 { font-size: 48px; } }
+:root { --line: #1d334b; }
+.app-shell { min-height: 100vh; display: flex; }
+.sidebar { width: 270px; flex: 0 0 270px; display: flex; flex-direction: column; padding: 28px 18px 20px; border-right: 1px solid var(--line); background: rgba(5,14,24,.9); }
+.sidebar .brand { padding: 0 10px 36px; }
+.side-nav { display: grid; gap: 6px; }
+.nav-item { display: flex; align-items: center; gap: 12px; width: 100%; padding: 13px 12px; border: 1px solid transparent; border-radius: 5px; color: #9db0c4; background: transparent; text-align: left; }
+.nav-item span { width: 20px; color: #6e8ba8; font-size: 18px; text-align: center; }
+.nav-item:hover, .nav-item.active { border-color: #234761; color: #eef5ff; background: #10253a; }
+.nav-item.active span { color: #45d5ff; }
+.sidebar-footer { display: grid; gap: 12px; margin-top: auto; padding: 18px 10px 0; border-top: 1px solid var(--line); color: #7890a8; font-size: 12px; }
+.sidebar-footer .quiet { justify-self: start; padding: 7px 11px; }
+.app-main { min-width: 0; flex: 1; }
+.topbar { min-height: 112px; height: auto; padding: 26px clamp(24px, 5vw, 70px); align-items: center; border-bottom: 1px solid var(--line); background: rgba(7,16,28,.76); }
+.topbar h1 { margin: 8px 0 0; font-size: clamp(30px, 4vw, 48px); }
+.status-dot { color: #7ee2b0; font-size: 12px; white-space: nowrap; }
+.app-main .workspace { max-width: 1400px; padding: 42px clamp(24px, 5vw, 70px) 80px; }
+.quick-panel { display: grid; align-content: start; gap: 10px; }
+.quick-panel h2, .quick-panel p { margin: 0; }
+.quick-panel .primary { justify-self: start; margin-top: 10px; }
+@media (max-width: 800px) {
+  .app-shell { display: block; }
+  .sidebar { width: 100%; padding: 16px 18px; border-right: 0; border-bottom: 1px solid var(--line); }
+  .sidebar .brand { padding: 0 0 16px; }
+  .side-nav { grid-template-columns: repeat(2, 1fr); }
+  .sidebar-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 16px; padding: 12px 0 0; }
+  .topbar { padding: 24px 20px; }
+  .app-main .workspace { padding: 28px 20px 60px; }
+}
