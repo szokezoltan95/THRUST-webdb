@@ -166,3 +166,17 @@ h1 { max-width: 880px; margin: 20px 0; font-size: clamp(42px, 7vw, 84px); line-h
   .measurement-item .measurement-main { display: block; }
   .measurement-item .measurement-main strong { display: block; }
 }
+
+
+.chart-toolbar { display: flex; justify-content: flex-end; margin-top: 8px; }
+.chart-toolbar label { display: flex; align-items: center; gap: 8px; color: #8ea5bc; font-size: .8rem; }
+.chart-toolbar select { background: #07121f; border: 1px solid var(--line); color: #eef5ff; padding: 6px 8px; }
+.response-chart { margin-top: 10px; border: 1px solid var(--line); background: #07121f; padding: 8px; }
+.response-chart svg { display: block; width: 100%; height: auto; }
+.chart-axis { stroke: #38536d; stroke-width: 1; }
+.chart-zero { stroke: #6b7d8d; stroke-width: 1; stroke-dasharray: 4 4; }
+.chart-mean { fill: none; stroke: #ff6878; stroke-width: 2; }
+.chart-median { fill: none; stroke: #45d5ff; stroke-width: 2; stroke-dasharray: 5 3; }
+.chart-label { fill: #ff6878; font-size: 10px; }
+.chart-label.median-label { fill: #45d5ff; }
+.chart-empty { margin-top: 10px; padding: 50px 20px; text-align: center; border: 1px dashed var(--line); color: #8ea5bc; font-size: .85rem; }
