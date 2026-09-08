@@ -273,8 +273,6 @@ export function App() {
               </>}
 
             </section>
-
-            </section>
           </div>
         </div>
       ) : (
