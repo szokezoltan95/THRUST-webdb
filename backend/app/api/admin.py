@@ -213,6 +213,24 @@ async def measurement_detail(
     return measurement
 
 
+@router.delete("/measurements/{measurement_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_measurement(
+    measurement_id: str,
+    auth: AuthContext = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+) -> None:
+    measurement = await db.get(Measurement, measurement_id)
+    if measurement is None:
+        raise HTTPException(status_code=404, detail="Meranie neexistuje.")
+    if measurement.raw_storage_path:
+        try:
+            Path(measurement.raw_storage_path).unlink(missing_ok=True)
+        except OSError as exc:
+            raise HTTPException(status_code=500, detail="Raw súbor sa nepodarilo odstrániť.") from exc
+    await db.delete(measurement)
+    await db.commit()
+
+
 @router.get("/overview")
 async def overview(
     auth: AuthContext = Depends(require_admin),
