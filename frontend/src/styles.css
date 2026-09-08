@@ -88,3 +88,13 @@ h1 { max-width: 880px; margin: 20px 0; font-size: clamp(42px, 7vw, 84px); line-h
   .topbar { padding: 24px 20px; }
   .app-main .workspace { padding: 28px 20px 60px; }
 }
+
+
+.measurement-record { border-bottom: 1px solid var(--line); }
+.measurement-record summary { list-style: none; cursor: pointer; }
+.measurement-record summary::-webkit-details-marker { display: none; }
+.measurement-record summary > div { display: grid; gap: 4px; }
+.measurement-record summary small { color: #8ea5bc; font-size: .78rem; }
+.measurement-detail { padding: 8px 0 14px 0; color: #9db0c4; font-size: .88rem; }
+.measurement-detail p { margin: 5px 0; }
+.measurement-detail code { color: #45d5ff; font-size: .78rem; }
