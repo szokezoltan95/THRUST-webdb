@@ -1,0 +1,30 @@
+from datetime import datetime
+
+from pydantic import BaseModel, Field, field_validator
+
+
+class TestDefinitionCreate(BaseModel):
+    test_code: str = Field(min_length=1, max_length=50)
+    name: str = Field(min_length=1, max_length=120)
+    version: str = Field(default="1.0", min_length=1, max_length=30)
+
+    @field_validator("test_code")
+    @classmethod
+    def normalize_code(cls, value: str) -> str:
+        return value.strip().upper().replace(" ", "_")
+
+    @field_validator("name", "version")
+    @classmethod
+    def trim_text(cls, value: str) -> str:
+        return value.strip()
+
+
+class TestDefinitionResponse(BaseModel):
+    id: str
+    test_code: str
+    name: str
+    version: str
+    is_active: bool
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
