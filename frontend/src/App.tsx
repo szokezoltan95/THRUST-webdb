@@ -52,6 +52,8 @@ export function App() {
   const [testForm, setTestForm] = useState({ test_code: "", name: "", version: "1.0", analysis_profile: "SCOPE_STEP_RESPONSE_V1", configuration: defaultTestConfiguration });
   const [testMessage, setTestMessage] = useState("");
   const [selectedParticipant, setSelectedParticipant] = useState<ParticipantDetail | null>(null);
+  const [measurementForm, setMeasurementForm] = useState({ participant_id: "", test_definition_id: "", started_at: "" });
+  const [measurementMessage, setMeasurementMessage] = useState("");
   const [loginOpen, setLoginOpen] = useState(false);
   const [error, setError] = useState("");
 
@@ -95,6 +97,24 @@ export function App() {
   async function openParticipant(participant: Participant) {
     const detail = await request<ParticipantDetail>(`/api/admin/participants/${participant.id}`);
     setSelectedParticipant(detail);
+  }
+
+  async function createMeasurement(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setMeasurementMessage("");
+    try {
+      const measurement = await request<{ participant_id: string }>("/api/admin/measurements", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...measurementForm, started_at: new Date(measurementForm.started_at).toISOString() }),
+      });
+      setMeasurementMessage("Záznam merania bol vytvorený.");
+      setOverview((current) => current ? { ...current, measurement_count: current.measurement_count + 1 } : current);
+      const participant = participants.find((item) => item.id === measurement.participant_id);
+      if (participant) openParticipant(participant);
+    } catch (reason) {
+      setMeasurementMessage(reason instanceof Error ? reason.message : "Meranie sa nepodarilo vytvoriť.");
+    }
   }
 
   async function createParticipant(event: FormEvent<HTMLFormElement>) {
@@ -193,6 +213,17 @@ export function App() {
               {tests.length === 0 ? <p className="muted">Zatiaľ nie sú definované žiadne testy.</p> : <div className="participant-list">{tests.map((test) => <div className="participant-row" key={test.id}><strong>{test.name}</strong><span>{test.test_code} · v{test.version} · {test.status}</span></div>)}</div>}
             </section>
           </div>
+          <section className="panel measurement-panel">
+            <div className="eyebrow">EVIDENCIA MERANIA</div>
+            <h2>Nový záznam merania</h2>
+            <form className="measurement-form" onSubmit={createMeasurement}>
+              <label>Účastník<select value={measurementForm.participant_id} onChange={(event) => setMeasurementForm({ ...measurementForm, participant_id: event.target.value })} required><option value="">Vyber účastníka</option>{participants.map((participant) => <option key={participant.id} value={participant.id}>{participant.participant_code}</option>)}</select></label>
+              <label>Test<select value={measurementForm.test_definition_id} onChange={(event) => setMeasurementForm({ ...measurementForm, test_definition_id: event.target.value })} required><option value="">Vyber test</option>{tests.filter((test) => test.is_active).map((test) => <option key={test.id} value={test.id}>{test.name} · v{test.version}</option>)}</select></label>
+              <label>Dátum a čas<input type="datetime-local" value={measurementForm.started_at} onChange={(event) => setMeasurementForm({ ...measurementForm, started_at: event.target.value })} required /></label>
+              <button className="primary" type="submit">Evidovať meranie</button>
+            </form>
+            {measurementMessage && <p className="notice">{measurementMessage}</p>}
+          </section>
           {selectedParticipant && <section className="panel detail-panel"><div className="eyebrow">DETAIL ÚČASTNÍKA</div><h2>{selectedParticipant.participant.participant_code}</h2>{selectedParticipant.measurements.length === 0 ? <p className="muted">Účastník zatiaľ nemá evidované merania.</p> : <div className="participant-list">{selectedParticipant.measurements.map((measurement) => <div className="participant-row" key={measurement.id}><strong>{measurement.test_type}</strong><span>{new Date(measurement.started_at).toLocaleString("sk-SK")}</span></div>)}</div>}</section>}
         </section>
       ) : (
