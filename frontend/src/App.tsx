@@ -58,6 +58,7 @@ export function App() {
   const [uploadMessage, setUploadMessage] = useState("");
   const [selectedMeasurementId, setSelectedMeasurementId] = useState<string | null>(null);
   const [selectedMeasurementIds, setSelectedMeasurementIds] = useState<string[]>([]);
+  const [chartChannel, setChartChannel] = useState("AILE");
   const [measurementSearch, setMeasurementSearch] = useState("");
   const [measurementParticipantFilter, setMeasurementParticipantFilter] = useState("");
   const [measurementTestFilter, setMeasurementTestFilter] = useState("");
@@ -270,7 +271,7 @@ export function App() {
                   </section>
                   <section className="panel workbench-detail">
                     <div className="eyebrow">PRACOVNÝ PANEL</div>
-                    {(() => { const selected = measurements.find((item) => item.id === selectedMeasurementId); return selected ? <><h2>{selected.test_type}</h2><p className="muted">{selected.source_file_name} · {new Date(selected.started_at).toLocaleString("sk-SK")}</p><div className="detail-grid"><div><span>Vzorky</span><strong>{String(selected.analysis_data?.sample_count ?? "—")}</strong></div><div><span>Trvanie</span><strong>{selected.analysis_data?.duration_s ? String(Number(selected.analysis_data.duration_s).toFixed(2)) + " s" : "—"}</strong></div><div><span>Raw dáta</span><strong>Archivované</strong></div><div><span>Normalizácia</span><strong>{selected.analysis_data?.normalized_step_response ? "Dostupná" : "Nie je dostupná"}</strong></div></div><p className="muted">Grafy a porovnanie vybraných meraní doplníme do tohto panelu.</p></> : <div className="empty-list"><h2>Vyber meranie</h2><p className="muted">V ľavom paneli vyber meranie, ktoré chceš preskúmať.</p></div> })()}
+                    {(() => { const selected = measurements.find((item) => item.id === selectedMeasurementId); return selected ? <><h2>{selected.test_type}</h2><p className="muted">{selected.source_file_name} · {new Date(selected.started_at).toLocaleString("sk-SK")}</p><div className="detail-grid"><div><span>Vzorky</span><strong>{String(selected.analysis_data?.sample_count ?? "—")}</strong></div><div><span>Trvanie</span><strong>{selected.analysis_data?.duration_s ? String(Number(selected.analysis_data.duration_s).toFixed(2)) + " s" : "—"}</strong></div><div><span>Raw dáta</span><strong>Archivované</strong></div><div><span>Normalizácia</span><strong>{selected.analysis_data?.normalized_step_response ? "Dostupná" : "Nie je dostupná"}</strong></div></div><div className="chart-toolbar"><label>Kanál<select value={chartChannel} onChange={(event) => setChartChannel(event.target.value)}><option>AILE</option><option>ELEV</option><option>THRO</option><option>RUDD</option></select></label></div><ResponseChart data={selected.analysis_data?.normalized_step_response} channel={chartChannel} /></> : <div className="empty-list"><h2>Vyber meranie</h2><p className="muted">V ľavom paneli vyber meranie, ktoré chceš preskúmať.</p></div> })()}
                   </section>
                 </div>
                 {manualUploadOpen && <div className="backdrop" onMouseDown={() => setManualUploadOpen(false)}><section className="login upload-dialog" onMouseDown={(event) => event.stopPropagation()}><div className="eyebrow">NÚDZOVÁ SYNCHRONIZÁCIA</div><h2>Manuálne nahrať dátový súbor</h2><p className="muted">Použi iba vtedy, ak upload počas sessionu zlyhal.</p><form className="measurement-form modal-form" onSubmit={async (event) => { await uploadMeasurement(event); setManualUploadOpen(false); }}><label>Účastník<select name="participant_id" required><option value="">Vyber účastníka</option>{participants.map((participant) => <option key={participant.id} value={participant.id}>{participant.participant_code}</option>)}</select></label><label>Test<select name="test_definition_id" required><option value="">Vyber test</option>{tests.filter((test) => test.is_active).map((test) => <option key={test.id} value={test.id}>{test.name} · v{test.version}</option>)}</select></label><label>Dátum a čas<input name="started_at" type="datetime-local" required /></label><label>Raw SCoPE log<input name="raw_file" type="file" accept=".txt,.tsv,text/plain" required /></label><div className="actions"><button type="button" className="quiet" onClick={() => setManualUploadOpen(false)}>Zrušiť</button><button className="primary" type="submit">Nahrať dáta</button></div></form>{uploadMessage && <p className="notice">{uploadMessage}</p>}</section></div>}
@@ -299,6 +300,28 @@ export function App() {
       {loginOpen && <div className="backdrop" onMouseDown={() => setLoginOpen(false)}><form className="login" onSubmit={login} onMouseDown={(e) => e.stopPropagation()}><div className="eyebrow">CHRÁNENÝ PRÍSTUP</div><h2>Administrácia</h2><label>Používateľské meno<input name="username" autoComplete="username" required autoFocus /></label><label>Heslo<input name="password" type="password" autoComplete="current-password" required /></label>{error && <p className="error">{error}</p>}<div className="actions"><button type="button" className="quiet" onClick={() => setLoginOpen(false)}>Zrušiť</button><button type="submit" className="primary">Prihlásiť</button></div></form></div>}
     </main>
   );
+}
+
+type NormalizedChannel = { mean?: number[]; median?: number[] };
+type NormalizedResponse = { time_s?: number[]; channels?: Record<string, NormalizedChannel> };
+
+function ResponseChart({ data, channel }: { data: unknown; channel: string }) {
+  const response = data as NormalizedResponse | null;
+  const selected = response?.channels?.[channel];
+  const time = response?.time_s ?? [];
+  const mean = selected?.mean ?? [];
+  const median = selected?.median ?? [];
+  if (!selected || !mean.length || !median.length) {
+    return <div className="chart-empty">Normalizovaná odozva nie je dostupná.</div>;
+  }
+  const count = Math.min(time.length, mean.length, median.length);
+  const values = [...mean.slice(0, count), ...median.slice(0, count)];
+  const min = Math.min(-0.2, ...values);
+  const max = Math.max(1.2, ...values);
+  const x = (index: number) => 42 + (index / Math.max(1, count - 1)) * 458;
+  const y = (value: number) => 190 - ((value - min) / Math.max(0.001, max - min)) * 160;
+  const points = (values: number[]) => values.slice(0, count).map((value, index) => `${x(index).toFixed(1)},${y(value).toFixed(1)}`).join(" ");
+  return <div className="response-chart"><svg viewBox="0 0 520 220" role="img" aria-label={`Normalizovaná odozva kanála ${channel}`}><line x1="42" y1="190" x2="500" y2="190" className="chart-axis" /><line x1="42" y1="30" x2="42" y2="190" className="chart-axis" /><line x1="42" y1={y(0)} x2="500" y2={y(0)} className="chart-zero" /><polyline points={points(mean)} className="chart-mean" /><polyline points={points(median)} className="chart-median" /><text x="46" y="18" className="chart-label">A priemer</text><text x="125" y="18" className="chart-label median-label">B medián</text><text x="452" y="212" className="chart-label">{time[count - 1]?.toFixed(1)} s</text></svg></div>;
 }
 
 function Metric({ label, value }: { label: string; value: string | number }) {
