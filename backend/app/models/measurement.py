@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from sqlalchemy import JSON, DateTime, ForeignKey, String
+from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -20,6 +20,10 @@ class Measurement(Base):
     source_file_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     raw_data: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     analysis_data: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    raw_storage_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    raw_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    raw_size_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    raw_content_type: Mapped[str | None] = mapped_column(String(100), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
     )
