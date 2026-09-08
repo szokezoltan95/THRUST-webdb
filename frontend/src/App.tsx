@@ -56,6 +56,14 @@ export function App() {
   const [selectedParticipant, setSelectedParticipant] = useState<ParticipantDetail | null>(null);
   const [measurements, setMeasurements] = useState<Measurement[]>([]);
   const [uploadMessage, setUploadMessage] = useState("");
+  const [selectedMeasurementId, setSelectedMeasurementId] = useState<string | null>(null);
+  const [selectedMeasurementIds, setSelectedMeasurementIds] = useState<string[]>([]);
+  const [measurementSearch, setMeasurementSearch] = useState("");
+  const [measurementParticipantFilter, setMeasurementParticipantFilter] = useState("");
+  const [measurementTestFilter, setMeasurementTestFilter] = useState("");
+  const [measurementDateFrom, setMeasurementDateFrom] = useState("");
+  const [measurementDateTo, setMeasurementDateTo] = useState("");
+  const [manualUploadOpen, setManualUploadOpen] = useState(false);
   const [loginOpen, setLoginOpen] = useState(false);
   const [error, setError] = useState("");
   const [activeSection, setActiveSection] = useState<AdminSection>("overview");
@@ -138,6 +146,40 @@ export function App() {
     }
   }
 
+  function filteredMeasurements() {
+    const query = measurementSearch.trim().toLowerCase();
+    return measurements.filter((measurement) => {
+      if (!measurement.raw_sha256 || !measurement.raw_size_bytes) return false;
+      if (measurementParticipantFilter && measurement.participant_id !== measurementParticipantFilter) return false;
+      if (measurementTestFilter && measurement.test_definition_id !== measurementTestFilter) return false;
+      const date = new Date(measurement.started_at);
+      if (measurementDateFrom && date < new Date(measurementDateFrom)) return false;
+      if (measurementDateTo && date > new Date(measurementDateTo + "T23:59:59")) return false;
+      if (query && ![measurement.test_type, measurement.source_file_name ?? "", measurement.id].join(" ").toLowerCase().includes(query)) return false;
+      return true;
+    });
+  }
+
+  function toggleMeasurementSelection(id: string) {
+    setSelectedMeasurementIds((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
+  }
+
+  async function deleteSelectedMeasurements() {
+    if (!selectedMeasurementIds.length) return;
+    if (!window.confirm(`Naozaj chceš odstrániť ${selectedMeasurementIds.length} vybraných meraní? Odstránia sa aj archivované raw súbory.`)) return;
+    try {
+      for (const id of selectedMeasurementIds) {
+        await request<void>(`/api/admin/measurements/${id}`, { method: "DELETE", headers: { "X-CSRF-Token": user?.csrf_token ?? "" } });
+      }
+      setMeasurements((current) => current.filter((measurement) => !selectedMeasurementIds.includes(measurement.id)));
+      if (selectedMeasurementId && selectedMeasurementIds.includes(selectedMeasurementId)) setSelectedMeasurementId(null);
+      setSelectedMeasurementIds([]);
+      setOverview((current) => current ? { ...current, measurement_count: Math.max(0, current.measurement_count - selectedMeasurementIds.length) } : current);
+    } catch (reason) {
+      setUploadMessage(reason instanceof Error ? reason.message : "Merania sa nepodarilo odstrániť.");
+    }
+  }
+
   async function createParticipant(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setParticipantMessage("");
@@ -208,11 +250,29 @@ export function App() {
               </>}
               {activeSection === "tests" && <div className="admin-grid"><section className="panel"><div className="eyebrow">KATALÓG TESTOV</div><h2>Nový typ testu</h2><form className="participant-form" onSubmit={createTest}><label>Kód testu<input value={testForm.test_code} onChange={(event) => setTestForm({ ...testForm, test_code: event.target.value.toUpperCase() })} placeholder="SCOPE_HARD" required /></label><label>Názov<input value={testForm.name} onChange={(event) => setTestForm({ ...testForm, name: event.target.value })} placeholder="SCoPE HARD" required /></label><label>Verzia<input value={testForm.version} onChange={(event) => setTestForm({ ...testForm, version: event.target.value })} required /></label><label>Analytický profil<input value={testForm.analysis_profile} onChange={(event) => setTestForm({ ...testForm, analysis_profile: event.target.value })} required /></label><label>Konfigurácia testu (JSON)<textarea className="config-editor" value={testForm.configuration} onChange={(event) => setTestForm({ ...testForm, configuration: event.target.value })} rows={12} required /></label><button className="primary" type="submit">Pridať test</button></form>{testMessage && <p className="notice">{testMessage}</p>}</section><section className="panel"><div className="eyebrow">DOSTUPNÉ TESTY</div><h2>Katalóg</h2>{tests.length === 0 ? <p className="muted">Zatiaľ nie sú definované žiadne testy.</p> : <div className="participant-list">{tests.map((test) => <div className="participant-row" key={test.id}><strong>{test.name}</strong><span>{test.test_code} · v{test.version} · {test.status}</span></div>)}</div>}</section></div>}
               {activeSection === "measurements" && <>
-                <section className="panel measurement-panel">
-                  <div className="eyebrow">SYNCHRONIZOVANÉ MERANIA</div>
-                  <h2>Výsledky z THRUST</h2>
-                  {measurements.filter((measurement) => Boolean(measurement.raw_sha256 && measurement.raw_size_bytes)).length === 0 ? <p className="muted">Zatiaľ neboli synchronizované žiadne merania.</p> : <div className="participant-list">{measurements.filter((measurement) => Boolean(measurement.raw_sha256 && measurement.raw_size_bytes)).map((measurement) => <details className="measurement-record" key={measurement.id}><summary className="participant-row"><div><strong>{measurement.test_type}</strong><small>{measurement.source_file_name ?? "bez názvu súboru"} · {measurement.raw_size_bytes ? Math.round(measurement.raw_size_bytes / 1024) + " kB" : "bez raw súboru"}</small></div><span>{new Date(measurement.started_at).toLocaleString("sk-SK")} · {measurement.raw_sha256 ? "Archivované" : "Bez raw dát"}</span></summary><div className="measurement-detail"><p>Meranie: <code>{measurement.id}</code></p><p>Vzorka: {String(measurement.analysis_data?.sample_count ?? "—")} · Trvanie: {measurement.analysis_data?.duration_s ? String(Number(measurement.analysis_data.duration_s).toFixed(2)) + " s" : "—"}</p><p>Normalizovaná odozva: {measurement.analysis_data?.normalized_step_response ? "dostupná" : "nie je dostupná"}</p></div></details>)}</div>}
-                </section>
+                <div className="workbench">
+                  <section className="panel workbench-list">
+                    <div className="workbench-header"><div><div className="eyebrow">ARCHÍV MERANÍ</div><h2>Synchronizované merania</h2></div><button className="primary compact" onClick={() => setManualUploadOpen(true)}>Núdzový upload</button></div>
+                    <div className="filters">
+                      <input placeholder="Hľadať ID, test alebo súbor…" value={measurementSearch} onChange={(event) => setMeasurementSearch(event.target.value)} />
+                      <select value={measurementParticipantFilter} onChange={(event) => setMeasurementParticipantFilter(event.target.value)}><option value="">Všetci účastníci</option>{participants.map((participant) => <option key={participant.id} value={participant.id}>{participant.participant_code}</option>)}</select>
+                      <select value={measurementTestFilter} onChange={(event) => setMeasurementTestFilter(event.target.value)}><option value="">Všetky testy</option>{tests.map((test) => <option key={test.id} value={test.id}>{test.name} · v{test.version}</option>)}</select>
+                      <input type="date" value={measurementDateFrom} onChange={(event) => setMeasurementDateFrom(event.target.value)} aria-label="Od dátumu" />
+                      <input type="date" value={measurementDateTo} onChange={(event) => setMeasurementDateTo(event.target.value)} aria-label="Do dátumu" />
+                    </div>
+                    <div className="selection-toolbar"><label><input type="checkbox" checked={filteredMeasurements().length > 0 && filteredMeasurements().every((item) => selectedMeasurementIds.includes(item.id))} onChange={() => setSelectedMeasurementIds(filteredMeasurements().every((item) => selectedMeasurementIds.includes(item.id)) ? [] : filteredMeasurements().map((item) => item.id))} /> Vybrať všetky</label><button className="quiet compact danger" disabled={!selectedMeasurementIds.length} onClick={deleteSelectedMeasurements}>Odstrániť vybrané</button></div>
+                    <div className="measurement-list">{filteredMeasurements().map((measurement) => <button className={selectedMeasurementId === measurement.id ? "measurement-item selected" : "measurement-item"} key={measurement.id} onClick={() => setSelectedMeasurementId(measurement.id)}><input type="checkbox" checked={selectedMeasurementIds.includes(measurement.id)} onChange={(event) => { event.stopPropagation(); toggleMeasurementSelection(measurement.id); }} onClick={(event) => event.stopPropagation()} /><span><strong>{measurement.test_type}</strong><small>{measurement.source_file_name ?? "bez názvu"} · {Math.round((measurement.raw_size_bytes ?? 0) / 1024)} kB</small></span><time>{new Date(measurement.started_at).toLocaleDateString("sk-SK")}</time></button>)}</div>
+                    {filteredMeasurements().length === 0 && <p className="muted empty-list">Filteru nezodpovedajú žiadne archivované merania.</p>}
+                  </section>
+                  <section className="panel workbench-detail">
+                    <div className="eyebrow">PRACOVNÝ PANEL</div>
+                    {(() => { const selected = measurements.find((item) => item.id === selectedMeasurementId); return selected ? <><h2>{selected.test_type}</h2><p className="muted">{selected.source_file_name} · {new Date(selected.started_at).toLocaleString("sk-SK")}</p><div className="detail-grid"><div><span>Vzorky</span><strong>{String(selected.analysis_data?.sample_count ?? "—")}</strong></div><div><span>Trvanie</span><strong>{selected.analysis_data?.duration_s ? String(Number(selected.analysis_data.duration_s).toFixed(2)) + " s" : "—"}</strong></div><div><span>Raw dáta</span><strong>Archivované</strong></div><div><span>Normalizácia</span><strong>{selected.analysis_data?.normalized_step_response ? "Dostupná" : "Nie je dostupná"}</strong></div></div><p className="muted">Grafy a porovnanie vybraných meraní doplníme do tohto panelu.</p></> : <div className="empty-list"><h2>Vyber meranie</h2><p className="muted">V ľavom paneli vyber meranie, ktoré chceš preskúmať.</p></div> })()}
+                  </section>
+                </div>
+                {manualUploadOpen && <div className="backdrop" onMouseDown={() => setManualUploadOpen(false)}><section className="login upload-dialog" onMouseDown={(event) => event.stopPropagation()}><div className="eyebrow">NÚDZOVÁ SYNCHRONIZÁCIA</div><h2>Manuálne nahrať dátový súbor</h2><p className="muted">Použi iba vtedy, ak upload počas sessionu zlyhal.</p><form className="measurement-form modal-form" onSubmit={async (event) => { await uploadMeasurement(event); setManualUploadOpen(false); }}><label>Účastník<select name="participant_id" required><option value="">Vyber účastníka</option>{participants.map((participant) => <option key={participant.id} value={participant.id}>{participant.participant_code}</option>)}</select></label><label>Test<select name="test_definition_id" required><option value="">Vyber test</option>{tests.filter((test) => test.is_active).map((test) => <option key={test.id} value={test.id}>{test.name} · v{test.version}</option>)}</select></label><label>Dátum a čas<input name="started_at" type="datetime-local" required /></label><label>Raw SCoPE log<input name="raw_file" type="file" accept=".txt,.tsv,text/plain" required /></label><div className="actions"><button type="button" className="quiet" onClick={() => setManualUploadOpen(false)}>Zrušiť</button><button className="primary" type="submit">Nahrať dáta</button></div></form>{uploadMessage && <p className="notice">{uploadMessage}</p>}</section></div>}
+              </>}
+
+            </section>
                 <section className="panel measurement-panel">
                   <div className="eyebrow">NÚDZOVÁ SYNCHRONIZÁCIA</div>
                   <h2>Manuálne nahrať dátový súbor</h2>
