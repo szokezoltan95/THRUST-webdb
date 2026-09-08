@@ -39,9 +39,11 @@ h1 { max-width: 880px; margin: 20px 0; font-size: clamp(42px, 7vw, 84px); line-h
 .participant-form label { display:grid; gap:8px; color:#8ea5bc; margin:18px 0; }
 .participant-form input { background:#07121f; border:1px solid var(--line); color:#f4f8fb; padding:12px; font:inherit; letter-spacing:.14em; text-transform:uppercase; }
 .participant-list { display:grid; gap:8px; margin-top:18px; }
-.participant-row { display:flex; justify-content:space-between; border-bottom:1px solid var(--line); padding:10px 0; }
+.participant-row { width:100%; display:flex; justify-content:space-between; border:0; border-bottom:1px solid var(--line); padding:10px 0; color:#eef5ff; background:transparent; text-align:left; }
+.participant-row:hover { color:#45d5ff; }
 .participant-row span { color:#8ea5bc; font-size:.85rem; }
 .notice { color:#45d5ff; }
+.detail-panel { margin-top:16px; }
 @media (max-width: 760px) { .admin-grid { grid-template-columns:1fr; } }
 .backdrop { position: fixed; inset: 0; display: grid; place-items: center; padding: 20px; background: rgba(1,7,13,.78); backdrop-filter: blur(8px); }
 .login { width: min(430px,100%); padding: 34px; border: 1px solid #294863; background: #0a1726; box-shadow: 0 25px 80px #0009; }
