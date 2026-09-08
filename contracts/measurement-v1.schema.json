@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://thrust.local/contracts/measurement-v1.schema.json",
+  "title": "THRUST measurement envelope",
+  "type": "object",
+  "required": ["schema_version", "measurement_id", "participant_code", "test_type", "started_at", "producer"],
+  "properties": {
+    "schema_version": { "const": "measurement/1.0" },
+    "measurement_id": { "type": "string", "format": "uuid" },
+    "participant_code": { "type": "string", "pattern": "^[2-9A-HJ-NP-Z]{4}(-[2-9A-HJ-NP-Z]{4}){2}$" },
+    "test_type": { "type": "string", "minLength": 1, "maxLength": 50 },
+    "started_at": { "type": "string", "format": "date-time" },
+    "producer": {
+      "type": "object",
+      "required": ["application", "version"],
+      "properties": {
+        "application": { "type": "string" },
+        "version": { "type": "string" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}
+
