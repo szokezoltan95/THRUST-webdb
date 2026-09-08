@@ -273,20 +273,6 @@ export function App() {
               </>}
 
             </section>
-                <section className="panel measurement-panel">
-                  <div className="eyebrow">NÚDZOVÁ SYNCHRONIZÁCIA</div>
-                  <h2>Manuálne nahrať dátový súbor</h2>
-                  <p className="muted">Použi iba vtedy, ak sa upload počas merania nepodaril.</p>
-                  <form className="measurement-form" onSubmit={uploadMeasurement}>
-                    <label>Účastník<select name="participant_id" required><option value="">Vyber účastníka</option>{participants.map((participant) => <option key={participant.id} value={participant.id}>{participant.participant_code}</option>)}</select></label>
-                    <label>Test<select name="test_definition_id" required><option value="">Vyber test</option>{tests.filter((test) => test.is_active).map((test) => <option key={test.id} value={test.id}>{test.name} · v{test.version}</option>)}</select></label>
-                    <label>Dátum a čas<input name="started_at" type="datetime-local" required /></label>
-                    <label>Raw SCoPE log<input name="raw_file" type="file" accept=".txt,.tsv,text/plain" required /></label>
-                    <button className="primary" type="submit">Nahrať dáta</button>
-                  </form>
-                  {uploadMessage && <p className="notice">{uploadMessage}</p>}
-                </section>
-              </>}
 
             </section>
           </div>
