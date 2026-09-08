@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://thrust.local/contracts/analysis-v1.schema.json",
+  "title": "THRUST local analysis result",
+  "type": "object",
+  "required": ["schema_version", "analysis_id", "measurement_id", "analysis_type", "algorithm_version", "status", "metrics"],
+  "properties": {
+    "schema_version": { "const": "analysis/1.0" },
+    "analysis_id": { "type": "string", "format": "uuid" },
+    "measurement_id": { "type": "string", "format": "uuid" },
+    "analysis_type": { "type": "string", "minLength": 1 },
+    "algorithm_version": { "type": "string", "minLength": 1 },
+    "status": { "enum": ["completed", "failed", "partial"] },
+    "metrics": { "type": "object", "additionalProperties": { "type": ["number", "integer", "boolean", "string", "null"] } },
+    "quality": { "type": "object" }
+  },
+  "additionalProperties": false
+}
