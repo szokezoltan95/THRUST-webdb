@@ -24,21 +24,6 @@ Student accounts and measurement upload are intentionally deferred until the fir
 
 Set `COOKIE_SECURE=true` when the application is served through HTTPS in production.
 
-## GitHub Codespaces
-
-The repository includes a `.devcontainer` configuration for browser-based development.
-Create a Codespace from the repository, then run:
-
-```bash
-docker compose up --build -d
-docker compose exec backend alembic upgrade head
-docker compose exec backend python -m app.create_admin admin
-```
-
-Open the forwarded port `8080` in the Codespace. The first Codespace setup installs
-Neovim, Docker Compose, ripgrep and the basic build tools. The `.env` file is created
-from `.env.example`; change the development database password before starting the stack.
-
 ## Security boundary
 
 - Never store names, e-mail addresses, university identifiers, or the local ID-to-name mapping here.
