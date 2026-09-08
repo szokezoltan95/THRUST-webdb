@@ -10,7 +10,7 @@ type PublicMetrics = {
 type User = { username: string; role: string; csrf_token: string };
 type Overview = { participant_count: number; measurement_count: number };
 type Participant = { id: string; participant_code: string; is_active: boolean; created_at: string };
-type TestDefinition = { id: string; test_code: string; name: string; version: string; is_active: boolean };
+type TestDefinition = { id: string; test_code: string; name: string; version: string; status: string; analysis_profile: string; configuration: Record<string, unknown>; is_active: boolean };
 type ParticipantDetail = { participant: Participant; measurements: { id: string; test_type: string; status: string; started_at: string }[] };
 
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
@@ -27,7 +27,29 @@ export function App() {
   const [participantCode, setParticipantCode] = useState("");
   const [participantMessage, setParticipantMessage] = useState("");
   const [tests, setTests] = useState<TestDefinition[]>([]);
-  const [testForm, setTestForm] = useState({ test_code: "", name: "", version: "1.0" });
+  const defaultTestConfiguration = `{
+  "sampling_hz": 100,
+  "difficulty": "hard",
+  "timeout_s": 5.0,
+  "hold_time_s": 1.0,
+  "joystick_test_required": true,
+  "axes": ["AILE", "ELEV", "THRO", "RUDD"],
+  "tasks": [],
+  "visual": {
+    "screen_bg": "#000000",
+    "gimbal_bg": "#808080",
+    "stick_outline": "#1e2cff",
+    "stick_fill": "#ffffff",
+    "zone_idle_outline": "#ff0000",
+    "zone_idle_fill": "#ff0000",
+    "zone_ok_outline": "#00cc00",
+    "zone_ok_fill": "#00cc00",
+    "grid": "#ffffff",
+    "label": "#ffffff",
+    "prompt": "#ff0000"
+  }
+}`;
+  const [testForm, setTestForm] = useState({ test_code: "", name: "", version: "1.0", analysis_profile: "SCOPE_STEP_RESPONSE_V1", configuration: defaultTestConfiguration });
   const [testMessage, setTestMessage] = useState("");
   const [selectedParticipant, setSelectedParticipant] = useState<ParticipantDetail | null>(null);
   const [loginOpen, setLoginOpen] = useState(false);
@@ -56,16 +78,17 @@ export function App() {
     event.preventDefault();
     setTestMessage("");
     try {
+      const configuration = JSON.parse(testForm.configuration);
       const test = await request<TestDefinition>("/api/admin/tests", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(testForm),
+        body: JSON.stringify({ ...testForm, configuration }),
       });
       setTests((current) => [...current, test]);
-      setTestForm({ test_code: "", name: "", version: "1.0" });
+      setTestForm({ test_code: "", name: "", version: "1.0", analysis_profile: "SCOPE_STEP_RESPONSE_V1", configuration: defaultTestConfiguration });
       setTestMessage("Typ testu bol vytvorený.");
     } catch (reason) {
-      setTestMessage(reason instanceof Error ? reason.message : "Test sa nepodarilo vytvoriť.");
+      setTestMessage(reason instanceof SyntaxError ? "Konfigurácia testu nie je platný JSON." : reason instanceof Error ? reason.message : "Test sa nepodarilo vytvoriť.");
     }
   }
 
@@ -158,6 +181,8 @@ export function App() {
                 <label>Kód testu<input value={testForm.test_code} onChange={(event) => setTestForm({ ...testForm, test_code: event.target.value.toUpperCase() })} placeholder="SCOPE_HARD" required /></label>
                 <label>Názov<input value={testForm.name} onChange={(event) => setTestForm({ ...testForm, name: event.target.value })} placeholder="SCoPE HARD" required /></label>
                 <label>Verzia<input value={testForm.version} onChange={(event) => setTestForm({ ...testForm, version: event.target.value })} required /></label>
+                <label>Analytický profil<input value={testForm.analysis_profile} onChange={(event) => setTestForm({ ...testForm, analysis_profile: event.target.value })} required /></label>
+                <label>Konfigurácia testu (JSON)<textarea className="config-editor" value={testForm.configuration} onChange={(event) => setTestForm({ ...testForm, configuration: event.target.value })} rows={12} required /></label>
                 <button className="primary" type="submit">Pridať test</button>
               </form>
               {testMessage && <p className="notice">{testMessage}</p>}
@@ -165,7 +190,7 @@ export function App() {
             <section className="panel">
               <div className="eyebrow">DOSTUPNÉ TESTY</div>
               <h2>Katalóg</h2>
-              {tests.length === 0 ? <p className="muted">Zatiaľ nie sú definované žiadne testy.</p> : <div className="participant-list">{tests.map((test) => <div className="participant-row" key={test.id}><strong>{test.name}</strong><span>{test.test_code} · v{test.version}</span></div>)}</div>}
+              {tests.length === 0 ? <p className="muted">Zatiaľ nie sú definované žiadne testy.</p> : <div className="participant-list">{tests.map((test) => <div className="participant-row" key={test.id}><strong>{test.name}</strong><span>{test.test_code} · v{test.version} · {test.status}</span></div>)}</div>}
             </section>
           </div>
           {selectedParticipant && <section className="panel detail-panel"><div className="eyebrow">DETAIL ÚČASTNÍKA</div><h2>{selectedParticipant.participant.participant_code}</h2>{selectedParticipant.measurements.length === 0 ? <p className="muted">Účastník zatiaľ nemá evidované merania.</p> : <div className="participant-list">{selectedParticipant.measurements.map((measurement) => <div className="participant-row" key={measurement.id}><strong>{measurement.test_type}</strong><span>{new Date(measurement.started_at).toLocaleString("sk-SK")}</span></div>)}</div>}</section>}
