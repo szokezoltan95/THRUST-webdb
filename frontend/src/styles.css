@@ -39,6 +39,11 @@ h1 { max-width: 880px; margin: 20px 0; font-size: clamp(42px, 7vw, 84px); line-h
 .participant-form label { display:grid; gap:8px; color:#8ea5bc; margin:18px 0; }
 .participant-form input { background:#07121f; border:1px solid var(--line); color:#f4f8fb; padding:12px; font:inherit; letter-spacing:.14em; text-transform:uppercase; }
 .config-editor { width:100%; resize:vertical; background:#07121f; border:1px solid var(--line); color:#f4f8fb; padding:12px; font:12px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace; }
+.measurement-panel { margin-top:16px; }
+.measurement-form { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px; align-items:end; }
+.measurement-form label { display:grid; gap:8px; color:#8ea5bc; }
+.measurement-form input, .measurement-form select { width:100%; background:#07121f; border:1px solid var(--line); color:#f4f8fb; padding:12px; font:inherit; }
+@media (max-width: 760px) { .measurement-form { grid-template-columns:1fr; } }
 .participant-list { display:grid; gap:8px; margin-top:18px; }
 .participant-row { width:100%; display:flex; justify-content:space-between; border:0; border-bottom:1px solid var(--line); padding:10px 0; color:#eef5ff; background:transparent; text-align:left; }
 .participant-row:hover { color:#45d5ff; }
