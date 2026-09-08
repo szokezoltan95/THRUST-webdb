@@ -9,6 +9,7 @@ from app.api.dependencies import AuthContext, require_admin
 from app.db.session import get_db
 from app.models import Measurement, Participant, TestDefinition
 from app.schemas.participant import ParticipantCreate, ParticipantResponse
+from app.schemas.measurement import MeasurementCreate, MeasurementResponse
 from app.schemas.test_definition import TestDefinitionCreate, TestDefinitionResponse
 
 router = APIRouter(prefix="/admin", tags=["administration"])
@@ -113,6 +114,31 @@ async def participant_detail(
             for item in measurements
         ],
     }
+
+
+@router.post("/measurements", response_model=MeasurementResponse, status_code=status.HTTP_201_CREATED)
+async def create_measurement(
+    payload: MeasurementCreate,
+    auth: AuthContext = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+) -> Measurement:
+    participant = await db.get(Participant, payload.participant_id)
+    if participant is None or not participant.is_active:
+        raise HTTPException(status_code=404, detail="Aktívny účastník neexistuje.")
+    test = await db.get(TestDefinition, payload.test_definition_id)
+    if test is None or not test.is_active:
+        raise HTTPException(status_code=404, detail="Aktívny typ testu neexistuje.")
+    measurement = Measurement(
+        participant_id=participant.id,
+        test_definition_id=test.id,
+        test_type=f"{test.test_code} v{test.version}",
+        status=payload.status,
+        started_at=payload.started_at,
+    )
+    db.add(measurement)
+    await db.commit()
+    await db.refresh(measurement)
+    return measurement
 
 
 @router.get("/overview")
