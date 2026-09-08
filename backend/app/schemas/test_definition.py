@@ -7,6 +7,8 @@ class TestDefinitionCreate(BaseModel):
     test_code: str = Field(min_length=1, max_length=50)
     name: str = Field(min_length=1, max_length=120)
     version: str = Field(default="1.0", min_length=1, max_length=30)
+    analysis_profile: str = Field(default="SCOPE_STEP_RESPONSE_V1", min_length=1, max_length=80)
+    configuration: dict = Field(default_factory=dict)
 
     @field_validator("test_code")
     @classmethod
@@ -24,6 +26,9 @@ class TestDefinitionResponse(BaseModel):
     test_code: str
     name: str
     version: str
+    status: str
+    analysis_profile: str
+    configuration: dict
     is_active: bool
     created_at: datetime
 
