@@ -30,3 +30,11 @@ Set `COOKIE_SECURE=true` when the application is served through HTTPS in product
 - Never commit `.env`, database dumps, participant mappings, tokens, or measurement exports.
 - PostgreSQL must not be exposed directly to the internet.
 - Production traffic must terminate over HTTPS at a trusted reverse proxy.
+
+## Local client configuration
+
+After an administrator logs in, a local THRUST/SCoPE client can load one exact test version with:
+
+`GET /api/admin/tests/{test_id}/configuration`
+
+The response contains `schema_version: test-configuration-v1` and the selected test definition, including its JSON configuration. The client should keep the returned test code and version together with each measurement so later changes do not alter historical interpretation.
