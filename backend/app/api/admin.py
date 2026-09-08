@@ -191,6 +191,28 @@ async def create_measurement(
     return measurement
 
 
+@router.get("/measurements", response_model=list[MeasurementResponse])
+async def list_measurements(
+    auth: AuthContext = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+) -> list[Measurement]:
+    """List measurements synchronized by THRUST or uploaded manually."""
+    result = await db.scalars(select(Measurement).order_by(Measurement.started_at.desc()))
+    return list(result)
+
+
+@router.get("/measurements/{measurement_id}", response_model=MeasurementResponse)
+async def measurement_detail(
+    measurement_id: str,
+    auth: AuthContext = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+) -> Measurement:
+    measurement = await db.get(Measurement, measurement_id)
+    if measurement is None:
+        raise HTTPException(status_code=404, detail="Meranie neexistuje.")
+    return measurement
+
+
 @router.get("/overview")
 async def overview(
     auth: AuthContext = Depends(require_admin),
