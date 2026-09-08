@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     app_name: str = "THRUST-webdb"
     database_url: str = "postgresql+asyncpg://thrust:change-me@localhost:5432/thrust"
     cookie_secure: bool = False
+    allowed_hosts: str = "localhost,127.0.0.1"
     session_lifetime_hours: int = 12
     public_min_group_size: int = 10
 
