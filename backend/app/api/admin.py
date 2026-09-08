@@ -68,6 +68,22 @@ async def list_tests(
     return list(result)
 
 
+@router.get("/tests/{test_id}/configuration")
+async def test_configuration(
+    test_id: str,
+    auth: AuthContext = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Return a version-pinned test manifest for local THRUST/SCoPE clients."""
+    test = await db.get(TestDefinition, test_id)
+    if test is None:
+        raise HTTPException(status_code=404, detail="Typ testu neexistuje.")
+    return {
+        "schema_version": "test-configuration-v1",
+        "test": TestDefinitionResponse.model_validate(test).model_dump(mode="json"),
+    }
+
+
 @router.post("/tests", response_model=TestDefinitionResponse, status_code=status.HTTP_201_CREATED)
 async def create_test(
     payload: TestDefinitionCreate,
