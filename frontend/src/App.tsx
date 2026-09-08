@@ -10,6 +10,8 @@ type PublicMetrics = {
 type User = { username: string; role: string; csrf_token: string };
 type Overview = { participant_count: number; measurement_count: number };
 type Participant = { id: string; participant_code: string; is_active: boolean; created_at: string };
+type TestDefinition = { id: string; test_code: string; name: string; version: string; is_active: boolean };
+type ParticipantDetail = { participant: Participant; measurements: { id: string; test_type: string; status: string; started_at: string }[] };
 
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(url, { credentials: "same-origin", ...options });
@@ -24,6 +26,10 @@ export function App() {
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [participantCode, setParticipantCode] = useState("");
   const [participantMessage, setParticipantMessage] = useState("");
+  const [tests, setTests] = useState<TestDefinition[]>([]);
+  const [testForm, setTestForm] = useState({ test_code: "", name: "", version: "1.0" });
+  const [testMessage, setTestMessage] = useState("");
+  const [selectedParticipant, setSelectedParticipant] = useState<ParticipantDetail | null>(null);
   const [loginOpen, setLoginOpen] = useState(false);
   const [error, setError] = useState("");
 
@@ -36,6 +42,7 @@ export function App() {
     if (user) {
       request<Overview>("/api/admin/overview").then(setOverview).catch(() => setOverview(null));
       request<Participant[]>("/api/admin/participants").then(setParticipants).catch(() => setParticipants([]));
+      request<TestDefinition[]>("/api/admin/tests").then(setTests).catch(() => setTests([]));
     }
   }, [user]);
 
@@ -43,6 +50,28 @@ export function App() {
     const result = await request<{ participant_code: string }>("/api/admin/participants/generate-code");
     setParticipantCode(result.participant_code);
     setParticipantMessage("");
+  }
+
+  async function createTest(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setTestMessage("");
+    try {
+      const test = await request<TestDefinition>("/api/admin/tests", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(testForm),
+      });
+      setTests((current) => [...current, test]);
+      setTestForm({ test_code: "", name: "", version: "1.0" });
+      setTestMessage("Typ testu bol vytvorený.");
+    } catch (reason) {
+      setTestMessage(reason instanceof Error ? reason.message : "Test sa nepodarilo vytvoriť.");
+    }
+  }
+
+  async function openParticipant(participant: Participant) {
+    const detail = await request<ParticipantDetail>(`/api/admin/participants/${participant.id}`);
+    setSelectedParticipant(detail);
   }
 
   async function createParticipant(event: FormEvent<HTMLFormElement>) {
@@ -118,9 +147,28 @@ export function App() {
             <section className="panel">
               <div className="eyebrow">EVIDENCIA</div>
               <h2>Účastníci</h2>
-              {participants.length === 0 ? <p className="muted">Zatiaľ nie sú evidovaní žiadni účastníci.</p> : <div className="participant-list">{participants.map((participant) => <div className="participant-row" key={participant.id}><strong>{participant.participant_code}</strong><span>{participant.is_active ? "Aktívny" : "Archivovaný"}</span></div>)}</div>}
+              {participants.length === 0 ? <p className="muted">Zatiaľ nie sú evidovaní žiadni účastníci.</p> : <div className="participant-list">{participants.map((participant) => <button className="participant-row" key={participant.id} onClick={() => openParticipant(participant)}><strong>{participant.participant_code}</strong><span>{participant.is_active ? "Aktívny" : "Archivovaný"}</span></button>)}</div>}
             </section>
           </div>
+          <div className="admin-grid">
+            <section className="panel">
+              <div className="eyebrow">KATALÓG TESTOV</div>
+              <h2>Nový typ testu</h2>
+              <form className="participant-form" onSubmit={createTest}>
+                <label>Kód testu<input value={testForm.test_code} onChange={(event) => setTestForm({ ...testForm, test_code: event.target.value.toUpperCase() })} placeholder="SCOPE_HARD" required /></label>
+                <label>Názov<input value={testForm.name} onChange={(event) => setTestForm({ ...testForm, name: event.target.value })} placeholder="SCoPE HARD" required /></label>
+                <label>Verzia<input value={testForm.version} onChange={(event) => setTestForm({ ...testForm, version: event.target.value })} required /></label>
+                <button className="primary" type="submit">Pridať test</button>
+              </form>
+              {testMessage && <p className="notice">{testMessage}</p>}
+            </section>
+            <section className="panel">
+              <div className="eyebrow">DOSTUPNÉ TESTY</div>
+              <h2>Katalóg</h2>
+              {tests.length === 0 ? <p className="muted">Zatiaľ nie sú definované žiadne testy.</p> : <div className="participant-list">{tests.map((test) => <div className="participant-row" key={test.id}><strong>{test.name}</strong><span>{test.test_code} · v{test.version}</span></div>)}</div>}
+            </section>
+          </div>
+          {selectedParticipant && <section className="panel detail-panel"><div className="eyebrow">DETAIL ÚČASTNÍKA</div><h2>{selectedParticipant.participant.participant_code}</h2>{selectedParticipant.measurements.length === 0 ? <p className="muted">Účastník zatiaľ nemá evidované merania.</p> : <div className="participant-list">{selectedParticipant.measurements.map((measurement) => <div className="participant-row" key={measurement.id}><strong>{measurement.test_type}</strong><span>{new Date(measurement.started_at).toLocaleString("sk-SK")}</span></div>)}</div>}</section>}
         </section>
       ) : (
         <section className="public">
