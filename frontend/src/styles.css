@@ -275,3 +275,17 @@ h1 { max-width: 880px; margin: 20px 0; font-size: clamp(42px, 7vw, 84px); line-h
 .chart-expand-header h3 { margin: 5px 0 0; }
 .chart-expand-window .response-chart { max-width: 100%; }
 @media (max-width: 650px) { .response-grid { grid-template-columns: 1fr; } .chart-expand-backdrop { padding: 10px; } .chart-expand-window { max-height: calc(100vh - 20px); padding: 10px; } }
+
+
+/* Results: plots beside metrics */
+.results-layout { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(540px, .85fr); gap: 16px; align-items: start; margin-top: 12px; }
+.results-chart-column { min-width: 0; }
+.results-chart-column .chart-toolbar { margin: 0 0 8px; }
+.metrics-summary { min-width: 0; margin-top: 0; padding: 14px; border: 1px solid var(--line); background: rgba(255,255,255,.025); }
+.metrics-table { max-width: 100%; }
+.chart-expand-window .plot-svg-large { width: 100%; max-height: none; }
+.chart-expand-window .plot-grid line { stroke-width: 1; stroke-dasharray: 4 4; }
+.chart-expand-window .plot-tick { font-size: 11px; }
+.chart-expand-window .plot-axis-label { font-size: 12px; }
+.chart-expand-window .plot-title { font-size: 16px; }
+@media (max-width: 1100px) { .results-layout { grid-template-columns: 1fr; } .metrics-summary { margin-top: 12px; } }
