@@ -219,3 +219,12 @@ h1 { max-width: 880px; margin: 20px 0; font-size: clamp(42px, 7vw, 84px); line-h
   .participant-create-strip { align-items: flex-start; flex-direction: column; gap: 10px; }
   .inline-create-form { margin-left: 0; width: 100%; }
 }
+
+
+.test-table .data-table-head, .test-table .data-table-row { grid-template-columns: 1fr 1.5fr .7fr 1.3fr 1.4fr; }
+.create-disclosure { margin-top: 12px; border: 1px solid var(--line); }
+.create-disclosure > summary { list-style: none; cursor: pointer; }
+.create-disclosure > summary::-webkit-details-marker { display: none; }
+.create-disclosure .participant-create-strip { margin: 0; border: 0; }
+.create-form-panel { padding: 18px; border-top: 1px solid var(--line); background: rgba(255,255,255,.025); }
+.config-preview { max-height: 360px; overflow: auto; margin: 12px 0 0; padding: 16px; background: #07121f; border: 1px solid var(--line); color: #a9dfff; font: .78rem/1.5 ui-monospace, SFMono-Regular, Consolas, monospace; white-space: pre-wrap; }
