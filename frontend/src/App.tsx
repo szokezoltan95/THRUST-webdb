@@ -63,6 +63,7 @@ export function App() {
   const [selectedMeasurementId, setSelectedMeasurementId] = useState<string | null>(null);
   const [selectedMeasurementIds, setSelectedMeasurementIds] = useState<string[]>([]);
   const [chartChannel, setChartChannel] = useState("AILE");
+  const [chartMode, setChartMode] = useState<"single" | "all">("single");
   const [measurementSearch, setMeasurementSearch] = useState("");
   const [measurementParticipantFilter, setMeasurementParticipantFilter] = useState("");
   const [measurementTestFilter, setMeasurementTestFilter] = useState("");
@@ -313,7 +314,7 @@ export function App() {
                   </section>
                   <section className={selectedMeasurementId ? "panel workbench-detail detail-modal-open" : "panel workbench-detail detail-modal-closed"}>
                     <div className="detail-window-bar"><div className="eyebrow">PRACOVNÝ PANEL</div><button className="quiet compact" onClick={() => setSelectedMeasurementId(null)}>Zavrieť</button></div>
-                    {(() => { const selected = measurements.find((item) => item.id === selectedMeasurementId); return selected ? <><h2>{selected.test_type}</h2><p className="muted">{selected.source_file_name} · {new Date(selected.started_at).toLocaleString("sk-SK")}</p><div className="detail-grid"><div><span>Vzorky</span><strong>{String(selected.analysis_data?.sample_count ?? "—")}</strong></div><div><span>Trvanie</span><strong>{selected.analysis_data?.duration_s ? String(Number(selected.analysis_data.duration_s).toFixed(2)) + " s" : "—"}</strong></div><div><span>Raw dáta</span><strong>Archivované</strong></div><div><span>Normalizácia</span><strong>{selected.analysis_data?.normalized_step_response ? "Dostupná" : "Nie je dostupná"}</strong></div></div><div className="chart-toolbar"><label>Kanál<select value={chartChannel} onChange={(event) => setChartChannel(event.target.value)}><option>AILE</option><option>ELEV</option><option>THRO</option><option>RUDD</option></select></label></div><ResponseChart data={selected.analysis_data?.normalized_step_response} channel={chartChannel} /></> : <div className="empty-list"><h2>Vyber meranie</h2><p className="muted">V ľavom paneli vyber meranie, ktoré chceš preskúmať.</p></div> })()}
+                    {(() => { const selected = measurements.find((item) => item.id === selectedMeasurementId); return selected ? <><h2>{selected.test_type}</h2><p className="muted">{selected.source_file_name} · {new Date(selected.started_at).toLocaleString("sk-SK")}</p><div className="detail-grid"><div><span>Vzorky</span><strong>{String(selected.analysis_data?.sample_count ?? "—")}</strong></div><div><span>Trvanie</span><strong>{selected.analysis_data?.duration_s ? String(Number(selected.analysis_data.duration_s).toFixed(2)) + " s" : "—"}</strong></div><div><span>Raw dáta</span><strong>Archivované</strong></div><div><span>Normalizácia</span><strong>{selected.analysis_data?.normalized_step_response ? "Dostupná" : "Nie je dostupná"}</strong></div></div><div className="chart-toolbar"><label>Zobrazenie<select value={chartMode} onChange={(event) => setChartMode(event.target.value as "single" | "all")}><option value="single">Vybraný kanál</option><option value="all">Všetky osi</option></select></label>{chartMode === "single" && <label>Kanál<select value={chartChannel} onChange={(event) => setChartChannel(event.target.value)}><option>AILE</option><option>ELEV</option><option>THRO</option><option>RUDD</option></select></label>}</div><ResponseChart data={selected.analysis_data?.normalized_step_response} channel={chartChannel} mode={chartMode} /><ResponseMetrics data={selected.analysis_data?.normalized_step_response} /></> : <div className="empty-list"><h2>Vyber meranie</h2><p className="muted">V ľavom paneli vyber meranie, ktoré chceš preskúmať.</p></div> })()}
                   </section>
                 </div>
                 {manualUploadOpen && <div className="backdrop" onMouseDown={() => setManualUploadOpen(false)}><section className="login upload-dialog" onMouseDown={(event) => event.stopPropagation()}><div className="eyebrow">NÚDZOVÁ SYNCHRONIZÁCIA</div><h2>Manuálne nahrať dátový súbor</h2><p className="muted">Použi iba vtedy, ak upload počas sessionu zlyhal.</p><form className="measurement-form modal-form" onSubmit={async (event) => { await uploadMeasurement(event); setManualUploadOpen(false); }}><label>Účastník<select name="participant_id" required><option value="">Vyber účastníka</option>{participants.map((participant) => <option key={participant.id} value={participant.id}>{participant.participant_code}</option>)}</select></label><label>Test<select name="test_definition_id" required><option value="">Vyber test</option>{tests.filter((test) => test.is_active).map((test) => <option key={test.id} value={test.id}>{test.name} · v{test.version}</option>)}</select></label><label>Dátum a čas<input name="started_at" type="datetime-local" required /></label><label>Raw SCoPE log<input name="raw_file" type="file" accept=".txt,.tsv,text/plain" required /></label><div className="actions"><button type="button" className="quiet" onClick={() => setManualUploadOpen(false)}>Zrušiť</button><button className="primary" type="submit">Nahrať dáta</button></div></form>{uploadMessage && <p className="notice">{uploadMessage}</p>}</section></div>}
@@ -344,26 +345,74 @@ export function App() {
   );
 }
 
-type NormalizedChannel = { mean?: number[]; median?: number[] };
+type NormalizedChannel = { mean?: number[]; median?: number[]; std?: number[] };
 type NormalizedResponse = { time_s?: number[]; channels?: Record<string, NormalizedChannel> };
+type ResponseMode = "single" | "all";
 
-function ResponseChart({ data, channel }: { data: unknown; channel: string }) {
+type StepMetrics = {
+  reaction_s: number | null;
+  rise_s: number | null;
+  overshoot_pct: number | null;
+  settling_s: number | null;
+  steady_state_error_pct: number | null;
+  rmse: number | null;
+  mean_std: number | null;
+};
+
+const RESPONSE_CHANNELS = ["AILE", "ELEV", "THRO", "RUDD"] as const;
+const RESPONSE_COLORS: Record<string, string> = { AILE: "#ff6878", ELEV: "#45d5ff", THRO: "#ffc857", RUDD: "#9d8cff" };
+
+function calculateStepMetrics(channel: NormalizedChannel | undefined, time: number[]): StepMetrics {
+  const values = channel?.mean ?? [];
+  const count = Math.min(time.length, values.length);
+  const empty = { reaction_s: null, rise_s: null, overshoot_pct: null, settling_s: null, steady_state_error_pct: null, rmse: null, mean_std: null };
+  if (count < 3) return empty;
+  const ys = values.slice(0, count).map(Number);
+  const edgeCount = Math.max(1, Math.floor(count * .1));
+  const baseline = ys.slice(0, edgeCount).reduce((sum, value) => sum + value, 0) / edgeCount;
+  const final = ys.slice(count - edgeCount).reduce((sum, value) => sum + value, 0) / edgeCount;
+  const amplitude = final - baseline;
+  if (!Number.isFinite(amplitude) || Math.abs(amplitude) < 1e-9) return empty;
+  const normalized = ys.map((value) => (value - baseline) / amplitude);
+  const crossing = (level: number) => { const index = normalized.findIndex((value) => value >= level); return index >= 0 ? time[index] : null; };
+  const t10 = crossing(.1);
+  const t90 = crossing(.9);
+  const peak = Math.max(...normalized);
+  let lastOutside = -1;
+  normalized.forEach((value, index) => { if (Math.abs(value - 1) > .05) lastOutside = index; });
+  const stdValues = (channel?.std ?? []).slice(0, count).map(Number).filter(Number.isFinite);
+  return {
+    reaction_s: t10,
+    rise_s: t10 !== null && t90 !== null ? Math.max(0, t90 - t10) : null,
+    overshoot_pct: Number.isFinite(peak) ? Math.max(0, (peak - 1) * 100) : null,
+    settling_s: lastOutside >= 0 && lastOutside < count - 1 ? time[lastOutside] : null,
+    steady_state_error_pct: Number.isFinite(normalized[count - 1]) ? Math.abs(1 - normalized[count - 1]) * 100 : null,
+    rmse: Math.sqrt(normalized.reduce((sum, value) => sum + ((value - 1) ** 2), 0) / count),
+    mean_std: stdValues.length ? stdValues.reduce((sum, value) => sum + value, 0) / stdValues.length : null,
+  };
+}
+
+function formatMetric(value: number | null, unit = "") { return value === null || !Number.isFinite(value) ? "—" : value.toFixed(3) + unit; }
+
+function ResponseMetrics({ data }: { data: unknown }) {
   const response = data as NormalizedResponse | null;
-  const selected = response?.channels?.[channel];
   const time = response?.time_s ?? [];
-  const mean = selected?.mean ?? [];
-  const median = selected?.median ?? [];
-  if (!selected || !mean.length || !median.length) {
-    return <div className="chart-empty">Normalizovaná odozva nie je dostupná.</div>;
-  }
-  const count = Math.min(time.length, mean.length, median.length);
-  const values = [...mean.slice(0, count), ...median.slice(0, count)];
-  const min = Math.min(-0.2, ...values);
-  const max = Math.max(1.2, ...values);
-  const x = (index: number) => 42 + (index / Math.max(1, count - 1)) * 458;
+  const available = RESPONSE_CHANNELS.filter((name) => response?.channels?.[name]?.mean?.length);
+  if (!available.length) return null;
+  return <section className="metrics-summary"><div className="eyebrow">VYPOČÍTANÉ UKAZOVATELE</div><p className="muted metrics-note">Odhady zo znormalizovanej priemernej odozvy; presné modelové parametre budú doplnené lokálnym THRUST-compute.</p><div className="metrics-table"><div className="metrics-head"><span>Osa</span><span>Oneskorenie</span><span>Náběh 10–90 %</span><span>Overshoot</span><span>Ustálenie</span><span>Chyba</span><span>RMSE</span><span>Priem. SD</span></div>{available.map((name) => { const m = calculateStepMetrics(response?.channels?.[name], time); return <div className="metrics-row" key={name}><strong style={{ color: RESPONSE_COLORS[name] }}>{name}</strong><span>{formatMetric(m.reaction_s, " s")}</span><span>{formatMetric(m.rise_s, " s")}</span><span>{formatMetric(m.overshoot_pct, " %")}</span><span>{formatMetric(m.settling_s, " s")}</span><span>{formatMetric(m.steady_state_error_pct, " %")}</span><span>{formatMetric(m.rmse)}</span><span>{formatMetric(m.mean_std)}</span></div>; })}</div></section>;
+}
+
+function ResponseChart({ data, channel, mode }: { data: unknown; channel: string; mode: ResponseMode }) {
+  const response = data as NormalizedResponse | null;
+  const time = response?.time_s ?? [];
+  const names = mode === "all" ? RESPONSE_CHANNELS.filter((name) => response?.channels?.[name]?.mean?.length) : [channel];
+  const series = names.map((name) => ({ name, channel: response?.channels?.[name], count: Math.min(time.length, response?.channels?.[name]?.mean?.length ?? 0) })).filter((item) => item.count > 1);
+  if (!series.length) return <div className="chart-empty">Normalizovaná odozva nie je dostupná.</div>;
+  const allValues = series.flatMap(({ channel: item, count }) => { const mean = item?.mean?.slice(0, count) ?? []; const std = item?.std?.slice(0, count) ?? []; return mean.flatMap((value, index) => [Number(value) - (Number(std[index]) || 0), Number(value) + (Number(std[index]) || 0)]); }).filter(Number.isFinite);
+  const min = Math.min(-0.2, ...allValues); const max = Math.max(1.2, ...allValues);
+  const x = (index: number, count: number) => 42 + (index / Math.max(1, count - 1)) * 458;
   const y = (value: number) => 190 - ((value - min) / Math.max(0.001, max - min)) * 160;
-  const points = (values: number[]) => values.slice(0, count).map((value, index) => `${x(index).toFixed(1)},${y(value).toFixed(1)}`).join(" ");
-  return <div className="response-chart"><svg viewBox="0 0 520 220" role="img" aria-label={`Normalizovaná odozva kanála ${channel}`}><line x1="42" y1="190" x2="500" y2="190" className="chart-axis" /><line x1="42" y1="30" x2="42" y2="190" className="chart-axis" /><line x1="42" y1={y(0)} x2="500" y2={y(0)} className="chart-zero" /><polyline points={points(mean)} className="chart-mean" /><polyline points={points(median)} className="chart-median" /><text x="46" y="18" className="chart-label">A priemer</text><text x="125" y="18" className="chart-label median-label">B medián</text><text x="452" y="212" className="chart-label">{time[count - 1]?.toFixed(1)} s</text></svg></div>;
+  return <div className="response-chart"><svg viewBox="0 0 520 220" role="img" aria-label={mode === "all" ? "Normalizovaná odozva všetkých osí" : \`Normalizovaná odozva kanála \${channel}\`}><line x1="42" y1="190" x2="500" y2="190" className="chart-axis" /><line x1="42" y1="30" x2="42" y2="190" className="chart-axis" /><line x1="42" y1={y(0)} x2="500" y2={y(0)} className="chart-zero" />{series.map(({ name, channel: item, count }) => { const mean = item?.mean?.slice(0, count).map(Number) ?? []; const median = item?.median?.slice(0, count).map(Number) ?? []; const std = item?.std?.slice(0, count).map(Number) ?? []; const upper = mean.map((value, index) => \`\${x(index, count).toFixed(1)},\${y(value + (std[index] || 0)).toFixed(1)}\`); const lower = mean.map((value, index) => \`\${x(index, count).toFixed(1)},\${y(value - (std[index] || 0)).toFixed(1)}\`).reverse(); const band = [...upper, ...lower].join(" "); const meanPoints = mean.map((value, index) => \`\${x(index, count).toFixed(1)},\${y(value).toFixed(1)}\`).join(" "); const medianPoints = median.map((value, index) => \`\${x(index, count).toFixed(1)},\${y(value).toFixed(1)}\`).join(" "); return <g key={name}><polygon points={band} fill={RESPONSE_COLORS[name]} opacity=".14" /><polyline points={meanPoints} fill="none" stroke={RESPONSE_COLORS[name]} strokeWidth="2" /><polyline points={medianPoints} fill="none" stroke={RESPONSE_COLORS[name]} strokeWidth="1.5" strokeDasharray="5 3" opacity=".9" /></g>; })}<text x="46" y="18" className="chart-label">Priemer</text><text x="104" y="18" className="chart-label median-label">Medián</text><text x="430" y="18" className="chart-label">± SD</text><text x="452" y="212" className="chart-label">{time[time.length - 1]?.toFixed(1)} s</text></svg><div className="chart-legend">{series.map(({ name }) => <span key={name}><i style={{ background: RESPONSE_COLORS[name] }} />{name}</span>)}</div></div>;
 }
 
 function Metric({ label, value }: { label: string; value: string | number }) {
