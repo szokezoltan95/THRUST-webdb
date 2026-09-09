@@ -249,3 +249,9 @@ h1 { max-width: 880px; margin: 20px 0; font-size: clamp(42px, 7vw, 84px); line-h
 .chart-legend { display: flex; flex-wrap: wrap; gap: 12px; padding: 7px 4px 2px; color: #9db0c4; font-size: .74rem; }
 .chart-legend span { display: inline-flex; align-items: center; gap: 5px; }
 .chart-legend i { width: 9px; height: 9px; display: inline-block; border-radius: 50%; }
+
+
+/* Compact result chart for Full HD workspaces */
+.response-chart { max-width: 700px; margin: 8px auto 0; padding: 4px 6px; }
+.response-chart svg { max-height: 286px; }
+.metrics-summary { margin-top: 12px; padding-top: 12px; }
