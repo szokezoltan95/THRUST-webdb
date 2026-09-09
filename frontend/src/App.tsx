@@ -345,7 +345,7 @@ export function App() {
   );
 }
 
-type NormalizedChannel = { mean?: number[]; median?: number[]; std?: number[] };
+type NormalizedChannel = { mean?: number[]; median?: number[]; std?: number[]; metrics?: Record<string, number | null> };
 type NormalizedResponse = { time_s?: number[]; channels?: Record<string, NormalizedChannel> };
 type ResponseMode = "single" | "all";
 
@@ -393,13 +393,29 @@ function calculateStepMetrics(channel: NormalizedChannel | undefined, time: numb
 }
 
 function formatMetric(value: number | null, unit = "") { return value === null || !Number.isFinite(value) ? "—" : value.toFixed(3) + unit; }
+function metricsFor(channel: NormalizedChannel | undefined, time: number[]): StepMetrics {
+  const raw = channel?.metrics;
+  if (raw && typeof raw.step_count === "number" && raw.step_count > 0) {
+    return {
+      reaction_s: raw.reaction_delay_s ?? null,
+      rise_s: raw.rise_time_s ?? null,
+      overshoot_pct: raw.overshoot_pct ?? null,
+      settling_s: raw.settling_time_s ?? null,
+      steady_state_error_pct: raw.steady_state_error_pct ?? null,
+      rmse: raw.tracking_rmse ?? null,
+      mean_std: raw.mean_std ?? null,
+    };
+  }
+  return calculateStepMetrics(channel, time);
+}
+
 
 function ResponseMetrics({ data }: { data: unknown }) {
   const response = data as NormalizedResponse | null;
   const time = response?.time_s ?? [];
   const available = RESPONSE_CHANNELS.filter((name) => response?.channels?.[name]?.mean?.length);
   if (!available.length) return null;
-  return <section className="metrics-summary"><div className="eyebrow">VYPOČÍTANÉ UKAZOVATELE</div><p className="muted metrics-note">Odhady zo znormalizovanej priemernej odozvy; presné modelové parametre budú doplnené lokálnym THRUST-compute.</p><div className="metrics-table"><div className="metrics-head"><span>Osa</span><span>Oneskorenie</span><span>Náběh 10–90 %</span><span>Overshoot</span><span>Ustálenie</span><span>Chyba</span><span>RMSE</span><span>Priem. SD</span></div>{available.map((name) => { const m = calculateStepMetrics(response?.channels?.[name], time); return <div className="metrics-row" key={name}><strong style={{ color: RESPONSE_COLORS[name] }}>{name}</strong><span>{formatMetric(m.reaction_s, " s")}</span><span>{formatMetric(m.rise_s, " s")}</span><span>{formatMetric(m.overshoot_pct, " %")}</span><span>{formatMetric(m.settling_s, " s")}</span><span>{formatMetric(m.steady_state_error_pct, " %")}</span><span>{formatMetric(m.rmse)}</span><span>{formatMetric(m.mean_std)}</span></div>; })}</div></section>;
+  return <section className="metrics-summary"><div className="eyebrow">VYPOČÍTANÉ UKAZOVATELE</div><p className="muted metrics-note">Odhady zo znormalizovanej priemernej odozvy; presné modelové parametre budú doplnené lokálnym THRUST-compute.</p><div className="metrics-table"><div className="metrics-head"><span>Osa</span><span>Oneskorenie</span><span>Náběh 10–90 %</span><span>Overshoot</span><span>Ustálenie</span><span>Chyba</span><span>RMSE</span><span>Priem. SD</span></div>{available.map((name) => { const m = metricsFor(response?.channels?.[name], time); return <div className="metrics-row" key={name}><strong style={{ color: RESPONSE_COLORS[name] }}>{name}</strong><span>{formatMetric(m.reaction_s, " s")}</span><span>{formatMetric(m.rise_s, " s")}</span><span>{formatMetric(m.overshoot_pct, " %")}</span><span>{formatMetric(m.settling_s, " s")}</span><span>{formatMetric(m.steady_state_error_pct, " %")}</span><span>{formatMetric(m.rmse)}</span><span>{formatMetric(m.mean_std)}</span></div>; })}</div></section>;
 }
 
 function ResponseChart({ data, channel, mode }: { data: unknown; channel: string; mode: ResponseMode }) {
