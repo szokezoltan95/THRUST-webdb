@@ -28,6 +28,8 @@ export function App() {
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [participantCode, setParticipantCode] = useState("");
   const [participantMessage, setParticipantMessage] = useState("");
+  const [participantSearch, setParticipantSearch] = useState("");
+  const [participantSort, setParticipantSort] = useState<"code" | "first" | "last" | "count">("code");
   const [tests, setTests] = useState<TestDefinition[]>([]);
   const defaultTestConfiguration = `{
   "sampling_hz": 100,
@@ -227,6 +229,24 @@ export function App() {
     return participants.find((participant) => participant.id === participantId)?.participant_code ?? participantId.slice(0, 8);
   }
 
+  function participantMeasurements(participantId: string) {
+    return measurements.filter((measurement) => measurement.participant_id === participantId && measurement.raw_sha256);
+  }
+
+  function filteredParticipants() {
+    const query = participantSearch.trim().toLowerCase();
+    return [...participants]
+      .filter((participant) => !query || participant.participant_code.toLowerCase().includes(query))
+      .sort((left, right) => {
+        const leftMeasurements = participantMeasurements(left.id);
+        const rightMeasurements = participantMeasurements(right.id);
+        if (participantSort === "count") return rightMeasurements.length - leftMeasurements.length;
+        if (participantSort === "first") return (leftMeasurements[0]?.started_at ?? "").localeCompare(rightMeasurements[0]?.started_at ?? "");
+        if (participantSort === "last") return (rightMeasurements[0]?.started_at ?? "").localeCompare(leftMeasurements[0]?.started_at ?? "");
+        return left.participant_code.localeCompare(right.participant_code);
+      });
+  }
+
   return (
     <main>
       {user ? (
@@ -250,8 +270,14 @@ export function App() {
                 <div className="admin-grid"><section className="panel quick-panel"><div className="eyebrow">RÝCHLA AKCIA</div><h2>Nový účastník</h2><p className="muted">Vytvor pseudonymné ID a priraď k nemu neskoršie merania.</p><button className="primary" onClick={() => setActiveSection("participants")}>Otvoriť administráciu účastníkov</button></section><section className="panel quick-panel"><div className="eyebrow">RÝCHLA AKCIA</div><h2>Synchronizované výsledky</h2><p className="muted">Zobraz merania odoslané z lokálneho THRUST/SCoPE klienta.</p><button className="primary" onClick={() => setActiveSection("measurements")}>Otvoriť evidenciu meraní</button></section></div>
               </>}
               {activeSection === "participants" && <>
-                <div className="admin-grid"><section className="panel"><div className="eyebrow">NOVÝ ÚČASTNÍK</div><h2>Vytvoriť účastníka</h2><p className="muted">Na serveri sa ukladá iba pseudonymné ID.</p><form className="participant-form" onSubmit={createParticipant}><label>Jedinečný kód<input value={participantCode} onChange={(event) => setParticipantCode(event.target.value.toUpperCase())} maxLength={5} pattern="[A-Za-z0-9]{5}" placeholder="ABCDE" required /></label><div className="actions"><button type="button" className="quiet" onClick={generateParticipantCode}>Generovať ID</button><button type="submit" className="primary">Vytvoriť</button></div></form>{participantMessage && <p className="notice">{participantMessage}</p>}</section><section className="panel"><div className="eyebrow">EVIDENCIA</div><h2>Registrovaní účastníci</h2>{participants.length === 0 ? <p className="muted">Zatiaľ nie sú evidovaní žiadni účastníci.</p> : <div className="participant-list">{participants.map((participant) => <button className="participant-row" key={participant.id} onClick={() => openParticipant(participant)}><strong>{participant.participant_code}</strong><span>{participant.is_active ? "Aktívny" : "Archivovaný"}</span></button>)}</div>}</section></div>
-                {selectedParticipant && <section className="panel detail-panel"><div className="eyebrow">DETAIL ÚČASTNÍKA</div><h2>{selectedParticipant.participant.participant_code}</h2>{selectedParticipant.measurements.filter((measurement) => measurement.raw_data_available).length === 0 ? <p className="muted">Účastník zatiaľ nemá synchronizované merania.</p> : <div className="participant-list">{selectedParticipant.measurements.filter((measurement) => measurement.raw_data_available).map((measurement) => <div className="participant-row" key={measurement.id}><strong>{measurement.test_type}</strong><span>{new Date(measurement.started_at).toLocaleString("sk-SK")} · {measurement.status}</span></div>)}</div>}</section>}
+                <section className="browser-panel">
+                  <div className="browser-header"><div><div className="eyebrow">ÚČASTNÍCI</div><h2>Databáza účastníkov</h2><p className="muted">Na serveri sa uchováva iba pseudonymné päťznakové ID.</p></div><button className="primary compact" onClick={() => document.getElementById("new-participant-code")?.focus()}>Nový účastník</button></div>
+                  <div className="browser-toolbar"><input placeholder="Hľadať ID účastníka…" value={participantSearch} onChange={(event) => setParticipantSearch(event.target.value)} /><select value={participantSort} onChange={(event) => setParticipantSort(event.target.value as typeof participantSort)}><option value="code">Zoradiť podľa ID</option><option value="first">Najstarší prvý test</option><option value="last">Najnovší posledný test</option><option value="count">Počet meraní</option></select></div>
+                  <div className="data-table participant-table"><div className="data-table-head"><span>ID účastníka</span><span>Prvé meranie</span><span>Posledné meranie</span><span>Meraní</span><span>Akcie</span></div>{filteredParticipants().map((participant) => { const rows = participantMeasurements(participant.id); const first = rows.length ? rows[rows.length - 1].started_at : null; const last = rows.length ? rows[0].started_at : null; return <div className="data-table-row" key={participant.id}><strong>{participant.participant_code}</strong><span>{first ? new Date(first).toLocaleDateString("sk-SK") : "—"}</span><span>{last ? new Date(last).toLocaleDateString("sk-SK") : "—"}</span><span>{rows.length}</span><span className="row-actions"><button className="quiet compact" onClick={() => openParticipant(participant)}>Otvoriť</button><button className="quiet compact" onClick={() => { setMeasurementParticipantFilter(participant.id); setActiveSection("measurements"); }}>Merania</button></span></div>; })}</div>
+                  {filteredParticipants().length === 0 && <div className="empty-list"><h2>Žiadni účastníci</h2><p className="muted">Filteru nezodpovedá žiadny záznam.</p></div>}
+                </section>
+                <section className="participant-create-strip"><div><div className="eyebrow">NOVÝ ÚČASTNÍK</div><strong>Vytvoriť anonymné ID</strong></div><form className="inline-create-form" onSubmit={createParticipant}><input id="new-participant-code" value={participantCode} onChange={(event) => setParticipantCode(event.target.value.toUpperCase())} maxLength={5} pattern="[A-Za-z0-9]{5}" placeholder="ABCDE" required /><button type="button" className="quiet compact" onClick={generateParticipantCode}>Generovať</button><button type="submit" className="primary compact">Vytvoriť</button></form>{participantMessage && <span className="notice">{participantMessage}</span>}</section>
+                {selectedParticipant && <section className="browser-detail"><div className="detail-header"><div><div className="eyebrow">DETAIL ÚČASTNÍKA</div><h2>{selectedParticipant.participant.participant_code}</h2></div><button className="quiet compact" onClick={() => setSelectedParticipant(null)}>Zavrieť detail</button></div><p className="muted">História synchronizovaných meraní účastníka.</p><div className="data-table"><div className="data-table-head"><span>Test</span><span>Dátum</span><span>Stav</span><span>Akcia</span></div>{selectedParticipant.measurements.filter((measurement) => measurement.raw_data_available).map((measurement) => <div className="data-table-row" key={measurement.id}><strong>{measurement.test_type}</strong><span>{new Date(measurement.started_at).toLocaleString("sk-SK")}</span><span>{measurement.status}</span><button className="quiet compact" onClick={() => { setSelectedMeasurementId(measurement.id); setActiveSection("measurements"); }}>Otvoriť výsledok</button></div>)}</div></section>}
               </>}
               {activeSection === "tests" && <div className="admin-grid"><section className="panel"><div className="eyebrow">KATALÓG TESTOV</div><h2>Nový typ testu</h2><form className="participant-form" onSubmit={createTest}><label>Kód testu<input value={testForm.test_code} onChange={(event) => setTestForm({ ...testForm, test_code: event.target.value.toUpperCase() })} placeholder="SCOPE_HARD" required /></label><label>Názov<input value={testForm.name} onChange={(event) => setTestForm({ ...testForm, name: event.target.value })} placeholder="SCoPE HARD" required /></label><label>Verzia<input value={testForm.version} onChange={(event) => setTestForm({ ...testForm, version: event.target.value })} required /></label><label>Analytický profil<input value={testForm.analysis_profile} onChange={(event) => setTestForm({ ...testForm, analysis_profile: event.target.value })} required /></label><label>Konfigurácia testu (JSON)<textarea className="config-editor" value={testForm.configuration} onChange={(event) => setTestForm({ ...testForm, configuration: event.target.value })} rows={12} required /></label><button className="primary" type="submit">Pridať test</button></form>{testMessage && <p className="notice">{testMessage}</p>}</section><section className="panel"><div className="eyebrow">DOSTUPNÉ TESTY</div><h2>Katalóg</h2>{tests.length === 0 ? <p className="muted">Zatiaľ nie sú definované žiadne testy.</p> : <div className="participant-list">{tests.map((test) => <div className="participant-row" key={test.id}><strong>{test.name}</strong><span>{test.test_code} · v{test.version} · {test.status}</span></div>)}</div>}</section></div>}
               {activeSection === "measurements" && <>
