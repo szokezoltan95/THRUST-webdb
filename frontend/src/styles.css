@@ -236,3 +236,16 @@ h1 { max-width: 880px; margin: 20px 0; font-size: clamp(42px, 7vw, 84px); line-h
 .detail-modal-open .detail-header { position: sticky; top: -18px; z-index: 2; padding: 18px 0 12px; background: #0a1726; }
 .detail-window-bar { display: flex; justify-content: space-between; align-items: center; gap: 14px; margin-bottom: 4px; }
 @media (max-width: 700px) { .detail-modal-open { inset: 10px; max-height: calc(100vh - 20px); } .detail-modal-open .detail-header { top: -18px; } }
+
+
+/* Result metrics and multi-axis charts */
+.metrics-summary { margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--line); }
+.metrics-note { margin: 7px 0 12px; font-size: .78rem; }
+.metrics-table { overflow-x: auto; border: 1px solid var(--line); }
+.metrics-head, .metrics-row { display: grid; grid-template-columns: .6fr repeat(7, minmax(92px, 1fr)); gap: 8px; align-items: center; min-width: 760px; padding: 8px 10px; }
+.metrics-head { color: #7890a8; background: #07121f; font-size: .68rem; text-transform: uppercase; letter-spacing: .06em; }
+.metrics-row { border-top: 1px solid var(--line); color: #c5d5e5; font-size: .78rem; }
+.metrics-row strong { font-size: .82rem; }
+.chart-legend { display: flex; flex-wrap: wrap; gap: 12px; padding: 7px 4px 2px; color: #9db0c4; font-size: .74rem; }
+.chart-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.chart-legend i { width: 9px; height: 9px; display: inline-block; border-radius: 50%; }
