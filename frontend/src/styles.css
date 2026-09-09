@@ -289,3 +289,15 @@ h1 { max-width: 880px; margin: 20px 0; font-size: clamp(42px, 7vw, 84px); line-h
 .chart-expand-window .plot-axis-label { font-size: 12px; }
 .chart-expand-window .plot-title { font-size: 16px; }
 @media (max-width: 1100px) { .results-layout { grid-template-columns: 1fr; } .metrics-summary { margin-top: 12px; } }
+
+
+/* Tighten result workspace spacing */
+.detail-grid { margin: 10px 0; }
+.results-layout { margin-top: 4px; gap: 10px; }
+.response-grid { gap: 4px; margin-top: 2px; }
+.chart-tile { padding: 1px; }
+.metrics-summary { padding: 10px; }
+.metrics-head, .metrics-row { min-width: 0; grid-template-columns: .5fr repeat(7, minmax(62px, 1fr)); gap: 5px; padding: 6px 7px; }
+.metrics-head { font-size: .62rem; }
+.metrics-row { font-size: .7rem; }
+@media (max-width: 1100px) { .metrics-head, .metrics-row { min-width: 760px; } }
