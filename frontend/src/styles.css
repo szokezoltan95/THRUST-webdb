@@ -228,3 +228,11 @@ h1 { max-width: 880px; margin: 20px 0; font-size: clamp(42px, 7vw, 84px); line-h
 .create-disclosure .participant-create-strip { margin: 0; border: 0; }
 .create-form-panel { padding: 18px; border-top: 1px solid var(--line); background: rgba(255,255,255,.025); }
 .config-preview { max-height: 360px; overflow: auto; margin: 12px 0 0; padding: 16px; background: #07121f; border: 1px solid var(--line); color: #a9dfff; font: .78rem/1.5 ui-monospace, SFMono-Regular, Consolas, monospace; white-space: pre-wrap; }
+
+
+/* Detail views open as independent fullscreen work windows */
+.detail-modal-closed { display: none !important; }
+.detail-modal-open { position: fixed !important; z-index: 1000; inset: 28px; margin: 0 !important; max-height: calc(100vh - 56px); overflow: auto; background: #0a1726 !important; box-shadow: 0 0 0 100vmax rgba(1, 7, 13, .82), 0 24px 90px rgba(0,0,0,.6); }
+.detail-modal-open .detail-header { position: sticky; top: -18px; z-index: 2; padding: 18px 0 12px; background: #0a1726; }
+.detail-window-bar { display: flex; justify-content: space-between; align-items: center; gap: 14px; margin-bottom: 4px; }
+@media (max-width: 700px) { .detail-modal-open { inset: 10px; max-height: calc(100vh - 20px); } .detail-modal-open .detail-header { top: -18px; } }
