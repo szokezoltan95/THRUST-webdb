@@ -63,7 +63,7 @@ export function App() {
   const [selectedMeasurementId, setSelectedMeasurementId] = useState<string | null>(null);
   const [selectedMeasurementIds, setSelectedMeasurementIds] = useState<string[]>([]);
   const [chartChannel, setChartChannel] = useState("AILE");
-  const [chartMode, setChartMode] = useState<"single" | "all">("single");
+  const [chartMode, setChartMode] = useState<"single" | "all">("all");
   const [measurementSearch, setMeasurementSearch] = useState("");
   const [measurementParticipantFilter, setMeasurementParticipantFilter] = useState("");
   const [measurementTestFilter, setMeasurementTestFilter] = useState("");
