@@ -255,3 +255,23 @@ h1 { max-width: 880px; margin: 20px 0; font-size: clamp(42px, 7vw, 84px); line-h
 .response-chart { max-width: 700px; margin: 8px auto 0; padding: 4px 6px; }
 .response-chart svg { max-height: 286px; }
 .metrics-summary { margin-top: 12px; padding-top: 12px; }
+
+
+/* Multi-axis 2x2 response chart grid */
+.response-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; max-width: 720px; margin: 8px auto 0; }
+.response-single { max-width: 700px; margin: 8px auto 0; }
+.chart-tile { min-width: 0; padding: 3px; border: 1px solid var(--line); background: #07121f; color: inherit; text-align: left; cursor: zoom-in; }
+.chart-tile:hover { border-color: #45d5ff; background: #0b1d30; }
+.plot-svg { display: block; width: 100%; height: auto; }
+.plot-svg-large { width: min(100%, 980px); margin: 0 auto; }
+.plot-grid line { stroke: #29445d; stroke-width: .7; stroke-dasharray: 2 3; opacity: .8; }
+.plot-tick { fill: #7890a8; font-size: 8px; }
+.plot-axis-label { fill: #8ea5bc; font-size: 8px; }
+.plot-title { font-size: 11px; font-weight: 700; }
+.plot-hint { fill: #7890a8; font-size: 7px; }
+.chart-expand-backdrop { position: fixed; inset: 0; z-index: 1100; display: grid; place-items: center; padding: 28px; background: rgba(1,7,13,.84); backdrop-filter: blur(8px); }
+.chart-expand-window { width: min(1100px, 100%); max-height: calc(100vh - 56px); overflow: auto; padding: 18px; border: 1px solid #31506e; background: #0a1726; box-shadow: 0 24px 90px rgba(0,0,0,.65); }
+.chart-expand-header { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 10px; }
+.chart-expand-header h3 { margin: 5px 0 0; }
+.chart-expand-window .response-chart { max-width: 100%; }
+@media (max-width: 650px) { .response-grid { grid-template-columns: 1fr; } .chart-expand-backdrop { padding: 10px; } .chart-expand-window { max-height: calc(100vh - 20px); padding: 10px; } }
