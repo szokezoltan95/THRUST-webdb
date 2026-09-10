@@ -486,7 +486,9 @@ const initialScopeConfiguration: ScopeConfiguration = {
 function makeScopeConfiguration(value: Record<string, unknown>): ScopeConfiguration {
   const loadedDeadzone = Array.isArray(value.deadzone) ? value.deadzone.map(Number) : initialScopeConfiguration.deadzone;
   const loadedAxisMap = value.axis_map && typeof value.axis_map === "object" ? value.axis_map as Record<string, number> : {};
-  return { ...initialScopeConfiguration, ...value, difficulty: String(value.difficulty ?? "hard").toLowerCase(), deadzone: [...loadedDeadzone, ...initialScopeConfiguration.deadzone].slice(0, 4), axis_map: { ...initialScopeConfiguration.axis_map, ...loadedAxisMap } } as ScopeConfiguration;
+  const normalized = { ...value };
+  delete normalized.user;
+  return { ...initialScopeConfiguration, ...normalized, difficulty: String(value.difficulty ?? "hard").toLowerCase(), deadzone: [...loadedDeadzone, ...initialScopeConfiguration.deadzone].slice(0, 4), axis_map: { ...initialScopeConfiguration.axis_map, ...loadedAxisMap } } as ScopeConfiguration;
 }
 
 function TestCreator({ onCreated }: { onCreated: (test: TestDefinition) => void }) {
@@ -540,12 +542,12 @@ function TestEditor({ test, onClose, onSaved }: { test: TestDefinition; onClose:
   const [message, setMessage] = useState("");
   const colorInput = useRef<HTMLInputElement>(null);
   function setValue(key: string, value: unknown) { setConfiguration((current) => ({ ...current, [key]: value })); }
-  function pickColor(key: string) { setSelectedColor(key); colorInput.current?.click(); }
+  function pickColor(key: string) { setSelectedColor(key); if (colorInput.current) { colorInput.current.value = String(configuration[key] ?? "#ffffff"); colorInput.current.click(); } }
   const colorFields = [["screen_background", "Pozadie obrazovky"], ["gimbal_background", "Pozadie gimbalu"], ["grid_color", "Okraje a stredové značky"], ["zone_idle_fill", "Výplň zóny"], ["zone_idle_outline", "Obrys zóny"], ["stick_fill", "Výplň páčky"], ["stick_outline", "Obrys páčky"], ["label_color", "Popisy"], ["prompt_color", "Výzva"]] as const;
   async function save() {
     setMessage("");
     try {
-      const saved = await request<TestDefinition>(\`/api/admin/tests/\${test.id}\`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ configuration: { ...configuration, difficulty: String(configuration.difficulty).toLowerCase() } }) });
+      const saved = await request<TestDefinition>(`/api/admin/tests/${test.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ configuration: { ...configuration, difficulty: String(configuration.difficulty).toLowerCase() } }) });
       onSaved(saved); setMessage("Nastavenia boli uložené.");
     } catch (reason) { setMessage(reason instanceof Error ? reason.message : "Nastavenia sa nepodarilo uložiť."); }
   }
