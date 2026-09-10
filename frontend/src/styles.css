@@ -378,3 +378,12 @@ h1 { max-width: 880px; margin: 20px 0; font-size: clamp(42px, 7vw, 84px); line-h
 .editor-preview .config-card { margin-top: 14px; }
 .editor-preview .color-list { max-height: 290px; overflow-y: auto; }
 .preview-clickable { transition: filter .12s ease; }
+
+
+/* Preview first, controls second: visual edits stay beside the drawing */
+.editor-layout { grid-template-columns: minmax(430px, 1.08fr) minmax(560px, .92fr); }
+.editor-preview { grid-column: 1; grid-row: 1; }
+.editor-controls { grid-column: 2; grid-row: 1; }
+@media (max-width: 1050px) {
+  .editor-preview, .editor-controls { grid-column: auto; grid-row: auto; }
+}
