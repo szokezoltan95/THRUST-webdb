@@ -531,7 +531,7 @@ function TestEditor({ test, onClose, onSaved }: { test: TestDefinition; onClose:
   async function save() {
     setMessage("");
     try {
-      const saved = await request<TestDefinition>(\`${"/api/admin/tests/"}${test.id}\`, {
+      const saved = await request<TestDefinition>(`${"/api/admin/tests/"}${test.id}`, {
         method: "PATCH", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ configuration: { ...configuration, difficulty: String(configuration.difficulty).toLowerCase() } })
       });
