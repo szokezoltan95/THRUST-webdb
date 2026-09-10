@@ -387,3 +387,10 @@ h1 { max-width: 880px; margin: 20px 0; font-size: clamp(42px, 7vw, 84px); line-h
 @media (max-width: 1050px) {
   .editor-preview, .editor-controls { grid-column: auto; grid-row: auto; }
 }
+
+
+.toggle-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 16px; margin-top: 14px; }
+.toggle-grid label { display: flex; align-items: center; gap: 7px; color: #c5d5e5; font-size: .78rem; }
+.toggle-grid input { width: auto; accent-color: #45d5ff; }
+.geometry-fields { margin-top: 14px; }
+@media (max-width: 560px) { .toggle-grid { grid-template-columns: 1fr; } }
