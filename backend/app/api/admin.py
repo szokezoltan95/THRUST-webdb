@@ -14,7 +14,7 @@ from app.db.session import get_db
 from app.models import Measurement, Participant, TestDefinition
 from app.schemas.participant import ParticipantCreate, ParticipantResponse
 from app.schemas.measurement import MeasurementCreate, MeasurementResponse
-from app.schemas.test_definition import TestDefinitionCreate, TestDefinitionResponse
+from app.schemas.test_definition import TestDefinitionCreate, TestDefinitionResponse, TestDefinitionUpdate
 
 router = APIRouter(prefix="/admin", tags=["administration"])
 
@@ -102,8 +102,36 @@ async def create_test(
     )
     if existing:
         raise HTTPException(status_code=409, detail="Táto verzia testu už existuje.")
-    test = TestDefinition(**payload.model_dump())
+    data = payload.model_dump()
+    if isinstance(data["configuration"].get("difficulty"), str):
+        data["configuration"]["difficulty"] = data["configuration"]["difficulty"].lower()
+    test = TestDefinition(**data)
     db.add(test)
+    await db.commit()
+    await db.refresh(test)
+    return test
+
+
+@router.patch("/tests/{test_id}", response_model=TestDefinitionResponse)
+async def update_test(
+    test_id: str,
+    payload: TestDefinitionUpdate,
+    auth: AuthContext = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+) -> TestDefinition:
+    test = await db.get(TestDefinition, test_id)
+    if test is None:
+        raise HTTPException(status_code=404, detail="Typ testu neexistuje.")
+    if test.status != "draft":
+        raise HTTPException(status_code=409, detail="Aktívny test už nie je možné upravovať.")
+    data = payload.model_dump(exclude_unset=True)
+    if "name" in data:
+        test.name = data["name"]
+    if "configuration" in data and data["configuration"] is not None:
+        configuration = dict(data["configuration"])
+        if isinstance(configuration.get("difficulty"), str):
+            configuration["difficulty"] = configuration["difficulty"].lower()
+        test.configuration = configuration
     await db.commit()
     await db.refresh(test)
     return test
