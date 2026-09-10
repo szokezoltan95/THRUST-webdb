@@ -25,6 +25,26 @@ def generate_participant_code() -> str:
     return "".join(secrets.choice(CODE_ALPHABET) for _ in range(5))
 
 
+def normalize_test_configuration(source: dict) -> dict:
+    """Keep WebDB test definitions compatible with the local THRUST data flow."""
+    configuration = dict(source)
+    for key in ("user", "profile_name", "expert_mode", "output_root", "use_dated_subfolders"):
+        configuration.pop(key, None)
+    if isinstance(configuration.get("difficulty"), str):
+        configuration["difficulty"] = configuration["difficulty"].lower()
+    # A measurement cannot be uploaded without its raw source log.
+    configuration["save_raw_log"] = True
+    # Evaluation produces the normalized step-response artifact consumed by WebDB.
+    if configuration.get("run_evaluation", False):
+        configuration["save_step_file"] = True
+    if not configuration.get("run_evaluation", False):
+        configuration["auto_open_graph"] = False
+        configuration["show_graph"] = False
+    if not configuration.get("save_graph_pdf", False):
+        configuration["auto_open_graph"] = False
+    return configuration
+
+
 @router.get("/participants", response_model=list[ParticipantResponse])
 async def list_participants(
     auth: AuthContext = Depends(require_admin),
@@ -103,8 +123,7 @@ async def create_test(
     if existing:
         raise HTTPException(status_code=409, detail="Táto verzia testu už existuje.")
     data = payload.model_dump()
-    if isinstance(data["configuration"].get("difficulty"), str):
-        data["configuration"]["difficulty"] = data["configuration"]["difficulty"].lower()
+    data["configuration"] = normalize_test_configuration(data["configuration"])
     test = TestDefinition(**data)
     db.add(test)
     await db.commit()
@@ -128,9 +147,7 @@ async def update_test(
     if "name" in data:
         test.name = data["name"]
     if "configuration" in data and data["configuration"] is not None:
-        configuration = dict(data["configuration"])
-        if isinstance(configuration.get("difficulty"), str):
-            configuration["difficulty"] = configuration["difficulty"].lower()
+        configuration = normalize_test_configuration(data["configuration"])
         test.configuration = configuration
     await db.commit()
     await db.refresh(test)
