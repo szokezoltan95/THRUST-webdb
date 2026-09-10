@@ -57,6 +57,7 @@ export function App() {
   const [testMessage, setTestMessage] = useState("");
   const [testSearch, setTestSearch] = useState("");
   const [selectedTestId, setSelectedTestId] = useState<string | null>(null);
+  const [editingTestId, setEditingTestId] = useState<string | null>(null);
   const [selectedParticipant, setSelectedParticipant] = useState<ParticipantDetail | null>(null);
   const [measurements, setMeasurements] = useState<Measurement[]>([]);
   const [uploadMessage, setUploadMessage] = useState("");
@@ -291,11 +292,12 @@ export function App() {
                 <section className="browser-panel">
                   <div className="browser-header"><div><div className="eyebrow">KATALÓG TESTOV</div><h2>Testy a konfigurácie</h2><p className="muted">Každá verzia testu je samostatná, nemenná konfigurácia pre THRUST.</p></div></div>
                   <div className="browser-toolbar"><input placeholder="Hľadať kód, názov alebo profil…" value={testSearch} onChange={(event) => setTestSearch(event.target.value)} /></div>
-                  <div className="data-table test-table"><div className="data-table-head"><span>Kód</span><span>Názov</span><span>Verzia</span><span>Profil</span><span>Stav / akcie</span></div>{filteredTests().map((test) => <div className="data-table-row" key={test.id}><strong>{test.test_code}</strong><span>{test.name}</span><span>v{test.version}</span><span>{test.analysis_profile}</span><span className="row-actions"><span>{test.status}</span><button className="quiet compact" onClick={() => setSelectedTestId(test.id)}>Otvoriť</button></span></div>)}</div>
+                  <div className="data-table test-table"><div className="data-table-head"><span>Kód</span><span>Názov</span><span>Verzia</span><span>Profil</span><span>Stav / akcie</span></div>{filteredTests().map((test) => <div className="data-table-row" key={test.id}><strong>{test.test_code}</strong><span>{test.name}</span><span>v{test.version}</span><span>{test.analysis_profile}</span><span className="row-actions"><span>{test.status}</span><button className="quiet compact" onClick={() => setSelectedTestId(test.id)}>Otvoriť</button><button className="quiet compact" onClick={() => setEditingTestId(test.id)}>Editovať</button></span></div>)}</div>
                   {filteredTests().length === 0 && <div className="empty-list"><h2>Žiadne testy</h2><p className="muted">Filteru nezodpovedá žiadna verzia testu.</p></div>}
                 </section>
                 {selectedTestId && (() => { const selected = tests.find((test) => test.id === selectedTestId); return selected ? <section className={selectedTestId ? "browser-detail detail-modal-open" : "browser-detail detail-modal-closed"}><div className="detail-header"><div><div className="eyebrow">KONFIGURÁCIA TESTU</div><h2>{selected.name} · v{selected.version}</h2></div><button className="quiet compact" onClick={() => setSelectedTestId(null)}>Zavrieť detail</button></div><div className="detail-grid"><div><span>Kód</span><strong>{selected.test_code}</strong></div><div><span>Profil</span><strong>{selected.analysis_profile}</strong></div><div><span>Stav</span><strong>{selected.status}</strong></div><div><span>Aktívny</span><strong>{selected.is_active ? "Áno" : "Nie"}</strong></div></div><pre className="config-preview">{JSON.stringify(selected.configuration, null, 2)}</pre></section> : null })()}
-                <TestConfigurator onCreated={(test) => setTests((current) => [...current, test])} />
+                <TestCreator onCreated={(test) => { setTests((current) => [...current, test]); setEditingTestId(test.id); }} />
+                {editingTestId && (() => { const editing = tests.find((test) => test.id === editingTestId); return editing ? <TestEditor test={editing} onClose={() => setEditingTestId(null)} onSaved={(saved) => { setTests((current) => current.map((item) => item.id === saved.id ? saved : item)); setEditingTestId(null); }} /> : null; })()}
               </>}
               {activeSection === "measurements" && <>
                 <div className="workbench">
@@ -454,20 +456,21 @@ function ResponseChart({ data, channel, mode }: { data: unknown; channel: string
 }
 
 
+
 type ScopeConfiguration = {
   [key: string]: unknown;
-  user: string; difficulty: string; action_timeout_s: number; hold_time_s: number; fps: number;
+  difficulty: string; action_timeout_s: number; hold_time_s: number; fps: number;
   max_completed_actions: number; countdown_s: number; fullscreen: boolean; topmost: boolean;
-  joystick_index: number; break_axis: number; output_root: string; profile_name: string;
-  gui_gimbal_size: number; gui_stick_zone: number; screen_background: string; gimbal_background: string;
+  joystick_index: number; break_axis: number; stick_max: number; deadzone: number[];
+  axis_map: Record<string, number>; screen_background: string; gimbal_background: string;
   stick_outline: string; stick_fill: string; zone_idle_outline: string; zone_idle_fill: string;
   zone_ok_outline: string; zone_ok_fill: string; grid_color: string; label_color: string; prompt_color: string;
 };
 
 const initialScopeConfiguration: ScopeConfiguration = {
-  debug_output: false, user: "Pilot", difficulty: "hard", action_timeout_s: 3, hold_time_s: 0.5,
-  fps: 100, stick_max: 1000, deadzone: [100, 100, 100, 100], max_completed_actions: 50,
-  countdown_s: 3, seed: null, fullscreen: true, topmost: true, joystick_index: 0, break_axis: 5,
+  debug_output: false, difficulty: "hard", action_timeout_s: 3, hold_time_s: 0.5, fps: 100,
+  stick_max: 1000, deadzone: [100, 100, 100, 100], max_completed_actions: 50, countdown_s: 3,
+  fullscreen: true, topmost: true, joystick_index: 0, break_axis: 5,
   axis_map: { AILE: 0, ELEV: 1, THRO: 2, RUDD: 3 }, output_root: "Documents/THRUST/scope",
   profile_name: "default", use_dated_subfolders: true, save_raw_log: true, save_action_log: true,
   save_step_file: true, save_graph_pdf: true, auto_open_graph: true, run_evaluation: true, show_graph: false,
@@ -478,72 +481,70 @@ const initialScopeConfiguration: ScopeConfiguration = {
   grid_color: "#ffffff", label_color: "#ffffff", prompt_color: "#ff0000"
 };
 
-function TestConfigurator({ onCreated }: { onCreated: (test: TestDefinition) => void }) {
-  const [meta, setMeta] = useState({ test_code: "", name: "", version: "1.0", analysis_profile: "SCOPE_STEP_RESPONSE_V1" });
-  const [configuration, setConfiguration] = useState<ScopeConfiguration>(initialScopeConfiguration);
+function makeScopeConfiguration(value: Record<string, unknown>): ScopeConfiguration {
+  const loadedDeadzone = Array.isArray(value.deadzone) ? value.deadzone.map(Number) : initialScopeConfiguration.deadzone;
+  const loadedAxisMap = value.axis_map && typeof value.axis_map === "object" ? value.axis_map as Record<string, number> : {};
+  return { ...initialScopeConfiguration, ...value, difficulty: String(value.difficulty ?? "hard").toLowerCase(), deadzone: [...loadedDeadzone, ...initialScopeConfiguration.deadzone].slice(0, 4), axis_map: { ...initialScopeConfiguration.axis_map, ...loadedAxisMap } } as ScopeConfiguration;
+}
+
+function TestCreator({ onCreated }: { onCreated: (test: TestDefinition) => void }) {
+  const [name, setName] = useState("");
   const [message, setMessage] = useState("");
-  function setValue(key: string, value: unknown) { setConfiguration((current) => ({ ...current, [key]: value })); }
-  function numberValue(key: string, event: ChangeEvent<HTMLInputElement>) { setValue(key, Number(event.target.value)); }
-  function updateAxis(axis: string, event: ChangeEvent<HTMLInputElement>) {
-    const axisMap = configuration.axis_map as Record<string, number>;
-    setValue("axis_map", { ...axisMap, [axis]: Number(event.target.value) });
-  }
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault(); setMessage("");
+  async function create(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const cleanName = name.trim();
+    if (!cleanName) return;
+    setMessage("");
+    const slug = cleanName.toUpperCase().replace(/[^A-Z0-9]+/g, "_").replace(/^_|_$/g, "").slice(0, 42) || "TEST";
     try {
       const created = await request<TestDefinition>("/api/admin/tests", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...meta, configuration: { ...configuration, difficulty: String(configuration.difficulty).toLowerCase() } })
+        body: JSON.stringify({ test_code: "SCOPE_" + slug, name: cleanName, version: "1.0", analysis_profile: "SCOPE_STEP_RESPONSE_V1", configuration: { ...initialScopeConfiguration } })
       });
-      onCreated(created); setMeta({ test_code: "", name: "", version: "1.0", analysis_profile: "SCOPE_STEP_RESPONSE_V1" });
-      setConfiguration(initialScopeConfiguration); setMessage("Test bol vytvorený s grafickou konfiguráciou.");
+      setName(""); onCreated(created);
     } catch (reason) { setMessage(reason instanceof Error ? reason.message : "Test sa nepodarilo vytvoriť."); }
   }
-  const axisMap = configuration.axis_map as Record<string, number>;
-  const deadzone = configuration.deadzone as number[];
-  const colorFields = [
-    ["screen_background", "Pozadie obrazovky"], ["gimbal_background", "Pozadie gimbalu"],
-    ["stick_outline", "Obrys páčky"], ["stick_fill", "Výplň páčky"],
-    ["zone_idle_outline", "Obrys neaktívnej zóny"], ["zone_idle_fill", "Výplň neaktívnej zóny"],
-    ["zone_ok_outline", "Obrys správnej zóny"], ["zone_ok_fill", "Výplň správnej zóny"],
-    ["grid_color", "Mriežka"], ["label_color", "Popisy"], ["prompt_color", "Výzva"]
-  ] as const;
-  return (
-    <form className="test-configurator" onSubmit={submit}>
-      <div className="configurator-intro"><div><div className="eyebrow">GRAFICKÝ KONFIGURÁTOR</div><h2>Nový test</h2><p className="muted">Nastav parametre bez ručného písania JSON. Konfigurácia sa uloží ako nemenná verzia testu.</p></div><span className="config-badge">SCoPE · v1</span></div>
-      <div className="configurator-grid">
-        <section className="config-card"><div className="eyebrow">IDENTITA</div><h3>Definícia testu</h3><div className="field-grid">
-          <label>Kód testu<input value={meta.test_code} onChange={(event) => setMeta({ ...meta, test_code: event.target.value.toUpperCase() })} placeholder="SCOPE_HARD" required /></label>
-          <label>Názov<input value={meta.name} onChange={(event) => setMeta({ ...meta, name: event.target.value })} placeholder="SCoPE hard" required /></label>
-          <label>Verzia<input value={meta.version} onChange={(event) => setMeta({ ...meta, version: event.target.value })} required /></label>
-          <label>Analytický profil<input value={meta.analysis_profile} onChange={(event) => setMeta({ ...meta, analysis_profile: event.target.value })} required /></label>
-        </div></section>
-        <section className="config-card"><div className="eyebrow">EXPERIMENT</div><h3>Základné parametre</h3><div className="field-grid">
-          <label>Obtiažnosť<select value={String(configuration.difficulty)} onChange={(event) => setValue("difficulty", event.target.value)}><option value="easy">Ľahká</option><option value="medium">Stredná</option><option value="hard">Ťažká</option><option value="ultra">Ultra</option></select></label>
-          <label>Pilot / používateľ<input value={String(configuration.user)} onChange={(event) => setValue("user", event.target.value)} /></label>
-          <label>Vzorkovacia frekvencia (Hz)<input type="number" min="10" value={String(configuration.fps)} onChange={(event) => numberValue("fps", event)} /></label>
-          <label>Počet dokončených akcií<input type="number" min="1" value={String(configuration.max_completed_actions)} onChange={(event) => numberValue("max_completed_actions", event)} /></label>
-          <label>Timeout akcie (s)<input type="number" min="0.1" step="0.1" value={String(configuration.action_timeout_s)} onChange={(event) => numberValue("action_timeout_s", event)} /></label>
-          <label>Čas podržania (s)<input type="number" min="0.1" step="0.1" value={String(configuration.hold_time_s)} onChange={(event) => numberValue("hold_time_s", event)} /></label>
-          <label>Odpočet pred štartom (s)<input type="number" min="0" step="1" value={String(configuration.countdown_s)} onChange={(event) => numberValue("countdown_s", event)} /></label>
-          <label>Maximálna hodnota páčky<input type="number" min="1" value={String(configuration.stick_max)} onChange={(event) => numberValue("stick_max", event)} /></label>
-        </div></section>
-        <section className="config-card"><div className="eyebrow">JOYSTICK</div><h3>Mapovanie ovládania</h3><div className="axis-list">
-          {["AILE", "ELEV", "THRO", "RUDD"].map((axis) => <label key={axis}><strong>{axis}</strong><input type="number" min="0" value={String(axisMap[axis] ?? 0)} onChange={(event) => updateAxis(axis, event)} /></label>)}
-        </div><div className="field-grid compact-fields">
-          <label>Index joysticku<input type="number" min="0" value={String(configuration.joystick_index)} onChange={(event) => numberValue("joystick_index", event)} /></label>
-          <label>Break axis<input type="number" min="0" value={String(configuration.break_axis)} onChange={(event) => numberValue("break_axis", event)} /></label>
-          <label>Deadzone AILE<input type="number" min="0" value={String(deadzone[0] ?? 0)} onChange={(event) => setValue("deadzone", [Number(event.target.value), deadzone[1], deadzone[2], deadzone[3]])} /></label>
-          <label>Deadzone ELEV<input type="number" min="0" value={String(deadzone[1] ?? 0)} onChange={(event) => setValue("deadzone", [deadzone[0], Number(event.target.value), deadzone[2], deadzone[3]])} /></label>
-          <label>Deadzone THRO<input type="number" min="0" value={String(deadzone[2] ?? 0)} onChange={(event) => setValue("deadzone", [deadzone[0], deadzone[1], Number(event.target.value), deadzone[3]])} /></label>
-          <label>Deadzone RUDD<input type="number" min="0" value={String(deadzone[3] ?? 0)} onChange={(event) => setValue("deadzone", [deadzone[0], deadzone[1], deadzone[2], Number(event.target.value)])} /></label>
-        </div><div className="toggle-row"><label><input type="checkbox" checked={Boolean(configuration.fullscreen)} onChange={(event) => setValue("fullscreen", event.target.checked)} /> Celá obrazovka</label><label><input type="checkbox" checked={Boolean(configuration.topmost)} onChange={(event) => setValue("topmost", event.target.checked)} /> Vždy navrchu</label></div></section>
-        <section className="config-card"><div className="eyebrow">VZHĽAD</div><h3>Farby rozhrania</h3><div className="color-grid">{colorFields.map(([key, label]) => <label key={key}><span>{label}</span><span className="color-control"><input type="color" value={String(configuration[key])} onChange={(event) => setValue(key, event.target.value)} /><code>{String(configuration[key])}</code></span></label>)}</div></section>
-        <section className="config-card config-preview-card"><div className="eyebrow">KONTROLA</div><h3>Generovaná konfigurácia</h3><p className="muted">Toto je presne JSON, ktorý sa odošle do WebDB a neskôr načíta lokálny THRUST.</p><pre className="config-preview live">{JSON.stringify({ ...configuration, difficulty: String(configuration.difficulty).toLowerCase() }, null, 2)}</pre></section>
-      </div>
-      <div className="configurator-footer"><button className="primary" type="submit">Vytvoriť test</button>{message && <span className="notice">{message}</span>}</div>
-    </form>
-  );
+  return <section className="test-create-strip"><div><div className="eyebrow">NOVÝ TEST</div><strong>Vytvoriť novú definíciu</strong><p className="muted">Najprv zadaj iba názov. Parametre nastavíš v ďalšom okne.</p></div><form className="test-create-form" onSubmit={create}><input value={name} onChange={(event) => setName(event.target.value)} placeholder="Názov testu" required /><button className="primary compact" type="submit">Vytvoriť</button></form>{message && <span className="notice">{message}</span>}</section>;
+}
+
+function GimbalPreview({ configuration, selectedColor, onSelect }: { configuration: ScopeConfiguration; selectedColor: string; onSelect: (key: string) => void }) {
+  const color = (key: string) => String(configuration[key] ?? "#ffffff");
+  const gimbal = (x: number, prefix: string) => <g key={prefix} onClick={() => onSelect("gimbal_background")} className="preview-clickable">
+    <rect x={x} y="52" width="220" height="220" rx="3" fill={color("gimbal_background")} />
+    <g stroke={color("grid_color")} strokeWidth="2" opacity=".75" onClick={(event) => { event.stopPropagation(); onSelect("grid_color"); }} className="preview-clickable">
+      <line x1={x + 110} y1="52" x2={x + 110} y2="272" /><line x1={x} y1="162" x2={x + 220} y2="162" />
+      <line x1={x + 44} y1="52" x2={x + 44} y2="272" /><line x1={x + 176} y1="52" x2={x + 176} y2="272" />
+      <line x1={x} y1="96" x2={x + 220} y2="96" /><line x1={x} y1="228" x2={x + 220} y2="228" />
+    </g>
+    <circle cx={x + 110} cy="162" r="58" fill={color("zone_idle_fill")} stroke={selectedColor === "zone_idle_fill" ? "#45d5ff" : color("zone_idle_outline")} strokeWidth="8" onClick={(event) => { event.stopPropagation(); onSelect("zone_idle_fill"); }} className="preview-clickable" />
+    <circle cx={x + 110} cy="162" r="15" fill={color("stick_fill")} stroke={selectedColor === "stick_outline" ? "#45d5ff" : color("stick_outline")} strokeWidth="5" onClick={(event) => { event.stopPropagation(); onSelect("stick_fill"); }} className="preview-clickable" />
+  </g>;
+  return <div className="gimbal-preview"><svg viewBox="0 0 620 345" role="img" aria-label="Interaktívny náhľad SCoPE"><rect width="620" height="345" fill={color("screen_background")} onClick={() => onSelect("screen_background")} className="preview-clickable" />{gimbal(55, "left")}{gimbal(345, "right")}<text x="310" y="22" textAnchor="middle" fill={color("label_color")} onClick={() => onSelect("label_color")} className="preview-clickable">Action: [0, 0, 0, 0]</text><text x="310" y="330" textAnchor="middle" fill={color("label_color")} onClick={() => onSelect("label_color")} className="preview-clickable">Completed: 0 · Mistakes: 0</text><text x="310" y="162" textAnchor="middle" fill={color("prompt_color")} fontSize="22" onClick={() => onSelect("prompt_color")} className="preview-clickable">Press button on RC</text></svg><div className="preview-help">Klikni na prvok náhľadu a uprav jeho farbu vpravo.</div></div>;
+}
+
+function TestEditor({ test, onClose, onSaved }: { test: TestDefinition; onClose: () => void; onSaved: (test: TestDefinition) => void }) {
+  const [configuration, setConfiguration] = useState(() => makeScopeConfiguration(test.configuration));
+  const [selectedColor, setSelectedColor] = useState("screen_background");
+  const [message, setMessage] = useState("");
+  function setValue(key: string, value: unknown) { setConfiguration((current) => ({ ...current, [key]: value })); }
+  const colorFields = [["screen_background", "Pozadie obrazovky"], ["gimbal_background", "Pozadie gimbalu"], ["grid_color", "Mriežka"], ["zone_idle_fill", "Výplň zóny"], ["zone_idle_outline", "Obrys zóny"], ["stick_fill", "Výplň páčky"], ["stick_outline", "Obrys páčky"], ["label_color", "Popisy"], ["prompt_color", "Výzva"]] as const;
+  async function save() {
+    setMessage("");
+    try {
+      const saved = await request<TestDefinition>(\`\${"/api/admin/tests/"}\${test.id}\`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ configuration: { ...configuration, difficulty: String(configuration.difficulty).toLowerCase() } })
+      });
+      onSaved(saved); setMessage("Nastavenia boli uložené.");
+    } catch (reason) { setMessage(reason instanceof Error ? reason.message : "Nastavenia sa nepodarilo uložiť."); }
+  }
+  const deadzone = configuration.deadzone;
+  const axisMap = configuration.axis_map;
+  return <div className="editor-backdrop"><section className="test-editor-window"><header className="editor-header"><div><div className="eyebrow">EDITOR TESTU · ROZPRACOVANÁ VERZIA</div><h2>{test.name}</h2><p className="muted">{test.test_code} · v{test.version}</p></div><button className="quiet compact" onClick={onClose}>Zavrieť</button></header><div className="editor-layout"><div className="editor-controls">
+    <section className="config-card"><div className="eyebrow">EXPERIMENT</div><h3>Základné parametre</h3><div className="field-grid"><label>Obtiažnosť<select value={String(configuration.difficulty)} onChange={(event) => setValue("difficulty", event.target.value)}><option value="easy">Ľahká</option><option value="medium">Stredná</option><option value="hard">Ťažká</option><option value="ultra">Ultra</option></select></label><label>Vzorkovacia frekvencia (Hz)<input type="number" min="10" value={String(configuration.fps)} onChange={(event) => setValue("fps", Number(event.target.value))} /></label><label>Počet dokončených akcií<input type="number" min="1" value={String(configuration.max_completed_actions)} onChange={(event) => setValue("max_completed_actions", Number(event.target.value))} /></label><label>Timeout akcie (s)<input type="number" min=".1" step=".1" value={String(configuration.action_timeout_s)} onChange={(event) => setValue("action_timeout_s", Number(event.target.value))} /></label><label>Čas podržania (s)<input type="number" min=".1" step=".1" value={String(configuration.hold_time_s)} onChange={(event) => setValue("hold_time_s", Number(event.target.value))} /></label><label>Odpočet pred štartom (s)<input type="number" min="0" value={String(configuration.countdown_s)} onChange={(event) => setValue("countdown_s", Number(event.target.value))} /></label></div></section>
+    <section className="config-card"><div className="eyebrow">JOYSTICK</div><h3>Mapovanie a deadzone</h3><div className="axis-list">{["AILE", "ELEV", "THRO", "RUDD"].map((axis) => <label key={axis}><strong>{axis}</strong><input type="number" min="0" value={String(axisMap[axis] ?? 0)} onChange={(event) => setValue("axis_map", { ...axisMap, [axis]: Number(event.target.value) })} /></label>)}</div><div className="field-grid compact-fields"><label>Index joysticku<input type="number" min="0" value={String(configuration.joystick_index)} onChange={(event) => setValue("joystick_index", Number(event.target.value))} /></label><label>Break axis<input type="number" min="0" value={String(configuration.break_axis)} onChange={(event) => setValue("break_axis", Number(event.target.value))} /></label>{["AILE", "ELEV", "THRO", "RUDD"].map((axis, index) => <label key={axis}>Deadzone {axis}<input type="number" min="0" value={String(deadzone[index] ?? 0)} onChange={(event) => { const next = [...deadzone]; next[index] = Number(event.target.value); setValue("deadzone", next); }} /></label>)}</div><div className="toggle-row"><label><input type="checkbox" checked={Boolean(configuration.fullscreen)} onChange={(event) => setValue("fullscreen", event.target.checked)} /> Celá obrazovka</label><label><input type="checkbox" checked={Boolean(configuration.topmost)} onChange={(event) => setValue("topmost", event.target.checked)} /> Vždy navrchu</label></div></section>
+    <section className="config-card"><div className="eyebrow">VZHĽAD</div><h3>Vybraný prvok</h3><div className="selected-color"><span>{colorFields.find(([key]) => key === selectedColor)?.[1] ?? selectedColor}</span><input type="color" value={String(configuration[selectedColor])} onChange={(event) => setValue(selectedColor, event.target.value)} /><code>{String(configuration[selectedColor])}</code></div><div className="color-list">{colorFields.map(([key, label]) => <button type="button" className={selectedColor === key ? "color-item selected" : "color-item"} key={key} onClick={() => setSelectedColor(key)}><span>{label}</span><i style={{ background: String(configuration[key]) }} /><code>{String(configuration[key])}</code></button>)}</div></section>
+  </div><div className="editor-preview"><div className="eyebrow">ŽIVÝ NÁHĽAD</div><h3>SCoPE obrazovka</h3><GimbalPreview configuration={configuration} selectedColor={selectedColor} onSelect={setSelectedColor} /><details className="json-disclosure"><summary>Rozšírený JSON náhľad</summary><pre className="config-preview live">{JSON.stringify({ ...configuration, difficulty: String(configuration.difficulty).toLowerCase() }, null, 2)}</pre></details></div></div><footer className="editor-footer"><button className="quiet" onClick={onClose}>Zrušiť</button><button className="primary" onClick={save}>Uložiť nastavenia</button>{message && <span className="notice">{message}</span>}</footer></section></div>;
 }
 
 function Metric({ label, value }: { label: string; value: string | number }) {
