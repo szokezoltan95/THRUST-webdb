@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from "react";
+import { ChangeEvent, FormEvent, useEffect, useState } from "react";
 
 type PublicMetrics = {
   participant_count: number | null;
@@ -483,8 +483,8 @@ function TestConfigurator({ onCreated }: { onCreated: (test: TestDefinition) => 
   const [configuration, setConfiguration] = useState<ScopeConfiguration>(initialScopeConfiguration);
   const [message, setMessage] = useState("");
   function setValue(key: string, value: unknown) { setConfiguration((current) => ({ ...current, [key]: value })); }
-  function numberValue(key: string, event: React.ChangeEvent<HTMLInputElement>) { setValue(key, Number(event.target.value)); }
-  function updateAxis(axis: string, event: React.ChangeEvent<HTMLInputElement>) {
+  function numberValue(key: string, event: ChangeEvent<HTMLInputElement>) { setValue(key, Number(event.target.value)); }
+  function updateAxis(axis: string, event: ChangeEvent<HTMLInputElement>) {
     const axisMap = configuration.axis_map as Record<string, number>;
     setValue("axis_map", { ...axisMap, [axis]: Number(event.target.value) });
   }
