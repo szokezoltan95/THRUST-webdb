@@ -21,6 +21,16 @@ class TestDefinitionCreate(BaseModel):
         return value.strip()
 
 
+class TestDefinitionUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    configuration: dict | None = None
+
+    @field_validator("name")
+    @classmethod
+    def trim_name(cls, value: str | None) -> str | None:
+        return value.strip() if value is not None else None
+
+
 class TestDefinitionResponse(BaseModel):
     id: str
     test_code: str
