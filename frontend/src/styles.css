@@ -372,3 +372,9 @@ h1 { max-width: 880px; margin: 20px 0; font-size: clamp(42px, 7vw, 84px); line-h
 .editor-footer .notice { margin-right: auto; }
 @media (max-width: 1050px) { .editor-layout { grid-template-columns: 1fr; } }
 @media (max-width: 650px) { .test-create-strip, .test-create-form { align-items: stretch; flex-direction: column; } .test-create-form { margin-left: 0; } .test-create-form input { min-width: 0; } .color-list { grid-template-columns: 1fr; } .editor-backdrop { padding: 8px; } .test-editor-window { max-height: calc(100vh - 16px); padding: 14px; } }
+
+
+/* Keep appearance controls next to the visual preview */
+.editor-preview .config-card { margin-top: 14px; }
+.editor-preview .color-list { max-height: 290px; overflow-y: auto; }
+.preview-clickable { transition: filter .12s ease; }
