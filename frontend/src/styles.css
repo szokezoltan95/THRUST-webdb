@@ -301,3 +301,35 @@ h1 { max-width: 880px; margin: 20px 0; font-size: clamp(42px, 7vw, 84px); line-h
 .metrics-head { font-size: .62rem; }
 .metrics-row { font-size: .7rem; }
 @media (max-width: 1100px) { .metrics-head, .metrics-row { min-width: 760px; } }
+
+
+/* Graphical test configuration */
+.test-configurator { margin-top: 12px; border: 1px solid var(--line); background: rgba(255,255,255,.025); padding: 20px; }
+.configurator-intro { display: flex; justify-content: space-between; align-items: flex-start; gap: 18px; padding-bottom: 18px; border-bottom: 1px solid var(--line); }
+.configurator-intro h2 { margin: 5px 0 6px; }
+.configurator-intro p { margin: 0; max-width: 680px; }
+.config-badge { padding: 7px 10px; border: 1px solid #276080; color: #45d5ff; font-size: .72rem; text-transform: uppercase; letter-spacing: .08em; white-space: nowrap; }
+.configurator-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 12px; }
+.config-card { min-width: 0; padding: 16px; border: 1px solid var(--line); background: #091727; }
+.config-card h3 { margin: 5px 0 14px; }
+.field-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 11px; }
+.field-grid label, .config-card > label { display: grid; gap: 6px; color: #9db0c4; font-size: .78rem; }
+.field-grid input, .field-grid select, .config-card input, .config-card select { width: 100%; min-width: 0; box-sizing: border-box; background: #07121f; border: 1px solid var(--line); color: #f4f8fb; padding: 9px 10px; font: inherit; }
+.field-grid input:focus, .field-grid select:focus, .config-card input:focus, .config-card select:focus { outline: none; border-color: #45d5ff; box-shadow: 0 0 0 2px #45d5ff22; }
+.axis-list { display: grid; gap: 7px; margin-bottom: 14px; }
+.axis-list label { display: grid; grid-template-columns: 1fr 100px; gap: 12px; align-items: center; color: #dcecff; }
+.axis-list input { padding: 7px 9px; }
+.compact-fields { gap: 8px; }
+.toggle-row { display: flex; flex-wrap: wrap; gap: 18px; margin-top: 14px; color: #c5d5e5; font-size: .82rem; }
+.toggle-row label { display: flex; align-items: center; gap: 7px; }
+.toggle-row input { width: auto; accent-color: #45d5ff; }
+.color-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px 16px; }
+.color-grid label { display: flex; justify-content: space-between; align-items: center; gap: 10px; color: #9db0c4; font-size: .75rem; }
+.color-control { display: flex; align-items: center; gap: 7px; }
+.color-control input[type="color"] { width: 30px; height: 25px; padding: 2px; border-radius: 3px; cursor: pointer; }
+.color-control code { color: #c5d5e5; font-size: .7rem; }
+.config-preview-card { grid-column: 1 / -1; }
+.config-preview.live { max-height: 430px; margin-bottom: 0; }
+.configurator-footer { display: flex; align-items: center; gap: 14px; margin-top: 14px; }
+@media (max-width: 900px) { .configurator-grid { grid-template-columns: 1fr; } .config-preview-card { grid-column: auto; } }
+@media (max-width: 560px) { .field-grid, .color-grid { grid-template-columns: 1fr; } .configurator-intro { display: grid; } .configurator-footer { align-items: flex-start; flex-direction: column; } }
