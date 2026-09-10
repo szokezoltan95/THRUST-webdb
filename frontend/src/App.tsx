@@ -295,7 +295,7 @@ export function App() {
                   {filteredTests().length === 0 && <div className="empty-list"><h2>Žiadne testy</h2><p className="muted">Filteru nezodpovedá žiadna verzia testu.</p></div>}
                 </section>
                 {selectedTestId && (() => { const selected = tests.find((test) => test.id === selectedTestId); return selected ? <section className={selectedTestId ? "browser-detail detail-modal-open" : "browser-detail detail-modal-closed"}><div className="detail-header"><div><div className="eyebrow">KONFIGURÁCIA TESTU</div><h2>{selected.name} · v{selected.version}</h2></div><button className="quiet compact" onClick={() => setSelectedTestId(null)}>Zavrieť detail</button></div><div className="detail-grid"><div><span>Kód</span><strong>{selected.test_code}</strong></div><div><span>Profil</span><strong>{selected.analysis_profile}</strong></div><div><span>Stav</span><strong>{selected.status}</strong></div><div><span>Aktívny</span><strong>{selected.is_active ? "Áno" : "Nie"}</strong></div></div><pre className="config-preview">{JSON.stringify(selected.configuration, null, 2)}</pre></section> : null })()}
-                <details className="create-disclosure"><summary className="participant-create-strip"><span><span className="eyebrow">NOVÁ VERZIA</span><strong>Vytvoriť test alebo ďalšiu konfiguráciu</strong></span><span className="primary compact">Otvoriť formulár</span></summary><section className="create-form-panel"><form className="participant-form" onSubmit={createTest}><label>Kód testu<input value={testForm.test_code} onChange={(event) => setTestForm({ ...testForm, test_code: event.target.value.toUpperCase() })} placeholder="SCOPE_HARD" required /></label><label>Názov<input value={testForm.name} onChange={(event) => setTestForm({ ...testForm, name: event.target.value })} placeholder="SCoPE HARD" required /></label><label>Verzia<input value={testForm.version} onChange={(event) => setTestForm({ ...testForm, version: event.target.value })} required /></label><label>Analytický profil<input value={testForm.analysis_profile} onChange={(event) => setTestForm({ ...testForm, analysis_profile: event.target.value })} required /></label><label>Konfigurácia testu (JSON)<textarea className="config-editor" value={testForm.configuration} onChange={(event) => setTestForm({ ...testForm, configuration: event.target.value })} rows={12} required /></label><button className="primary" type="submit">Vytvoriť</button></form>{testMessage && <p className="notice">{testMessage}</p>}</section></details>
+                <TestConfigurator onCreated={(test) => setTests((current) => [...current, test])} />
               </>}
               {activeSection === "measurements" && <>
                 <div className="workbench">
@@ -451,6 +451,99 @@ function ResponseChart({ data, channel, mode }: { data: unknown; channel: string
   const plots = series.map(({ name, channel: item }) => <button type="button" className="chart-tile" key={name} onClick={() => setExpandedChannel(name)}><ChartPlot name={name} channel={item} time={time} min={min} max={max} /></button>);
   const expanded = expandedChannel ? series.find((item) => item.name === expandedChannel) : null;
   return <><div className={mode === "all" ? "response-grid" : "response-single"}>{plots}</div>{expanded && <div className="chart-expand-backdrop" onMouseDown={() => setExpandedChannel(null)}><section className="chart-expand-window" onMouseDown={(event) => event.stopPropagation()}><div className="chart-expand-header"><div><div className="eyebrow">DETAIL GRAFU</div><h3>{expanded.name} · normalizovaná odozva</h3></div><button type="button" className="quiet compact" onClick={() => setExpandedChannel(null)}>Zavrieť</button></div><ChartPlot name={expanded.name} channel={expanded.channel} time={time} min={min} max={max} expanded /></section></div>}</>;
+}
+
+
+type ScopeConfiguration = {
+  [key: string]: unknown;
+  user: string; difficulty: string; action_timeout_s: number; hold_time_s: number; fps: number;
+  max_completed_actions: number; countdown_s: number; fullscreen: boolean; topmost: boolean;
+  joystick_index: number; break_axis: number; output_root: string; profile_name: string;
+  gui_gimbal_size: number; gui_stick_zone: number; screen_background: string; gimbal_background: string;
+  stick_outline: string; stick_fill: string; zone_idle_outline: string; zone_idle_fill: string;
+  zone_ok_outline: string; zone_ok_fill: string; grid_color: string; label_color: string; prompt_color: string;
+};
+
+const initialScopeConfiguration: ScopeConfiguration = {
+  debug_output: false, user: "Pilot", difficulty: "hard", action_timeout_s: 3, hold_time_s: 0.5,
+  fps: 100, stick_max: 1000, deadzone: [100, 100, 100, 100], max_completed_actions: 50,
+  countdown_s: 3, seed: null, fullscreen: true, topmost: true, joystick_index: 0, break_axis: 5,
+  axis_map: { AILE: 0, ELEV: 1, THRO: 2, RUDD: 3 }, output_root: "Documents/THRUST/scope",
+  profile_name: "default", use_dated_subfolders: true, save_raw_log: true, save_action_log: true,
+  save_step_file: true, save_graph_pdf: true, auto_open_graph: true, run_evaluation: true, show_graph: false,
+  expert_mode: false, gui_gimbal_size: 500, gui_stick_zone: 200, gui_stick_radius: 20,
+  gui_stick_outline_width: 6, gui_zone_outline_width: 8, gui_gimbal_border_width: 12, gui_gimbal_cross_width: 6,
+  screen_background: "#000000", gimbal_background: "#808080", stick_outline: "#1e2cff", stick_fill: "#ffffff",
+  zone_idle_outline: "#ff0000", zone_idle_fill: "#ff0000", zone_ok_outline: "#00cc00", zone_ok_fill: "#00cc00",
+  grid_color: "#ffffff", label_color: "#ffffff", prompt_color: "#ff0000"
+};
+
+function TestConfigurator({ onCreated }: { onCreated: (test: TestDefinition) => void }) {
+  const [meta, setMeta] = useState({ test_code: "", name: "", version: "1.0", analysis_profile: "SCOPE_STEP_RESPONSE_V1" });
+  const [configuration, setConfiguration] = useState<ScopeConfiguration>(initialScopeConfiguration);
+  const [message, setMessage] = useState("");
+  function setValue(key: string, value: unknown) { setConfiguration((current) => ({ ...current, [key]: value })); }
+  function numberValue(key: string, event: React.ChangeEvent<HTMLInputElement>) { setValue(key, Number(event.target.value)); }
+  function updateAxis(axis: string, event: React.ChangeEvent<HTMLInputElement>) {
+    const axisMap = configuration.axis_map as Record<string, number>;
+    setValue("axis_map", { ...axisMap, [axis]: Number(event.target.value) });
+  }
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault(); setMessage("");
+    try {
+      const created = await request<TestDefinition>("/api/admin/tests", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...meta, configuration: { ...configuration, difficulty: String(configuration.difficulty).toLowerCase() } })
+      });
+      onCreated(created); setMeta({ test_code: "", name: "", version: "1.0", analysis_profile: "SCOPE_STEP_RESPONSE_V1" });
+      setConfiguration(initialScopeConfiguration); setMessage("Test bol vytvorený s grafickou konfiguráciou.");
+    } catch (reason) { setMessage(reason instanceof Error ? reason.message : "Test sa nepodarilo vytvoriť."); }
+  }
+  const axisMap = configuration.axis_map as Record<string, number>;
+  const deadzone = configuration.deadzone as number[];
+  const colorFields = [
+    ["screen_background", "Pozadie obrazovky"], ["gimbal_background", "Pozadie gimbalu"],
+    ["stick_outline", "Obrys páčky"], ["stick_fill", "Výplň páčky"],
+    ["zone_idle_outline", "Obrys neaktívnej zóny"], ["zone_idle_fill", "Výplň neaktívnej zóny"],
+    ["zone_ok_outline", "Obrys správnej zóny"], ["zone_ok_fill", "Výplň správnej zóny"],
+    ["grid_color", "Mriežka"], ["label_color", "Popisy"], ["prompt_color", "Výzva"]
+  ] as const;
+  return (
+    <form className="test-configurator" onSubmit={submit}>
+      <div className="configurator-intro"><div><div className="eyebrow">GRAFICKÝ KONFIGURÁTOR</div><h2>Nový test</h2><p className="muted">Nastav parametre bez ručného písania JSON. Konfigurácia sa uloží ako nemenná verzia testu.</p></div><span className="config-badge">SCoPE · v1</span></div>
+      <div className="configurator-grid">
+        <section className="config-card"><div className="eyebrow">IDENTITA</div><h3>Definícia testu</h3><div className="field-grid">
+          <label>Kód testu<input value={meta.test_code} onChange={(event) => setMeta({ ...meta, test_code: event.target.value.toUpperCase() })} placeholder="SCOPE_HARD" required /></label>
+          <label>Názov<input value={meta.name} onChange={(event) => setMeta({ ...meta, name: event.target.value })} placeholder="SCoPE hard" required /></label>
+          <label>Verzia<input value={meta.version} onChange={(event) => setMeta({ ...meta, version: event.target.value })} required /></label>
+          <label>Analytický profil<input value={meta.analysis_profile} onChange={(event) => setMeta({ ...meta, analysis_profile: event.target.value })} required /></label>
+        </div></section>
+        <section className="config-card"><div className="eyebrow">EXPERIMENT</div><h3>Základné parametre</h3><div className="field-grid">
+          <label>Obtiažnosť<select value={String(configuration.difficulty)} onChange={(event) => setValue("difficulty", event.target.value)}><option value="easy">Ľahká</option><option value="medium">Stredná</option><option value="hard">Ťažká</option><option value="ultra">Ultra</option></select></label>
+          <label>Pilot / používateľ<input value={String(configuration.user)} onChange={(event) => setValue("user", event.target.value)} /></label>
+          <label>Vzorkovacia frekvencia (Hz)<input type="number" min="10" value={String(configuration.fps)} onChange={(event) => numberValue("fps", event)} /></label>
+          <label>Počet dokončených akcií<input type="number" min="1" value={String(configuration.max_completed_actions)} onChange={(event) => numberValue("max_completed_actions", event)} /></label>
+          <label>Timeout akcie (s)<input type="number" min="0.1" step="0.1" value={String(configuration.action_timeout_s)} onChange={(event) => numberValue("action_timeout_s", event)} /></label>
+          <label>Čas podržania (s)<input type="number" min="0.1" step="0.1" value={String(configuration.hold_time_s)} onChange={(event) => numberValue("hold_time_s", event)} /></label>
+          <label>Odpočet pred štartom (s)<input type="number" min="0" step="1" value={String(configuration.countdown_s)} onChange={(event) => numberValue("countdown_s", event)} /></label>
+          <label>Maximálna hodnota páčky<input type="number" min="1" value={String(configuration.stick_max)} onChange={(event) => numberValue("stick_max", event)} /></label>
+        </div></section>
+        <section className="config-card"><div className="eyebrow">JOYSTICK</div><h3>Mapovanie ovládania</h3><div className="axis-list">
+          {["AILE", "ELEV", "THRO", "RUDD"].map((axis) => <label key={axis}><strong>{axis}</strong><input type="number" min="0" value={String(axisMap[axis] ?? 0)} onChange={(event) => updateAxis(axis, event)} /></label>)}
+        </div><div className="field-grid compact-fields">
+          <label>Index joysticku<input type="number" min="0" value={String(configuration.joystick_index)} onChange={(event) => numberValue("joystick_index", event)} /></label>
+          <label>Break axis<input type="number" min="0" value={String(configuration.break_axis)} onChange={(event) => numberValue("break_axis", event)} /></label>
+          <label>Deadzone AILE<input type="number" min="0" value={String(deadzone[0] ?? 0)} onChange={(event) => setValue("deadzone", [Number(event.target.value), deadzone[1], deadzone[2], deadzone[3]])} /></label>
+          <label>Deadzone ELEV<input type="number" min="0" value={String(deadzone[1] ?? 0)} onChange={(event) => setValue("deadzone", [deadzone[0], Number(event.target.value), deadzone[2], deadzone[3]])} /></label>
+          <label>Deadzone THRO<input type="number" min="0" value={String(deadzone[2] ?? 0)} onChange={(event) => setValue("deadzone", [deadzone[0], deadzone[1], Number(event.target.value), deadzone[3]])} /></label>
+          <label>Deadzone RUDD<input type="number" min="0" value={String(deadzone[3] ?? 0)} onChange={(event) => setValue("deadzone", [deadzone[0], deadzone[1], deadzone[2], Number(event.target.value)])} /></label>
+        </div><div className="toggle-row"><label><input type="checkbox" checked={Boolean(configuration.fullscreen)} onChange={(event) => setValue("fullscreen", event.target.checked)} /> Celá obrazovka</label><label><input type="checkbox" checked={Boolean(configuration.topmost)} onChange={(event) => setValue("topmost", event.target.checked)} /> Vždy navrchu</label></div></section>
+        <section className="config-card"><div className="eyebrow">VZHĽAD</div><h3>Farby rozhrania</h3><div className="color-grid">{colorFields.map(([key, label]) => <label key={key}><span>{label}</span><span className="color-control"><input type="color" value={String(configuration[key])} onChange={(event) => setValue(key, event.target.value)} /><code>{String(configuration[key])}</code></span></label>)}</div></section>
+        <section className="config-card config-preview-card"><div className="eyebrow">KONTROLA</div><h3>Generovaná konfigurácia</h3><p className="muted">Toto je presne JSON, ktorý sa odošle do WebDB a neskôr načíta lokálny THRUST.</p><pre className="config-preview live">{JSON.stringify({ ...configuration, difficulty: String(configuration.difficulty).toLowerCase() }, null, 2)}</pre></section>
+      </div>
+      <div className="configurator-footer"><button className="primary" type="submit">Vytvoriť test</button>{message && <span className="notice">{message}</span>}</div>
+    </form>
+  );
 }
 
 function Metric({ label, value }: { label: string; value: string | number }) {
