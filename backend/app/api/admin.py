@@ -28,7 +28,7 @@ def generate_participant_code() -> str:
 def normalize_test_configuration(source: dict) -> dict:
     """Keep WebDB test definitions compatible with the local THRUST data flow."""
     configuration = dict(source)
-    for key in ("user", "profile_name", "expert_mode", "output_root", "use_dated_subfolders"):
+    for key in ("user", "profile_name", "expert_mode", "output_root", "use_dated_subfolders", "joystick_index", "break_axis", "axis_map", "deadzone"):
         configuration.pop(key, None)
     if isinstance(configuration.get("difficulty"), str):
         configuration["difficulty"] = configuration["difficulty"].lower()
