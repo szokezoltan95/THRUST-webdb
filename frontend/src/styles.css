@@ -380,11 +380,12 @@ h1 { max-width: 880px; margin: 20px 0; font-size: clamp(42px, 7vw, 84px); line-h
 .preview-clickable { transition: filter .12s ease; }
 
 
-/* Preview first, controls second: visual edits stay beside the drawing */
-.editor-layout { grid-template-columns: minmax(430px, 1.08fr) minmax(560px, .92fr); }
-.editor-preview { grid-column: 1; grid-row: 1; }
-.editor-controls { grid-column: 2; grid-row: 1; }
+/* Test settings left, preview right; responsive stacking below */
+.editor-layout { grid-template-columns: minmax(500px, .95fr) minmax(500px, 1.05fr); align-items: start; }
+.editor-controls { grid-column: 1; grid-row: 1; }
+.editor-preview { grid-column: 2; grid-row: 1; }
 @media (max-width: 1050px) {
+  .editor-layout { grid-template-columns: 1fr; }
   .editor-preview, .editor-controls { grid-column: auto; grid-row: auto; }
 }
 
@@ -394,3 +395,5 @@ h1 { max-width: 880px; margin: 20px 0; font-size: clamp(42px, 7vw, 84px); line-h
 .toggle-grid input { width: auto; accent-color: #45d5ff; }
 .geometry-fields { margin-top: 14px; }
 @media (max-width: 560px) { .toggle-grid { grid-template-columns: 1fr; } }
+
+.config-note { margin: -4px 0 14px; color: #8e9aa5; font-size: .88rem; line-height: 1.45; }
