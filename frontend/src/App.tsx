@@ -246,6 +246,12 @@ export function App() {
         body: JSON.stringify({ role }),
       });
       setAdminAccounts((items) => items.map((item) => item.id === updated.id ? updated : item));
+      setRegisteredStudents((items) => {
+        const rest = items.filter((item) => item.participant_id !== updated.participant_id);
+        return updated.role === "student" && updated.participant_id && updated.participant_code
+          ? [{ participant_id: updated.participant_id, participant_code: updated.participant_code, email: updated.email || updated.username, first_name: updated.first_name || "", last_name: updated.last_name || "", is_active: updated.is_active, created_at: updated.created_at }, ...rest]
+          : rest;
+      });
       setAccountMessage("Rola bola zmenená.");
     } catch (reason) { setAccountMessage(reason instanceof Error ? reason.message : "Rolu sa nepodarilo zmeniť."); }
   }
