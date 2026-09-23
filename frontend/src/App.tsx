@@ -7,13 +7,15 @@ type PublicMetrics = {
   publishable: boolean;
 };
 
-type User = { username: string; role: string; csrf_token: string };
+type User = { username: string; role: string; csrf_token: string; email?: string | null; participant_id?: string | null; participant_code?: string | null; first_name?: string | null; last_name?: string | null };
 type Overview = { participant_count: number; measurement_count: number };
 type Participant = { id: string; participant_code: string; is_active: boolean; created_at: string };
 type TestDefinition = { id: string; test_code: string; name: string; version: string; status: string; analysis_profile: string; configuration: Record<string, unknown>; is_active: boolean };
 type Measurement = { id: string; participant_id: string; test_definition_id: string | null; test_type: string; status: string; started_at: string; source_file_name: string | null; raw_sha256: string | null; raw_size_bytes: number | null; analysis_data: Record<string, unknown> | null };
 type ParticipantDetail = { participant: Participant; measurements: { id: string; test_type: string; status: string; started_at: string; raw_data_available?: boolean }[] };
 type AdminSection = "overview" | "participants" | "tests" | "measurements";
+type StudentMeasurement = { id: string; test_type: string; status: string; started_at: string; analysis_data: Record<string, unknown> | null };
+type StudentComparison = { available: boolean; minimum_group_size: number; cohort_participant_count: number; own_measurement_count: number; own_average: Record<string, number>; cohort_average: Record<string, number> };
 
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(url, { credentials: "same-origin", ...options });
@@ -72,6 +74,7 @@ export function App() {
   const [measurementDateTo, setMeasurementDateTo] = useState("");
   const [manualUploadOpen, setManualUploadOpen] = useState(false);
   const [loginOpen, setLoginOpen] = useState(false);
+  const [registerOpen, setRegisterOpen] = useState(false);
   const [error, setError] = useState("");
   const [activeSection, setActiveSection] = useState<AdminSection>("overview");
 
@@ -81,7 +84,7 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    if (user) {
+    if (user && user.role !== "student") {
       request<Overview>("/api/admin/overview").then(setOverview).catch(() => setOverview(null));
       request<Participant[]>("/api/admin/participants").then(setParticipants).catch(() => setParticipants([]));
       request<TestDefinition[]>("/api/admin/tests").then(setTests).catch(() => setTests([]));
@@ -205,6 +208,27 @@ export function App() {
     }
   }
 
+  async function register(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError("");
+    const data = new FormData(event.currentTarget);
+    if (data.get("password") !== data.get("password_confirmation")) {
+      setError("Heslá sa nezhodujú.");
+      return;
+    }
+    try {
+      const signedIn = await request<User>("/api/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: data.get("email"), first_name: data.get("first_name"), last_name: data.get("last_name"),
+          password: data.get("password"), research_consent: data.get("research_consent") === "on", consent_version: "research-v1",
+        }),
+      });
+      setUser(signedIn); setRegisterOpen(false);
+    } catch (reason) { setError(reason instanceof Error ? reason.message : "Registrácia zlyhala."); }
+  }
+
   async function login(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
@@ -255,6 +279,8 @@ export function App() {
         return left.participant_code.localeCompare(right.participant_code);
       });
   }
+
+  if (user?.role === "student") return <StudentPortal user={user} onLogout={logout} />;
 
   return (
     <main>
@@ -327,7 +353,7 @@ export function App() {
         </div>
       ) : (
         <>
-          <header><div className="brand"><span className="mark">T</span><div><strong>THRUST</strong><small>UAV Human Performance Research</small></div></div><button className="quiet" onClick={() => setLoginOpen(true)}>Administrácia</button></header>
+          <header><div className="brand"><span className="mark">T</span><div><strong>THRUST</strong><small>UAV Human Performance Research</small></div></div><div className="actions"><button className="quiet" onClick={() => setRegisterOpen(true)}>Registrácia študenta</button><button className="quiet" onClick={() => setLoginOpen(true)}>Prihlásenie</button></div></header>
           <section className="public">
           <div className="eyebrow">TESTING HUB FOR RESEARCH IN UAV SIMULATION AND TRAINING</div>
           <h1>Merateľný pohľad na výkon pilotov UAV.</h1>
@@ -342,7 +368,8 @@ export function App() {
         </>
       )}
 
-      {loginOpen && <div className="backdrop" onMouseDown={() => setLoginOpen(false)}><form className="login" onSubmit={login} onMouseDown={(e) => e.stopPropagation()}><div className="eyebrow">CHRÁNENÝ PRÍSTUP</div><h2>Administrácia</h2><label>Používateľské meno<input name="username" autoComplete="username" required autoFocus /></label><label>Heslo<input name="password" type="password" autoComplete="current-password" required /></label>{error && <p className="error">{error}</p>}<div className="actions"><button type="button" className="quiet" onClick={() => setLoginOpen(false)}>Zrušiť</button><button type="submit" className="primary">Prihlásiť</button></div></form></div>}
+      {loginOpen && <div className="backdrop" onMouseDown={() => setLoginOpen(false)}><form className="login" onSubmit={login} onMouseDown={(e) => e.stopPropagation()}><div className="eyebrow">CHRÁNENÝ PRÍSTUP</div><h2>Administrácia</h2><label>Používateľské meno<input name="username" autoComplete="username" required autoFocus /></label><label>Heslo<input name="password" type="password" autoComplete="current-password" required /></label>{error && <p className="error">{error}</p>}<div className="actions"><button type="button" className="quiet" onClick={() => setLoginOpen(false)}>Zrušiť</button><button type="submit" className="primary">Prihlásiť</button></div></form></div>} 
+      {registerOpen && <div className="backdrop" onMouseDown={() => setRegisterOpen(false)}><form className="login register-form" onSubmit={register} onMouseDown={(e) => e.stopPropagation()}><div className="eyebrow">NOVÝ ÚČET</div><h2>Registrácia študenta</h2><p className="muted">Po registrácii dostaneš vlastné anonymné ID a prístup k svojim výsledkom.</p><div className="form-grid"><label>Meno<input name="first_name" required /></label><label>Priezvisko<input name="last_name" required /></label></div><label>E-mail<input name="email" type="email" autoComplete="email" required /></label><div className="form-grid"><label>Heslo<input name="password" type="password" minLength={10} autoComplete="new-password" required /></label><label>Zopakovať heslo<input name="password_confirmation" type="password" minLength={10} autoComplete="new-password" required /></label></div><label className="consent"><input name="research_consent" type="checkbox" required /> Súhlasím s použitím mojich pseudonymizovaných údajov na výskumné účely.</label>{error && <p className="error">{error}</p>}<div className="actions"><button type="button" className="quiet" onClick={() => setRegisterOpen(false)}>Zrušiť</button><button type="submit" className="primary">Vytvoriť účet</button></div></form></div>}
     </main>
   );
 }
@@ -564,3 +591,16 @@ function TestEditor({ test, onClose, onSaved }: { test: TestDefinition; onClose:
 function Metric({ label, value }: { label: string; value: string | number }) {
   return <article className="metric"><span>{label}</span><strong>{value}</strong></article>;
 }
+
+function StudentPortal({ user, onLogout }: { user: User; onLogout: () => Promise<void> }) {
+  const [measurements, setMeasurements] = useState<StudentMeasurement[]>([]);
+  const [comparison, setComparison] = useState<StudentComparison | null>(null);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    Promise.all([request<StudentMeasurement[]>("/api/student/measurements"), request<StudentComparison>("/api/student/comparison")])
+      .then(([own, group]) => { setMeasurements(own); setComparison(group); })
+      .catch((reason) => setError(reason instanceof Error ? reason.message : "Výsledky sa nepodarilo načítať."));
+  }, []);
+  return <main className="student-shell"><header><div className="brand"><span className="mark">T</span><div><strong>THRUST</strong><small>Študentský portál</small></div></div><button className="quiet" onClick={onLogout}>Odhlásiť</button></header><section className="public student-content"><div className="eyebrow">OSOBNÝ PROFIL</div><h1>Ahoj, {user.first_name || user.username}.</h1><p className="lead">Tvoje účastnícke ID: <strong>{user.participant_code || "—"}</strong></p><div className="stats"><Metric label="Moje merania" value={measurements.length} /><Metric label="Skupina" value={comparison?.cohort_participant_count ?? "—"} /><Metric label="Porovnanie" value={comparison?.available ? "dostupné" : "čaká na limit"} /></div>{error && <p className="error">{error}</p>}<section className="panel"><div className="eyebrow">VÝSLEDKY</div><h2>Moje merania</h2>{measurements.length ? <div className="table-wrap"><table><thead><tr><th>Test</th><th>Stav</th><th>Dátum</th></tr></thead><tbody>{measurements.map((m) => <tr key={m.id}><td>{m.test_type}</td><td>{m.status}</td><td>{new Date(m.started_at).toLocaleString("sk-SK")}</td></tr>)}</tbody></table></div> : <p className="muted">Zatiaľ nemáš uložené žiadne meranie.</p>}</section><section className="panel"><div className="eyebrow">ANONYMIZOVANÉ POROVNANIE</div>{comparison?.available ? <><p>Tvoje priemery: {formatMetricMap(comparison.own_average)}</p><p>Skupinové priemery: {formatMetricMap(comparison.cohort_average)}</p></> : <p className="muted">Porovnanie sa zobrazí po nazbieraní dostatočne veľkej skupiny.</p>}</section></section></main>;
+}
+function formatMetricMap(values: Record<string, number>) { return Object.entries(values).map(([key, value]) => `${key}: ${value.toFixed(2)}`).join(" · ") || "bez dostupných metrík"; }
