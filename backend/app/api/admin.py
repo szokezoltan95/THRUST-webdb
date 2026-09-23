@@ -11,8 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.dependencies import AuthContext, require_admin
 from app.core.config import settings
 from app.db.session import get_db
-from app.models import Measurement, Participant, TestDefinition
-from app.schemas.participant import ParticipantCreate, ParticipantResponse
+from app.models import AdminUser, Measurement, Participant, TestDefinition
+from app.schemas.participant import ParticipantCreate, ParticipantResponse, RegisteredStudentResponse
 from app.schemas.measurement import MeasurementCreate, MeasurementResponse
 from app.schemas.test_definition import TestDefinitionCreate, TestDefinitionResponse, TestDefinitionUpdate
 
@@ -52,6 +52,31 @@ async def list_participants(
 ) -> list[Participant]:
     result = await db.scalars(select(Participant).order_by(Participant.created_at.desc()))
     return list(result)
+
+
+@router.get("/students", response_model=list[RegisteredStudentResponse])
+async def list_registered_students(
+    auth: AuthContext = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+) -> list[dict]:
+    result = await db.execute(
+        select(AdminUser, Participant)
+        .join(Participant, Participant.id == AdminUser.participant_id)
+        .where(AdminUser.role == "student")
+        .order_by(Participant.created_at.desc())
+    )
+    return [
+        {
+            "participant_id": participant.id,
+            "participant_code": participant.participant_code,
+            "email": user.email or user.username,
+            "first_name": user.first_name or "",
+            "last_name": user.last_name or "",
+            "is_active": user.is_active and participant.is_active,
+            "created_at": participant.created_at,
+        }
+        for user, participant in result.all()
+    ]
 
 
 @router.post("/participants", response_model=ParticipantResponse, status_code=status.HTTP_201_CREATED)
