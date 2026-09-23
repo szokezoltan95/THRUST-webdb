@@ -8,9 +8,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.dependencies import AuthContext, require_authenticated
 from app.core.config import settings
 from app.db.session import get_db
-from app.models import Measurement, Participant
+from app.models import Measurement, Participant, TestDefinition
 from app.schemas.auth import StudentProfileResponse
 from app.schemas.measurement import MeasurementResponse
+from app.schemas.test_definition import TestDefinitionResponse
 
 router = APIRouter(prefix="/student", tags=["student"])
 
@@ -95,4 +96,34 @@ async def comparison(
         "own_measurement_count": len(own),
         "own_average": {key: mean(values) for key, values in own_values.items()},
         "cohort_average": {key: mean(values) for key, values in cohort_values.items()} if eligible else {},
+    }
+
+
+@router.get("/tests", response_model=list[TestDefinitionResponse])
+async def available_tests(
+    auth: AuthContext = Depends(require_authenticated),
+    db: AsyncSession = Depends(get_db),
+) -> list[TestDefinition]:
+    require_student(auth)
+    result = await db.scalars(
+        select(TestDefinition)
+        .where(TestDefinition.is_active.is_(True))
+        .order_by(TestDefinition.test_code, TestDefinition.version)
+    )
+    return list(result)
+
+
+@router.get("/tests/{test_id}/configuration")
+async def test_configuration(
+    test_id: str,
+    auth: AuthContext = Depends(require_authenticated),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    require_student(auth)
+    test = await db.get(TestDefinition, test_id)
+    if test is None or not test.is_active:
+        raise HTTPException(status_code=404, detail="Aktívny test neexistuje.")
+    return {
+        "schema_version": "test-configuration-v1",
+        "test": TestDefinitionResponse.model_validate(test).model_dump(mode="json"),
     }
