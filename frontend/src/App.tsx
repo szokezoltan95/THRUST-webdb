@@ -1171,7 +1171,7 @@ function StudentPortal({ user, onLogout }: { user: User; onLogout: () => Promise
             ["Video / počítačové hry", profileLabel(profile.video_game_experience)],
             ["Sebahodnotenie zručností", profile.self_rated_skill ?? "Neuvedené"],
           ]} />}
-      </section>
+      </section>}
       <section className="panel">
         <div className="eyebrow">VÝSLEDKY</div><h2>Moje merania</h2>
         {measurements.length ? <div className="table-wrap"><table><thead><tr><th>Test</th><th>Stav</th><th>Dátum</th></tr></thead><tbody>{measurements.map((m) => <tr key={m.id}><td>{m.test_type}</td><td>{m.status}</td><td>{formatDate(m.started_at)}</td></tr>)}</tbody></table></div> : <p className="muted">Zatiaľ nemáš uložené žiadne meranie.</p>}
