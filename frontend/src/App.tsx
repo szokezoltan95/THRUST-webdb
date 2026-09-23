@@ -10,12 +10,11 @@ type PublicMetrics = {
 type User = { username: string; role: string; csrf_token: string; email?: string | null; participant_id?: string | null; participant_code?: string | null; first_name?: string | null; last_name?: string | null };
 type Overview = { participant_count: number; measurement_count: number };
 type Participant = { id: string; participant_code: string; is_active: boolean; created_at: string };
-type RegisteredStudent = { participant_id: string; participant_code: string; email: string; first_name: string; last_name: string; is_active: boolean; created_at: string };
 type AdminAccount = { id: string; username: string; email: string | null; first_name: string | null; last_name: string | null; role: string; effective_role: string; is_active: boolean; participant_id: string | null; participant_code: string | null; created_at: string };
 type TestDefinition = { id: string; test_code: string; name: string; version: string; status: string; analysis_profile: string; configuration: Record<string, unknown>; is_active: boolean };
 type Measurement = { id: string; participant_id: string; test_definition_id: string | null; test_type: string; status: string; started_at: string; source_file_name: string | null; raw_sha256: string | null; raw_size_bytes: number | null; analysis_data: Record<string, unknown> | null };
 type ParticipantDetail = { participant: Participant; measurements: { id: string; test_type: string; status: string; started_at: string; raw_data_available?: boolean }[] };
-type AdminSection = "overview" | "participants" | "users" | "tests" | "measurements";
+type AdminSection = "overview" | "participants" | "tests" | "measurements";
 type StudentMeasurement = { id: string; test_type: string; status: string; started_at: string; analysis_data: Record<string, unknown> | null };
 type StudentComparison = { available: boolean; minimum_group_size: number; cohort_participant_count: number; own_measurement_count: number; own_average: Record<string, number>; cohort_average: Record<string, number> };
 
@@ -30,7 +29,6 @@ export function App() {
   const [user, setUser] = useState<User | null>(null);
   const [overview, setOverview] = useState<Overview | null>(null);
   const [participants, setParticipants] = useState<Participant[]>([]);
-  const [registeredStudents, setRegisteredStudents] = useState<RegisteredStudent[]>([]);
   const [adminAccounts, setAdminAccounts] = useState<AdminAccount[]>([]);
   const [accountMessage, setAccountMessage] = useState("");
   const [participantCode, setParticipantCode] = useState("");
@@ -92,7 +90,6 @@ export function App() {
     if (user && user.role !== "student") {
       request<Overview>("/api/admin/overview").then(setOverview).catch(() => setOverview(null));
       request<Participant[]>("/api/admin/participants").then(setParticipants).catch(() => setParticipants([]));
-      request<RegisteredStudent[]>("/api/admin/students").then(setRegisteredStudents).catch(() => setRegisteredStudents([]));
       request<AdminAccount[]>("/api/admin/users").then(setAdminAccounts).catch((reason) => setAccountMessage(reason instanceof Error ? reason.message : "Používateľov sa nepodarilo načítať."));
       request<TestDefinition[]>("/api/admin/tests").then(setTests).catch(() => setTests([]));
       request<Measurement[]>("/api/admin/measurements").then(setMeasurements).catch(() => setMeasurements([]));
@@ -246,12 +243,9 @@ export function App() {
         body: JSON.stringify({ role }),
       });
       setAdminAccounts((items) => items.map((item) => item.id === updated.id ? updated : item));
-      setRegisteredStudents((items) => {
-        const rest = items.filter((item) => item.participant_id !== updated.participant_id);
-        return updated.role === "student" && updated.participant_id && updated.participant_code
-          ? [{ participant_id: updated.participant_id, participant_code: updated.participant_code, email: updated.email || updated.username, first_name: updated.first_name || "", last_name: updated.last_name || "", is_active: updated.is_active, created_at: updated.created_at }, ...rest]
-          : rest;
-      });
+      if (updated.participant_id && updated.participant_code && !participants.some((item) => item.id === updated.participant_id)) {
+        setParticipants((items) => [{ id: updated.participant_id!, participant_code: updated.participant_code!, is_active: updated.is_active, created_at: updated.created_at }, ...items]);
+      }
       setAccountMessage("Rola bola zmenená.");
     } catch (reason) { setAccountMessage(reason instanceof Error ? reason.message : "Rolu sa nepodarilo zmeniť."); }
   }
@@ -275,8 +269,7 @@ export function App() {
     if (!window.confirm(`Anonymizovať a deaktivovať účet ${account.email || account.username}? Merania zostanú zachované pod pseudonymným ID.`)) return;
     try {
       await request<void>(`/api/admin/users/${account.id}`, { method: "DELETE", headers: { "X-CSRF-Token": user.csrf_token } });
-      setAdminAccounts((items) => items.filter((item) => item.id !== account.id));
-      setRegisteredStudents((items) => items.filter((item) => item.email !== account.email));
+      await refreshAccounts();
       setAccountMessage("Účet bol deaktivovaný a osobné údaje odstránené; merania zostali zachované.");
     } catch (reason) { setAccountMessage(reason instanceof Error ? reason.message : "Účet sa nepodarilo anonymizovať."); }
   }
@@ -308,13 +301,11 @@ export function App() {
   async function refreshAccounts() {
     setAccountMessage("");
     try {
-      const [accounts, students, participants] = await Promise.all([
+      const [accounts, participants] = await Promise.all([
         request<AdminAccount[]>("/api/admin/users"),
-        request<RegisteredStudent[]>("/api/admin/students"),
         request<Participant[]>("/api/admin/participants"),
       ]);
       setAdminAccounts(accounts);
-      setRegisteredStudents(students);
       setParticipants(participants);
       setAccountMessage(`Načítaných ${accounts.length} účtov a ${participants.length} účastníkov.`);
     } catch (reason) {
@@ -339,7 +330,7 @@ export function App() {
   function filteredParticipants() {
     const query = participantSearch.trim().toLowerCase();
     return [...participants]
-      .filter((participant) => { const student = registeredStudents.find((item) => item.participant_id === participant.id); return !query || [participant.participant_code, student?.first_name, student?.last_name, student?.email].filter(Boolean).join(" ").toLowerCase().includes(query); })
+      .filter((participant) => { const account = adminAccounts.find((item) => item.participant_id === participant.id); return !query || [participant.participant_code, account?.first_name, account?.last_name, account?.email, account?.username].filter(Boolean).join(" ").toLowerCase().includes(query); })
       .sort((left, right) => {
         const leftMeasurements = participantMeasurements(left.id);
         const rightMeasurements = participantMeasurements(right.id);
@@ -348,6 +339,26 @@ export function App() {
         if (participantSort === "last") return (rightMeasurements[0]?.started_at ?? "").localeCompare(leftMeasurements[0]?.started_at ?? "");
         return left.participant_code.localeCompare(right.participant_code);
       });
+  }
+
+  function visibleAccountOnlyRows() {
+    const query = participantSearch.trim().toLowerCase();
+    return adminAccounts.filter((account) => !account.participant_id &&
+      (!query || [account.first_name, account.last_name, account.email, account.username, account.role].filter(Boolean).join(" ").toLowerCase().includes(query)));
+  }
+
+  function accountManagementActions(account: AdminAccount | null) {
+    if (!account) return <span className="muted">Bez prihlasovacieho účtu</span>;
+    if (user?.role !== "superadmin" || account.effective_role === "superadmin") {
+      return <span className="role-label">{account.effective_role}</span>;
+    }
+    return <>
+      <select aria-label="Rola používateľa" value={account.role} onChange={(event) => void changeAccountRole(account, event.target.value)}>
+        <option value="student">Študent</option><option value="researcher">Researcher</option><option value="admin">Admin</option>
+      </select>
+      <button className="quiet compact" onClick={() => void resetAccountPassword(account)}>Reset hesla</button>
+      <button className="quiet compact danger" onClick={() => void anonymizeAccount(account)}>Anonymizovať</button>
+    </>;
   }
 
   if (user?.role === "student") return <StudentPortal user={user} onLogout={logout} />;
@@ -360,15 +371,14 @@ export function App() {
             <div className="brand"><span className="mark">T</span><div><strong>THRUST</strong><small>UAV Human Performance Research</small></div></div>
             <nav className="side-nav" aria-label="Administrácia">
               <button className={activeSection === "overview" ? "nav-item active" : "nav-item"} onClick={() => setActiveSection("overview")}><span>⌂</span>Prehľad</button>
-              <button className={activeSection === "participants" ? "nav-item active" : "nav-item"} onClick={() => setActiveSection("participants")}><span>◎</span>Účastníci</button>
-              <button className={activeSection === "users" ? "nav-item active" : "nav-item"} onClick={() => setActiveSection("users")}><span>♙</span>Používatelia</button>
+              <button className={activeSection === "participants" ? "nav-item active" : "nav-item"} onClick={() => setActiveSection("participants")}><span>◎</span>Účastníci a účty</button>
               <button className={activeSection === "tests" ? "nav-item active" : "nav-item"} onClick={() => setActiveSection("tests")}><span>▣</span>Testy a konfigurácie</button>
               <button className={activeSection === "measurements" ? "nav-item active" : "nav-item"} onClick={() => setActiveSection("measurements")}><span>↗</span>Merania a výsledky</button>
             </nav>
             <div className="sidebar-footer"><span>{user.username} · {user.role}</span><button className="quiet" onClick={logout}>Odhlásiť</button></div>
           </aside>
           <div className="app-main">
-            <header className="topbar"><div><div className="eyebrow">ADMINISTRÁCIA · {user.role.toUpperCase()}</div><h1>{activeSection === "overview" ? "Prehľad meraní" : activeSection === "participants" ? "Účastníci" : activeSection === "users" ? "Používatelia" : activeSection === "tests" ? "Testy a konfigurácie" : "Merania a výsledky"}</h1></div><span className="status-dot">Systém online</span></header>
+            <header className="topbar"><div><div className="eyebrow">ADMINISTRÁCIA · {user.role.toUpperCase()}</div><h1>{activeSection === "overview" ? "Prehľad meraní" : activeSection === "participants" ? "Účastníci a účty" : activeSection === "tests" ? "Testy a konfigurácie" : "Merania a výsledky"}</h1></div><span className="status-dot">Systém online</span></header>
             <section className="workspace">
               {activeSection === "overview" && <>
                 <div className="stats"><Metric label="Účastníci" value={overview?.participant_count ?? "—"} /><Metric label="Merania" value={overview?.measurement_count ?? "—"} /><Metric label="Čakajúce synchronizácie" value="0" /></div>
@@ -377,29 +387,33 @@ export function App() {
               </>}
               {activeSection === "participants" && <>
                 <section className="browser-panel">
-                  <div className="browser-header"><div><div className="eyebrow">ÚČASTNÍCI</div><h2>Databáza účastníkov</h2><p className="muted">Výskumné merania sú vedené pod pseudonymným ID; údaje účtu sú viditeľné administrátorovi.</p></div><button className="primary compact" onClick={() => document.getElementById("new-participant-code")?.focus()}>Nový účastník</button></div>
-                  <div className="browser-toolbar"><input placeholder="Hľadať ID účastníka…" value={participantSearch} onChange={(event) => setParticipantSearch(event.target.value)} /><select value={participantSort} onChange={(event) => setParticipantSort(event.target.value as typeof participantSort)}><option value="code">Zoradiť podľa ID</option><option value="first">Najstarší prvý test</option><option value="last">Najnovší posledný test</option><option value="count">Počet meraní</option></select></div>
-                  <div className="data-table participant-table"><div className="data-table-head"><span>ID účastníka</span><span>Registrovaný študent</span><span>Prvé meranie</span><span>Posledné meranie</span><span>Meraní</span><span>Akcie</span></div>{filteredParticipants().map((participant) => { const rows = participantMeasurements(participant.id); const first = rows.length ? rows[rows.length - 1].started_at : null; const last = rows.length ? rows[0].started_at : null; return <div className="data-table-row" key={participant.id}><strong>{participant.participant_code}</strong><span>{registeredStudents.find((item) => item.participant_id === participant.id) ? <>{registeredStudents.find((item) => item.participant_id === participant.id)?.first_name} {registeredStudents.find((item) => item.participant_id === participant.id)?.last_name}<small className="student-email">{registeredStudents.find((item) => item.participant_id === participant.id)?.email}</small></> : <span className="muted">Manuálny účet</span>}</span><span>{first ? new Date(first).toLocaleDateString("sk-SK") : "—"}</span><span>{last ? new Date(last).toLocaleDateString("sk-SK") : "—"}</span><span>{rows.length}</span><span className="row-actions"><button className="quiet compact" onClick={() => openParticipant(participant)}>Otvoriť</button><button className="quiet compact" onClick={() => { setMeasurementParticipantFilter(participant.id); setActiveSection("measurements"); }}>Merania</button></span></div>; })}</div>
+                  <div className="browser-header"><div><div className="eyebrow">ÚČASTNÍCI A ÚČTY</div><h2>Spoločná evidencia účastníkov a kont</h2><p className="muted">Participant ID, používateľské konto a rola sú zobrazené spolu. Účty bez Participant ID sú súčasťou toho istého zoznamu.</p></div><div className="actions"><button className="quiet compact" onClick={() => void refreshAccounts()}>Obnoviť</button><button className="primary compact" onClick={() => document.getElementById("new-participant-code")?.focus()}>Nové anonymné ID</button></div></div>
+                  {accountMessage && <p className="notice">{accountMessage}</p>}
+                  <div className="browser-toolbar"><input placeholder="Hľadať ID, meno, e-mail alebo login…" value={participantSearch} onChange={(event) => setParticipantSearch(event.target.value)} /><select value={participantSort} onChange={(event) => setParticipantSort(event.target.value as typeof participantSort)}><option value="code">Zoradiť podľa ID</option><option value="first">Najstarší prvý test</option><option value="last">Najnovší posledný test</option><option value="count">Počet meraní</option></select></div>
+                  <div className="data-table participant-table"><div className="data-table-head"><span>Participant ID</span><span>Konto / rola</span><span>Prvé meranie</span><span>Posledné meranie</span><span>Meraní</span><span>Akcie</span></div>
+                    {filteredParticipants().map((participant) => {
+                      const rows = participantMeasurements(participant.id);
+                      const first = rows.length ? rows[rows.length - 1].started_at : null;
+                      const last = rows.length ? rows[0].started_at : null;
+                      const account = adminAccounts.find((item) => item.participant_id === participant.id) || null;
+                      return <div className="data-table-row" key={participant.id}>
+                        <strong>{participant.participant_code}</strong>
+                        <span>{account ? <><strong>{[account.first_name, account.last_name].filter(Boolean).join(" ") || account.username}</strong><small className="student-email">{account.email || account.username} · {account.effective_role}</small></> : <span className="muted">Manuálny účastník</span>}</span>
+                        <span>{first ? new Date(first).toLocaleDateString("sk-SK") : "—"}</span>
+                        <span>{last ? new Date(last).toLocaleDateString("sk-SK") : "—"}</span>
+                        <span>{rows.length}</span>
+                        <span className="row-actions">{accountManagementActions(account)}{participant && <><button className="quiet compact" onClick={() => openParticipant(participant)}>Detail</button><button className="quiet compact" onClick={() => { setMeasurementParticipantFilter(participant.id); setActiveSection("measurements"); }}>Merania</button></>}</span>
+                      </div>;
+                    })}
+                    {visibleAccountOnlyRows().map((account) => <div className="data-table-row" key={account.id}>
+                      <strong>—</strong><span><strong>{[account.first_name, account.last_name].filter(Boolean).join(" ") || account.username}</strong><small className="student-email">{account.email || account.username}</small></span>
+                      <span>—</span><span>—</span><span>—</span><span className="row-actions">{accountManagementActions(account)}</span>
+                    </div>)}
+                  </div>
                   {filteredParticipants().length === 0 && <div className="empty-list"><h2>Žiadni účastníci</h2><p className="muted">Filteru nezodpovedá žiadny záznam.</p></div>}
                 </section>
                 <section className="participant-create-strip"><div><div className="eyebrow">NOVÝ ÚČASTNÍK</div><strong>Vytvoriť anonymné ID</strong></div><form className="inline-create-form" onSubmit={createParticipant}><input id="new-participant-code" value={participantCode} onChange={(event) => setParticipantCode(event.target.value.toUpperCase())} maxLength={5} pattern="[A-Za-z0-9]{5}" placeholder="ABCDE" required /><button type="button" className="quiet compact" onClick={generateParticipantCode}>Generovať</button><button type="submit" className="primary compact">Vytvoriť</button></form>{participantMessage && <span className="notice">{participantMessage}</span>}</section>
                 {selectedParticipant && <section className={selectedParticipant ? "browser-detail detail-modal-open" : "browser-detail detail-modal-closed"}><div className="detail-header"><div><div className="eyebrow">DETAIL ÚČASTNÍKA</div><h2>{selectedParticipant.participant.participant_code}</h2></div><button className="quiet compact" onClick={() => setSelectedParticipant(null)}>Zavrieť detail</button></div><p className="muted">História synchronizovaných meraní účastníka.</p><div className="data-table"><div className="data-table-head"><span>Test</span><span>Dátum</span><span>Stav</span><span>Akcia</span></div>{selectedParticipant.measurements.filter((measurement) => measurement.raw_data_available).map((measurement) => <div className="data-table-row" key={measurement.id}><strong>{measurement.test_type}</strong><span>{new Date(measurement.started_at).toLocaleString("sk-SK")}</span><span>{measurement.status}</span><button className="quiet compact" onClick={() => { setSelectedMeasurementId(measurement.id); setActiveSection("measurements"); }}>Otvoriť výsledok</button></div>)}</div></section>}
-              </>}
-              {activeSection === "users" && <>
-                <section className="browser-panel">
-                  <div className="browser-header"><div><div className="eyebrow">SPRÁVA ÚČTOV</div><h2>Používatelia a účastníci</h2><p className="muted">Prihlásenie funguje cez e-mail alebo pseudonymné Participant ID. Zmena rolí, reset hesla a anonymizácia sú dostupné iba superadminovi.</p></div><button className="quiet compact" onClick={() => void refreshAccounts()}>Obnoviť zoznam</button></div>
-                  {accountMessage && <p className="notice">{accountMessage}</p>}
-                  <div className="account-list">{adminAccounts.map((account) => <article className="account-row" key={account.id}>
-                    <div><strong>{[account.first_name, account.last_name].filter(Boolean).join(" ") || account.username}</strong><small>{account.email || account.username}</small></div>
-                    <div><strong>{account.participant_code || "—"}</strong><small>{account.effective_role}{account.is_active ? "" : " · deaktivovaný"}</small></div>
-                    <div className="account-actions">{user.role === "superadmin" && account.effective_role !== "superadmin" ? <>
-                      <select aria-label="Rola používateľa" value={account.role} onChange={(event) => void changeAccountRole(account, event.target.value)}><option value="student">Študent</option><option value="researcher">Researcher</option><option value="admin">Admin</option></select>
-                      <button className="quiet compact" onClick={() => void resetAccountPassword(account)}>Resetovať heslo</button>
-                      <button className="quiet compact danger" onClick={() => void anonymizeAccount(account)}>Zmazať/anonymizovať</button>
-                    </> : <span className="muted">{account.effective_role === "superadmin" ? "Superadmin" : "Bez oprávnenia na správu"}</span>}</div>
-                  </article>)}</div>
-                  {!adminAccounts.length && !accountMessage && <div className="empty-list"><h2>Žiadne účty</h2><p className="muted">Registrované účty sa zobrazia tu.</p></div>}
-                </section>
               </>}
               {activeSection === "tests" && <>
                 <section className="browser-panel">
