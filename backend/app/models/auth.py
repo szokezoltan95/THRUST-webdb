@@ -1,10 +1,14 @@
 from datetime import datetime, timezone
 from uuid import uuid4
+from typing import TYPE_CHECKING
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+
+if TYPE_CHECKING:
+    from app.models.participant import Participant
 
 
 def utcnow() -> datetime:
@@ -22,6 +26,7 @@ class AdminUser(Base):
     first_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
     last_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
     participant_id: Mapped[str | None] = mapped_column(ForeignKey("participants.id", ondelete="SET NULL"), nullable=True, unique=True)
+    participant: Mapped["Participant | None"] = relationship("Participant", foreign_keys=[participant_id])
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
 
