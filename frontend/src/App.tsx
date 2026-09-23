@@ -86,7 +86,7 @@ export function App() {
   const [measurementDateTo, setMeasurementDateTo] = useState("");
   const [manualUploadOpen, setManualUploadOpen] = useState(false);
   const [loginOpen, setLoginOpen] = useState(false);
-  const [registerOpen, setRegisterOpen] = useState(false);
+  const [isRegisterPage, setIsRegisterPage] = useState(() => window.location.pathname.replace(/\/+$/, "") === "/register");
   const [consentTexts, setConsentTexts] = useState<ConsentDocuments | null>(null);
   const [consentDialog, setConsentDialog] = useState<ConsentKind | null>(null);
   const [activeConsentDocument, setActiveConsentDocument] = useState<ConsentDocument | null>(null);
@@ -94,9 +94,21 @@ export function App() {
   const [activeSection, setActiveSection] = useState<AdminSection>("overview");
 
   useEffect(() => {
+    const syncRoute = () => setIsRegisterPage(window.location.pathname.replace(/\/+$/, "") === "/register");
+    window.addEventListener("popstate", syncRoute);
+    return () => window.removeEventListener("popstate", syncRoute);
+  }, []);
+
+  useEffect(() => {
     request<PublicMetrics>("/api/public/metrics").then(setMetrics).catch(() => setMetrics(null));
     request<ConsentDocuments>("/api/public/consent-texts").then(setConsentTexts).catch(() => setConsentTexts(null));
-    request<User>("/api/auth/me").then(setUser).catch(() => undefined);
+    request<User>("/api/auth/me").then((sessionUser) => {
+      setUser(sessionUser);
+      if (window.location.pathname.replace(/\/+$/, "") === "/register") {
+        window.history.replaceState({}, "", "/");
+        setIsRegisterPage(false);
+      }
+    }).catch(() => undefined);
   }, []);
 
   useEffect(() => {
@@ -246,6 +258,20 @@ export function App() {
     }
   }
 
+  function openRegistration() {
+    window.history.pushState({}, "", "/register");
+    setIsRegisterPage(true);
+    setError("");
+    window.scrollTo(0, 0);
+  }
+
+  function leaveRegistration() {
+    window.history.pushState({}, "", "/");
+    setIsRegisterPage(false);
+    setError("");
+    window.scrollTo(0, 0);
+  }
+
   async function register(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
@@ -273,7 +299,7 @@ export function App() {
           gdpr_consent_version: consentTexts?.gdpr.version || "gdpr-v2",
         }),
       });
-      setUser(signedIn); setRegisterOpen(false);
+      setUser(signedIn); leaveRegistration();
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Registrácia zlyhala."); }
   }
 
@@ -435,6 +461,10 @@ export function App() {
   }
 
   if (user?.role === "student") return <StudentPortal user={user} onLogout={logout} />;
+  if (isRegisterPage && !user) return <>
+    <RegistrationPage onSubmit={register} onBack={leaveRegistration} onLogin={() => { leaveRegistration(); setLoginOpen(true); }} error={error} consentTexts={consentTexts} onOpenConsent={setConsentDialog} />
+    {consentDialog && consentTexts && <ConsentTextDialog kind={consentDialog} document={activeConsentDocument || consentTexts[consentDialog]} onClose={() => { setConsentDialog(null); setActiveConsentDocument(null); }} />}
+  </>;
 
   return (
     <main>
@@ -573,7 +603,7 @@ export function App() {
         </div>
       ) : (
         <>
-          <header><div className="brand"><span className="mark">T</span><div><strong>THRUST</strong><small>UAV Human Performance Research</small></div></div><div className="actions"><button className="quiet" onClick={() => setRegisterOpen(true)}>Registrácia</button><button className="quiet" onClick={() => setLoginOpen(true)}>Prihlásenie</button></div></header>
+          <header><div className="brand"><span className="mark">T</span><div><strong>THRUST</strong><small>UAV Human Performance Research</small></div></div><div className="actions"><button className="quiet" onClick={openRegistration}>Registrácia</button><button className="quiet" onClick={() => setLoginOpen(true)}>Prihlásenie</button></div></header>
           <section className="public">
           <div className="eyebrow">TESTING HUB FOR RESEARCH IN UAV SIMULATION AND TRAINING</div>
           <h1>Merateľný pohľad na výkon pilotov UAV.</h1>
@@ -589,10 +619,51 @@ export function App() {
       )}
 
       {loginOpen && <div className="backdrop" onMouseDown={() => setLoginOpen(false)}><form className="login" onSubmit={login} onMouseDown={(e) => e.stopPropagation()}><div className="eyebrow">CHRÁNENÝ PRÍSTUP</div><h2>Prihlásenie</h2><label>E-mail, Participant ID alebo username<input name="identifier" autoComplete="username" required autoFocus /></label><label>Heslo<input name="password" type="password" autoComplete="current-password" required /></label>{error && <p className="error">{error}</p>}<div className="actions"><button type="button" className="quiet" onClick={() => setLoginOpen(false)}>Zrušiť</button><button type="submit" className="primary">Prihlásiť</button></div></form></div>} 
-      {registerOpen && <div className="backdrop" onMouseDown={() => setRegisterOpen(false)}><form className="login register-form" onSubmit={register} onMouseDown={(e) => e.stopPropagation()}><div className="eyebrow">NOVÝ ÚČET</div><h2>Vytvoriť účet</h2><p className="muted">Účet dostane Participant ID a základnú rolu študenta. Oprávnenia môže zvýšiť iba superadmin.</p><div className="form-grid"><label>Meno<input name="first_name" required /></label><label>Priezvisko<input name="last_name" required /></label></div><label>E-mail<input name="email" type="email" autoComplete="email" required /></label><div className="form-grid"><label>Heslo<input name="password" type="password" minLength={10} autoComplete="new-password" required /></label><label>Zopakovať heslo<input name="password_confirmation" type="password" minLength={10} autoComplete="new-password" required /></label></div><section className="profile-questionnaire"><div className="eyebrow">PROFIL PILOTA · NEPOVINNÉ</div><p className="muted">Tieto údaje môžeš vynechať. Slúžia na štatistické vyhodnotenie skúseností s pilotovaním.</p><div className="form-grid"><label>Dátum narodenia<input name="birth_date" type="date" /></label><label>Skúsenosť s pilotovaním dronu<select name="pilot_experience" defaultValue=""><option value="">Nevyplnené</option><option value="none">Žiadna</option><option value="under_1_year">Menej ako 1 rok</option><option value="1_3_years">1–3 roky</option><option value="3_5_years">3–5 rokov</option><option value="over_5_years">Viac ako 5 rokov</option></select></label></div><div className="form-grid"><label>Odhadovaný počet letových hodín<select name="flight_hours_range" defaultValue=""><option value="">Nevyplnené</option><option value="0">0</option><option value="under_10">Menej ako 10</option><option value="10_50">10–50</option><option value="51_200">51–200</option><option value="201_500">201–500</option><option value="over_500">Viac ako 500</option></select></label><label>Osvedčenie / licencia<select name="pilot_certificate" defaultValue=""><option value="">Nevyplnené</option><option value="none">Žiadne</option><option value="a1_a3">A1/A3</option><option value="a2">A2</option><option value="sts">STS</option><option value="other">Iné</option></select></label></div><div className="form-grid"><label>Najčastejší typ UAV<select name="primary_uav_type" defaultValue=""><option value="">Nevyplnené</option><option value="multirotor">Multikoptéra</option><option value="fixed_wing">Pevné krídlo</option><option value="helicopter">Vrtuľník</option><option value="vtol">VTOL</option><option value="other">Iný / neviem</option></select></label><label>Skúsenosť s leteckým simulátorom<select name="simulator_experience" defaultValue=""><option value="">Nevyplnené</option><option value="none">Žiadna</option><option value="under_10">Menej ako 10 hodín</option><option value="10_50">10–50 hodín</option><option value="51_200">51–200 hodín</option><option value="over_200">Viac ako 200 hodín</option></select></label></div><label>Sebahodnotenie pilotných zručností (1 = začiatočník, 5 = veľmi skúsený)<select name="self_rated_skill" defaultValue=""><option value="">Nevyplnené</option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option></select></label></section><label className="consent"><input name="research_consent" type="checkbox" required /> <span>Súhlasím s použitím pseudonymizovaných údajov na výskumné účely. <a href="#consent-research" onClick={(event) => { event.preventDefault(); event.stopPropagation(); setConsentDialog("research"); }}>Zobraziť text výskumného súhlasu</a></span></label><label className="consent"><input name="gdpr_consent" type="checkbox" required /> <span>Súhlasím so spracovaním osobných údajov pre vytvorenie a správu účtu. <a href="#consent-gdpr" onClick={(event) => { event.preventDefault(); event.stopPropagation(); setConsentDialog("gdpr"); }}>Zobraziť informácie a GDPR súhlas</a></span></label>{error && <p className="error">{error}</p>}<div className="actions"><button type="button" className="quiet" onClick={() => setRegisterOpen(false)}>Zrušiť</button><button type="submit" className="primary" disabled={!consentTexts}>Vytvoriť účet</button></div></form></div>}
       {consentDialog && consentTexts && <ConsentTextDialog kind={consentDialog} document={activeConsentDocument || consentTexts[consentDialog]} onClose={() => { setConsentDialog(null); setActiveConsentDocument(null); }} />}
     </main>
   );
+}
+
+
+function RegistrationPage({ onSubmit, onBack, onLogin, error, consentTexts, onOpenConsent }: {
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  onBack: () => void;
+  onLogin: () => void;
+  error: string;
+  consentTexts: ConsentDocuments | null;
+  onOpenConsent: (kind: ConsentKind) => void;
+}) {
+  return <main className="registration-page">
+    <header className="registration-header">
+      <div className="brand"><span className="mark">T</span><div><strong>THRUST</strong><small>UAV Human Performance Research</small></div></div>
+      <div className="actions"><button type="button" className="quiet" onClick={onBack}>Späť na hlavnú stránku</button><button type="button" className="quiet" onClick={onLogin}>Už mám účet · Prihlásiť sa</button></div>
+    </header>
+    <section className="registration-content">
+      <div className="registration-heading"><div className="eyebrow">NOVÝ ŠTUDENTSKÝ ÚČET</div><h1>Vytvor si účet</h1><p className="lead">Po registrácii dostaneš svoje Participant ID. Výskumník ho použije pri meraní v lokálnom THRUSTe.</p></div>
+      <form className="registration-form" onSubmit={onSubmit}>
+        <section className="registration-card registration-account-fields">
+          <div className="eyebrow">PRIHLASOVACIE ÚDAJE</div><h2>Účet</h2><p className="muted">Účet má na začiatku rolu študenta. Oprávnenia môže zmeniť iba superadmin.</p>
+          <div className="form-grid"><label>Meno<input name="first_name" autoComplete="given-name" required /></label><label>Priezvisko<input name="last_name" autoComplete="family-name" required /></label></div>
+          <label>E-mail<input name="email" type="email" autoComplete="email" required /></label>
+          <div className="form-grid"><label>Heslo<input name="password" type="password" minLength={10} autoComplete="new-password" required /></label><label>Zopakovať heslo<input name="password_confirmation" type="password" minLength={10} autoComplete="new-password" required /></label></div>
+        </section>
+        <section className="registration-card profile-questionnaire">
+          <div><div className="eyebrow">PROFIL PILOTA · NEPOVINNÉ</div><h2>Skúsenosti a zručnosti</h2><p className="muted">Odpovede môžeš vynechať. Použijú sa na štatistické vyhodnotenie skúseností s pilotovaním.</p></div>
+          <div className="form-grid"><label>Dátum narodenia<input name="birth_date" type="date" /></label><label>Skúsenosť s pilotovaním dronu<select name="pilot_experience" defaultValue=""><option value="">Nevyplnené</option><option value="none">Žiadna</option><option value="under_1_year">Menej ako 1 rok</option><option value="1_3_years">1–3 roky</option><option value="3_5_years">3–5 rokov</option><option value="over_5_years">Viac ako 5 rokov</option></select></label></div>
+          <div className="form-grid"><label>Odhadovaný počet letových hodín<select name="flight_hours_range" defaultValue=""><option value="">Nevyplnené</option><option value="0">0</option><option value="under_10">Menej ako 10</option><option value="10_50">10–50</option><option value="51_200">51–200</option><option value="201_500">201–500</option><option value="over_500">Viac ako 500</option></select></label><label>Osvedčenie / licencia<select name="pilot_certificate" defaultValue=""><option value="">Nevyplnené</option><option value="none">Žiadne</option><option value="a1_a3">A1/A3</option><option value="a2">A2</option><option value="sts">STS</option><option value="other">Iné</option></select></label></div>
+          <div className="form-grid"><label>Najčastejší typ UAV<select name="primary_uav_type" defaultValue=""><option value="">Nevyplnené</option><option value="multirotor">Multikoptéra</option><option value="fixed_wing">Pevné krídlo</option><option value="helicopter">Vrtuľník</option><option value="vtol">VTOL</option><option value="other">Iný / neviem</option></select></label><label>Skúsenosť s leteckým simulátorom<select name="simulator_experience" defaultValue=""><option value="">Nevyplnené</option><option value="none">Žiadna</option><option value="under_10">Menej ako 10 hodín</option><option value="10_50">10–50 hodín</option><option value="51_200">51–200 hodín</option><option value="over_200">Viac ako 200 hodín</option></select></label></div>
+          <label>Sebahodnotenie pilotných zručností (1 = začiatočník, 5 = veľmi skúsený)<select name="self_rated_skill" defaultValue=""><option value="">Nevyplnené</option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option></select></label>
+        </section>
+        <section className="registration-card registration-consents">
+          <div className="eyebrow">SÚHLASY A DOKONČENIE</div>
+          <label className="consent"><input name="research_consent" type="checkbox" required /> <span>Súhlasím s použitím pseudonymizovaných údajov na výskumné účely. <a href="#consent-research" onClick={(event) => { event.preventDefault(); onOpenConsent("research"); }}>Zobraziť text výskumného súhlasu</a></span></label>
+          <label className="consent"><input name="gdpr_consent" type="checkbox" required /> <span>Súhlasím so spracovaním osobných údajov pre vytvorenie a správu účtu. <a href="#consent-gdpr" onClick={(event) => { event.preventDefault(); onOpenConsent("gdpr"); }}>Zobraziť informácie a GDPR súhlas</a></span></label>
+          {error && <p className="error">{error}</p>}
+          <div className="registration-actions"><span className="muted">Profilové otázky sú nepovinné. Oba súhlasy sú potrebné na registráciu.</span><button type="submit" className="primary" disabled={!consentTexts}>Vytvoriť účet</button></div>
+        </section>
+      </form>
+    </section>
+  </main>;
 }
 
 type NormalizedChannel = { mean?: number[]; median?: number[]; std?: number[]; metrics?: Record<string, number | null> };
