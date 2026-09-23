@@ -87,6 +87,15 @@ async def register(
         primary_uav_type=payload.primary_uav_type,
         simulator_experience=payload.simulator_experience,
         self_rated_skill=payload.self_rated_skill,
+        sex=payload.sex,
+        dominant_hand=payload.dominant_hand,
+        vision_correction=payload.vision_correction,
+        vision_diopters_left=payload.vision_diopters_left,
+        vision_diopters_right=payload.vision_diopters_right,
+        rc_experience=payload.rc_experience,
+        fpv_experience=payload.fpv_experience,
+        game_controller_experience=payload.game_controller_experience,
+        video_game_experience=payload.video_game_experience,
     )
     db.add(participant)
     await db.flush()
