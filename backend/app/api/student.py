@@ -201,8 +201,8 @@ async def consent_status(
         .order_by(ResearchConsent.accepted_at.desc())
     )
     status_by_type: dict[str, dict] = {
-        "research": {"accepted": False, "accepted_at": None, "revoked_at": None, "version": None},
-        "gdpr": {"accepted": False, "accepted_at": None, "revoked_at": None, "version": None},
+        "research": {"accepted": False, "accepted_at": None, "revoked_at": None, "version": None, "text": None},
+        "gdpr": {"accepted": False, "accepted_at": None, "revoked_at": None, "version": None, "text": None},
     }
     for consent in result:
         if consent.consent_type not in status_by_type or status_by_type[consent.consent_type]["version"] is not None:
@@ -212,6 +212,7 @@ async def consent_status(
             "accepted_at": consent.accepted_at,
             "revoked_at": consent.revoked_at,
             "version": consent.version,
+            "text": consent.text_snapshot,
         }
     return status_by_type
 
