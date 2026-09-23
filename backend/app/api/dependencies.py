@@ -47,6 +47,15 @@ async def require_admin(auth: AuthContext = Depends(require_session)) -> AuthCon
     return auth
 
 
+async def require_user_csrf(
+    auth: AuthContext = Depends(require_session),
+    csrf_token: str | None = Header(default=None, alias="X-CSRF-Token"),
+) -> AuthContext:
+    if not csrf_token or csrf_token != auth.session.csrf_token:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid CSRF token")
+    return auth
+
+
 async def require_csrf(
     auth: AuthContext = Depends(require_admin),
     csrf_token: str | None = Header(default=None, alias="X-CSRF-Token"),
