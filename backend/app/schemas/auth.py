@@ -8,11 +8,6 @@ class LoginRequest(BaseModel):
     username: str | None = Field(default=None, min_length=1, max_length=255)
     password: str = Field(min_length=1, max_length=1024)
 
-    @field_validator("identifier", mode="before")
-    @classmethod
-    def accept_legacy_username(cls, value: str | None, info):
-        return value or info.data.get("username")
-
 
 class RegistrationRequest(BaseModel):
     email: EmailStr
