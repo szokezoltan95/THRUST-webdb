@@ -441,3 +441,14 @@ h1 { max-width: 880px; margin: 20px 0; font-size: clamp(42px, 7vw, 84px); line-h
 .consent-status-card small { color: #8ea5bc; }
 .consent-active { color: #70e0ac; }
 @media (max-width: 680px) { .consent-status-grid { grid-template-columns: 1fr; } }
+
+
+/* Participant detail and superadmin account dialog */
+.participant-detail-modal { max-width: 1180px; }
+.participant-detail-modal .detail-grid > div { min-width: 0; }
+.participant-detail-modal .detail-grid strong { overflow-wrap: anywhere; }
+.account-dialog { width: min(560px, calc(100vw - 32px)); max-height: 88vh; overflow: auto; }
+.account-dialog label { display: grid; gap: 7px; margin: 18px 0; color: #9db0c4; font-size: .82rem; }
+.account-dialog select { width: 100%; box-sizing: border-box; background: #07121f; border: 1px solid var(--line); color: #eef5ff; padding: 10px; font: inherit; }
+.account-dialog-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 9px; margin-top: 22px; }
+@media (max-width: 650px) { .account-dialog-actions { align-items: stretch; flex-direction: column; } }
