@@ -56,7 +56,7 @@ class ResearcherRegistrationRequest(BaseModel):
     password: str = Field(min_length=10, max_length=1024)
     first_name: str = Field(min_length=1, max_length=120)
     last_name: str = Field(min_length=1, max_length=120)
-    registration_key: str = Field(min_length=1, max_length=256)
+    registration_key: str = Field(min_length=1, max_length=64)
     gdpr_consent: bool
     gdpr_consent_version: str = Field(default="gdpr-v3", min_length=1, max_length=30)
 
