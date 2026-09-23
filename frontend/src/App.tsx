@@ -659,17 +659,32 @@ export function App() {
                   if (participantDialog === "detail") return <section className="browser-detail detail-modal-open participant-detail-modal">
                     <div className="detail-header"><div><div className="eyebrow">ZÁKLADNÉ ÚDAJE ÚČASTNÍKA</div><h2>{participant.participant_code}</h2></div><button className="quiet compact" onClick={() => setParticipantDialog(null)}>Zavrieť</button></div>
                     {accountMessage && <p className="notice">{accountMessage}</p>}
-                    <div className="detail-grid">
-                      <div><span>Participant ID</span><strong>{participant.participant_code}</strong></div>
-                      <div><span>Stav účastníka</span><strong>{participant.is_active ? "Aktívny" : "Neaktívny"}</strong></div>
-                      <div><span>Vytvorený</span><strong>{formatDate(participant.created_at)}</strong></div>
-                      <div><span>Počet meraní</span><strong>{rows.length}</strong></div>
-                      <div><span>Prvé meranie</span><strong>{dates.length ? formatDate(dates[0]) : "Zatiaľ bez merania"}</strong></div>
-                      <div><span>Posledné meranie</span><strong>{dates.length ? formatDate(dates[dates.length - 1]) : "Zatiaľ bez merania"}</strong></div>
-                      <div><span>Prepojené konto</span><strong>{linkedAccount ? [linkedAccount.first_name, linkedAccount.last_name].filter(Boolean).join(" ") || linkedAccount.username : "Bez konta"}</strong></div>
-                      <div><span>E-mail / rola</span><strong>{linkedAccount ? `${linkedAccount.email || linkedAccount.username} · ${linkedAccount.effective_role}` : "—"}</strong></div>
-                    </div>
-                    {rows.length > 0 && <p className="muted">Súhrn: {new Set(rows.map((item) => item.test_type)).size} typov testov, {rows.filter((item) => item.status === "completed" || item.status === "recorded").length} dokončených alebo zaznamenaných meraní.</p>}<div className="detail-grid participant-research-profile"><div><span>Dátum narodenia</span><strong>{participant.birth_date ? formatDate(participant.birth_date) : "Neuvedené"}</strong></div><div><span>Skúsenosť s pilotovaním</span><strong>{profileLabel(participant.pilot_experience)}</strong></div><div><span>Letové hodiny</span><strong>{profileLabel(participant.flight_hours_range)}</strong></div><div><span>Osvedčenie</span><strong>{profileLabel(participant.pilot_certificate)}</strong></div><div><span>Typ UAV</span><strong>{profileLabel(participant.primary_uav_type)}</strong></div><div><span>Simulátor</span><strong>{profileLabel(participant.simulator_experience)}</strong></div><div><span>Sebahodnotenie zručností</span><strong>{participant.self_rated_skill ?? "Neuvedené"}</strong></div></div>{(user?.role === "admin" || user?.role === "superadmin") && <ParticipantProfileEditor participant={participant} csrfToken={user.csrf_token} onSaved={(updated) => { setParticipants((items) => items.map((item) => item.id === updated.id ? updated : item)); setSelectedParticipant((current) => current ? { ...current, participant: updated } : current); setAccountMessage("Profil účastníka bol uložený."); }} />}
+                    <InfoTable rows={[
+                      ["Participant ID", participant.participant_code],
+                      ["Stav účastníka", participant.is_active ? "Aktívny" : "Neaktívny"],
+                      ["Vytvorený", formatDate(participant.created_at)],
+                      ["Počet meraní", rows.length],
+                      ["Prvé meranie", dates.length ? formatDate(dates[0]) : "Zatiaľ bez merania"],
+                      ["Posledné meranie", dates.length ? formatDate(dates[dates.length - 1]) : "Zatiaľ bez merania"],
+                      ["Prepojené konto", linkedAccount ? [linkedAccount.first_name, linkedAccount.last_name].filter(Boolean).join(" ") || linkedAccount.username : "Bez konta"],
+                      ["E-mail / rola", linkedAccount ? `${linkedAccount.email || linkedAccount.username} · ${linkedAccount.effective_role}` : "—"],
+                      ["Súhrn meraní", rows.length ? `${new Set(rows.map((item) => item.test_type)).size} typov testov, ${rows.filter((item) => item.status === "completed" || item.status === "recorded").length} dokončených alebo zaznamenaných` : "Bez meraní"],
+                      ["Dátum narodenia", participant.birth_date ? formatDate(participant.birth_date) : "Neuvedené"],
+                      ["Pohlavie", profileLabel(participant.sex)],
+                      ["Dominantná ruka", profileLabel(participant.dominant_hand)],
+                      ["Zraková korekcia", profileLabel(participant.vision_correction)],
+                      ["Dioptrie ľavé / pravé", `${participant.vision_diopters_left ?? "—"} / ${participant.vision_diopters_right ?? "—"} D`],
+                      ["Skúsenosť s pilotovaním", profileLabel(participant.pilot_experience)],
+                      ["Letové hodiny", profileLabel(participant.flight_hours_range)],
+                      ["Osvedčenie", profileLabel(participant.pilot_certificate)],
+                      ["Typ UAV", profileLabel(participant.primary_uav_type)],
+                      ["Simulátor", profileLabel(participant.simulator_experience)],
+                      ["RC ovládanie", profileLabel(participant.rc_experience)],
+                      ["FPV", profileLabel(participant.fpv_experience)],
+                      ["Herný ovládač", profileLabel(participant.game_controller_experience)],
+                      ["Video / počítačové hry", profileLabel(participant.video_game_experience)],
+                      ["Sebahodnotenie zručností", participant.self_rated_skill ?? "Neuvedené"],
+                    ]} />{(user?.role === "admin" || user?.role === "superadmin") && <ParticipantProfileEditor participant={participant} csrfToken={user.csrf_token} onSaved={(updated) => { setParticipants((items) => items.map((item) => item.id === updated.id ? updated : item)); setSelectedParticipant((current) => current ? { ...current, participant: updated } : current); setAccountMessage("Profil účastníka bol uložený."); }} />}
                     {user?.role === "superadmin" && linkedAccount && linkedAccount.effective_role !== "superadmin" && <section className="account-management-panel">
                       <div><div className="eyebrow">SPRÁVA KONTA</div><strong>{linkedAccount.email || linkedAccount.username}</strong><small>Rola, prístup a údaje konta</small></div>
                       <div className="account-management-controls">
@@ -1066,6 +1081,12 @@ function ConsentTextDialog({ kind, document, onClose }: { kind: ConsentKind; doc
   </div>;
 }
 
+function InfoTable({ rows }: { rows: Array<[string, string | number]> }) {
+  return <div className="table-wrap profile-info-wrap"><table className="profile-info-table"><tbody>
+    {rows.map(([label, value]) => <tr key={label}><th scope="row">{label}</th><td>{value}</td></tr>)}
+  </tbody></table></div>;
+}
+
 function Metric({ label, value }: { label: string; value: string | number }) {
   return <article className="metric"><span>{label}</span><strong>{value}</strong></article>;
 }
@@ -1080,6 +1101,8 @@ function StudentPortal({ user, onLogout }: { user: User; onLogout: () => Promise
   const [activeConsentDocument, setActiveConsentDocument] = useState<ConsentDocument | null>(null);
   const [error, setError] = useState("");
   const [consentMessage, setConsentMessage] = useState("");
+  const [editingProfile, setEditingProfile] = useState(false);
+  const [profileMessage, setProfileMessage] = useState("");
 
   async function revokeConsent(kind: ConsentKind) {
     const name = kind === "research" ? "výskumný súhlas" : "súhlas so spracovaním osobných údajov";
@@ -1116,10 +1139,39 @@ function StudentPortal({ user, onLogout }: { user: User; onLogout: () => Promise
     <header><div className="brand"><span className="mark">T</span><div><strong>THRUST</strong><small>Študentský portál</small></div></div><button className="quiet" onClick={onLogout}>Odhlásiť</button></header>
     <section className="public student-content">
       <div className="eyebrow">OSOBNÝ PROFIL</div>
-      <h1>Ahoj, {user.first_name || user.username}.</h1>
+      <h1>Ahoj, {profile?.first_name || user.first_name || user.username}.</h1>
       <p className="lead">Tvoje účastnícke ID: <strong>{user.participant_code || "—"}</strong></p>
       <div className="stats"><Metric label="Moje merania" value={measurements.length} /><Metric label="Skupina" value={comparison?.cohort_participant_count ?? "—"} /><Metric label="Porovnanie" value={comparison?.available ? "dostupné" : "čaká na limit"} /></div>
-      {error && <p className="error">{error}</p>}<section className="panel"><div className="eyebrow">PROFIL PILOTA</div><h2>Údaje z registrácie</h2><p className="muted">Nepovinné údaje, ktoré si uviedol pri registrácii.</p><div className="detail-grid"><div><span>Dátum narodenia</span><strong>{profile?.birth_date ? formatDate(profile.birth_date) : "Neuvedené"}</strong></div><div><span>Pohlavie</span><strong>{profileLabel(profile?.sex)}</strong></div><div><span>Dominantná ruka</span><strong>{profileLabel(profile?.dominant_hand)}</strong></div><div><span>Zraková korekcia</span><strong>{profileLabel(profile?.vision_correction)}</strong></div><div><span>Dioptrie (ľavé / pravé)</span><strong>{profile?.vision_diopters_left ?? "—"} / {profile?.vision_diopters_right ?? "—"} D</strong></div><div><span>Skúsenosť s pilotovaním</span><strong>{profileLabel(profile?.pilot_experience)}</strong></div><div><span>Letové hodiny</span><strong>{profileLabel(profile?.flight_hours_range)}</strong></div><div><span>Osvedčenie</span><strong>{profileLabel(profile?.pilot_certificate)}</strong></div><div><span>Typ UAV</span><strong>{profileLabel(profile?.primary_uav_type)}</strong></div><div><span>Simulátor</span><strong>{profileLabel(profile?.simulator_experience)}</strong></div><div><span>RC ovládanie</span><strong>{profileLabel(profile?.rc_experience)}</strong></div><div><span>FPV</span><strong>{profileLabel(profile?.fpv_experience)}</strong></div><div><span>Herný ovládač</span><strong>{profileLabel(profile?.game_controller_experience)}</strong></div><div><span>Video / počítačové hry</span><strong>{profileLabel(profile?.video_game_experience)}</strong></div><div><span>Sebahodnotenie zručností</span><strong>{profile?.self_rated_skill ?? "Neuvedené"}</strong></div></div></section>
+      {error && <p className="error">{error}</p>}
+      {profile && <section className="panel student-profile-panel">
+        <div className="profile-panel-heading"><div><div className="eyebrow">PROFIL PILOTA</div><h2>Moje údaje</h2><p className="muted">Osobné údaje a odpovede z registrácie.</p></div>
+          <button className="quiet compact" onClick={() => { setEditingProfile((value) => !value); setProfileMessage(""); }}>{editingProfile ? "Zrušiť úpravy" : "Upraviť údaje"}</button>
+        </div>
+        {profileMessage && <p className="notice">{profileMessage}</p>}
+        {editingProfile
+          ? <ParticipantProfileEditor studentProfile={profile} csrfToken={user.csrf_token} onStudentSaved={(updated) => { setProfile(updated); setEditingProfile(false); setProfileMessage("Údaje profilu boli uložené."); }} />
+          : <InfoTable rows={[
+            ["Meno", profile.first_name],
+            ["Priezvisko", profile.last_name],
+            ["E-mail", profile.email || profile.username],
+            ["Participant ID", profile.participant_code],
+            ["Dátum narodenia", profile.birth_date ? formatDate(profile.birth_date) : "Neuvedené"],
+            ["Pohlavie", profileLabel(profile.sex)],
+            ["Dominantná ruka", profileLabel(profile.dominant_hand)],
+            ["Zraková korekcia", profileLabel(profile.vision_correction)],
+            ["Dioptrie ľavé / pravé", `${profile.vision_diopters_left ?? "—"} / ${profile.vision_diopters_right ?? "—"} D`],
+            ["Skúsenosť s pilotovaním", profileLabel(profile.pilot_experience)],
+            ["Letové hodiny", profileLabel(profile.flight_hours_range)],
+            ["Osvedčenie", profileLabel(profile.pilot_certificate)],
+            ["Typ UAV", profileLabel(profile.primary_uav_type)],
+            ["Skúsenosť so simulátorom", profileLabel(profile.simulator_experience)],
+            ["RC ovládanie", profileLabel(profile.rc_experience)],
+            ["FPV", profileLabel(profile.fpv_experience)],
+            ["Herný ovládač", profileLabel(profile.game_controller_experience)],
+            ["Video / počítačové hry", profileLabel(profile.video_game_experience)],
+            ["Sebahodnotenie zručností", profile.self_rated_skill ?? "Neuvedené"],
+          ]} />}
+      </section>
       <section className="panel">
         <div className="eyebrow">VÝSLEDKY</div><h2>Moje merania</h2>
         {measurements.length ? <div className="table-wrap"><table><thead><tr><th>Test</th><th>Stav</th><th>Dátum</th></tr></thead><tbody>{measurements.map((m) => <tr key={m.id}><td>{m.test_type}</td><td>{m.status}</td><td>{formatDate(m.started_at)}</td></tr>)}</tbody></table></div> : <p className="muted">Zatiaľ nemáš uložené žiadne meranie.</p>}
@@ -1151,9 +1203,18 @@ function StudentPortal({ user, onLogout }: { user: User; onLogout: () => Promise
     {consentDialog && consentTexts && <ConsentTextDialog kind={consentDialog} document={activeConsentDocument || consentTexts[consentDialog]} onClose={() => { setConsentDialog(null); setActiveConsentDocument(null); }} />}
   </main>;
 }
-function ParticipantProfileEditor({ participant, csrfToken, onSaved }: { participant: Participant; csrfToken: string; onSaved: (updated: Participant) => void }) {
+function ParticipantProfileEditor({ participant, studentProfile, csrfToken, onSaved, onStudentSaved }: {
+  participant?: Participant;
+  studentProfile?: StudentProfile;
+  csrfToken: string;
+  onSaved?: (updated: Participant) => void;
+  onStudentSaved?: (updated: StudentProfile) => void;
+}) {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+  const values = studentProfile ?? participant;
+  if (!values) return null;
+
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSaving(true);
@@ -1166,31 +1227,45 @@ function ParticipantProfileEditor({ participant, csrfToken, onSaved }: { partici
       setSaving(false);
       return;
     }
+    const profileData = {
+      birth_date: birthDate,
+      pilot_experience: form.get("pilot_experience") || null,
+      flight_hours_range: form.get("flight_hours_range") || null,
+      pilot_certificate: form.get("pilot_certificate") || null,
+      primary_uav_type: form.get("primary_uav_type") || null,
+      simulator_experience: form.get("simulator_experience") || null,
+      self_rated_skill: form.get("self_rated_skill") ? Number(form.get("self_rated_skill")) : null,
+      sex: form.get("sex") || null,
+      dominant_hand: form.get("dominant_hand") || null,
+      vision_correction: form.get("vision_correction") || null,
+      vision_diopters_left: form.get("vision_diopters_left") ? Number(form.get("vision_diopters_left")) : null,
+      vision_diopters_right: form.get("vision_diopters_right") ? Number(form.get("vision_diopters_right")) : null,
+      rc_experience: form.get("rc_experience") || null,
+      fpv_experience: form.get("fpv_experience") || null,
+      game_controller_experience: form.get("game_controller_experience") || null,
+      video_game_experience: form.get("video_game_experience") || null,
+    };
     try {
-      const updated = await request<Participant>("/api/admin/participants/" + participant.id, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken },
-        body: JSON.stringify({
-          is_active: form.get("is_active") === "on",
-          birth_date: birthDate,
-          pilot_experience: form.get("pilot_experience") || null,
-          flight_hours_range: form.get("flight_hours_range") || null,
-          pilot_certificate: form.get("pilot_certificate") || null,
-          primary_uav_type: form.get("primary_uav_type") || null,
-          simulator_experience: form.get("simulator_experience") || null,
-          self_rated_skill: form.get("self_rated_skill") ? Number(form.get("self_rated_skill")) : null,
-          sex: form.get("sex") || null,
-          dominant_hand: form.get("dominant_hand") || null,
-          vision_correction: form.get("vision_correction") || null,
-          vision_diopters_left: form.get("vision_diopters_left") ? Number(form.get("vision_diopters_left")) : null,
-          vision_diopters_right: form.get("vision_diopters_right") ? Number(form.get("vision_diopters_right")) : null,
-          rc_experience: form.get("rc_experience") || null,
-          fpv_experience: form.get("fpv_experience") || null,
-          game_controller_experience: form.get("game_controller_experience") || null,
-          video_game_experience: form.get("video_game_experience") || null,
-        }),
-      });
-      onSaved(updated);
+      if (studentProfile) {
+        const updated = await request<StudentProfile>("/api/student/profile", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken },
+          body: JSON.stringify({
+            ...profileData,
+            first_name: form.get("first_name"),
+            last_name: form.get("last_name"),
+            email: form.get("email"),
+          }),
+        });
+        onStudentSaved?.(updated);
+      } else if (participant) {
+        const updated = await request<Participant>("/api/admin/participants/" + participant.id, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken },
+          body: JSON.stringify({ ...profileData, is_active: form.get("is_active") === "on" }),
+        });
+        onSaved?.(updated);
+      }
       setMessage("Zmeny uložené.");
     } catch (reason) {
       setMessage(reason instanceof Error ? reason.message : "Profil sa nepodarilo uložiť.");
@@ -1198,18 +1273,24 @@ function ParticipantProfileEditor({ participant, csrfToken, onSaved }: { partici
       setSaving(false);
     }
   }
-  return <form className="participant-profile-editor" onSubmit={save}>
-    <div><div className="eyebrow">PROFIL ÚČASTNÍKA</div><h3>Parametre a skúsenosti</h3><p className="muted">Editovať môžu admin a superadmin.</p></div>
-    <label className="checkbox-line"><input name="is_active" type="checkbox" defaultChecked={participant.is_active} /> Aktívny účastník</label>
-    <div className="form-grid"><label>Dátum narodenia<input name="birth_date" type="date" defaultValue={participant.birth_date ?? ""} /></label><label>Pohlavie<select name="sex" defaultValue={participant.sex ?? ""}><option value="">Nevyplnené</option><option value="female">Žena</option><option value="male">Muž</option><option value="intersex">Intersex</option><option value="other">Iné</option><option value="prefer_not_to_say">Nechcem uviesť</option></select></label></div>
-    <div className="form-grid"><label>Dominantná ruka<select name="dominant_hand" defaultValue={participant.dominant_hand ?? ""}><option value="">Nevyplnené</option><option value="right">Pravá</option><option value="left">Ľavá</option><option value="both">Obe ruky</option><option value="prefer_not_to_say">Nechcem uviesť</option></select></label><label>Zraková korekcia<select name="vision_correction" defaultValue={participant.vision_correction ?? ""}><option value="">Nevyplnené</option><option value="none">Bez korekcie</option><option value="glasses">Okuliare</option><option value="contact_lenses">Kontaktné šošovky</option><option value="both">Okuliare aj šošovky</option><option value="other">Iná korekcia</option><option value="prefer_not_to_say">Nechcem uviesť</option></select></label></div>
-    <div className="form-grid"><label>Dioptrie ľavé oko<input name="vision_diopters_left" type="number" min="-30" max="30" step="0.25" defaultValue={participant.vision_diopters_left ?? ""} /></label><label>Dioptrie pravé oko<input name="vision_diopters_right" type="number" min="-30" max="30" step="0.25" defaultValue={participant.vision_diopters_right ?? ""} /></label></div>
-    <div className="form-grid"><label>Skúsenosť s pilotovaním<select name="pilot_experience" defaultValue={participant.pilot_experience ?? ""}><option value="">Nevyplnené</option><option value="none">Žiadna</option><option value="under_1_year">Menej ako 1 rok</option><option value="1_3_years">1–3 roky</option><option value="3_5_years">3–5 rokov</option><option value="over_5_years">Viac ako 5 rokov</option></select></label><label>Letové hodiny<select name="flight_hours_range" defaultValue={participant.flight_hours_range ?? ""}><option value="">Nevyplnené</option><option value="0">0</option><option value="under_10">Menej ako 10</option><option value="10_50">10–50</option><option value="51_200">51–200</option><option value="201_500">201–500</option><option value="over_500">Viac ako 500</option></select></label></div>
-    <div className="form-grid"><label>Osvedčenie<select name="pilot_certificate" defaultValue={participant.pilot_certificate ?? ""}><option value="">Nevyplnené</option><option value="none">Žiadne</option><option value="a1_a3">A1/A3</option><option value="a2">A2</option><option value="sts">STS</option><option value="other">Iné</option></select></label><label>Typ UAV<select name="primary_uav_type" defaultValue={participant.primary_uav_type ?? ""}><option value="">Nevyplnené</option><option value="multirotor">Multikoptéra</option><option value="fixed_wing">Pevné krídlo</option><option value="helicopter">Vrtuľník</option><option value="vtol">VTOL</option><option value="other">Iný / neviem</option></select></label></div>
-    <div className="form-grid"><label>Skúsenosť so simulátorom<select name="simulator_experience" defaultValue={participant.simulator_experience ?? ""}><option value="">Nevyplnené</option><option value="none">Žiadna</option><option value="under_10">Menej ako 10 hodín</option><option value="10_50">10–50 hodín</option><option value="51_200">51–200 hodín</option><option value="over_200">Viac ako 200 hodín</option></select></label><label>Skúsenosť s RC ovládaním<select name="rc_experience" defaultValue={participant.rc_experience ?? ""}><option value="">Nevyplnené</option><option value="none">Žiadna</option><option value="under_1_year">Menej ako 1 rok</option><option value="1_3_years">1–3 roky</option><option value="3_5_years">3–5 rokov</option><option value="over_5_years">Viac ako 5 rokov</option></select></label></div>
-    <div className="form-grid"><label>FPV<select name="fpv_experience" defaultValue={participant.fpv_experience ?? ""}><option value="">Nevyplnené</option><option value="none">Žiadna</option><option value="under_1_year">Menej ako 1 rok</option><option value="1_3_years">1–3 roky</option><option value="3_5_years">3–5 rokov</option><option value="over_5_years">Viac ako 5 rokov</option></select></label><label>Herný ovládač / gamepad<select name="game_controller_experience" defaultValue={participant.game_controller_experience ?? ""}><option value="">Nevyplnené</option><option value="none">Žiadna</option><option value="under_1_year">Menej ako 1 rok</option><option value="1_3_years">1–3 roky</option><option value="3_5_years">3–5 rokov</option><option value="over_5_years">Viac ako 5 rokov</option></select></label></div>
-    <div className="form-grid"><label>Video / počítačové hry<select name="video_game_experience" defaultValue={participant.video_game_experience ?? ""}><option value="">Nevyplnené</option><option value="none">Nikdy</option><option value="under_2">Menej ako 2 h/týždeň</option><option value="2_5">2–5 h/týždeň</option><option value="6_10">6–10 h/týždeň</option><option value="over_10">Viac ako 10 h/týždeň</option></select></label><label>Sebahodnotenie zručností<select name="self_rated_skill" defaultValue={participant.self_rated_skill?.toString() ?? ""}><option value="">Nevyplnené</option>{[1, 2, 3, 4, 5].map((value) => <option key={value} value={value}>{value}</option>)}</select></label></div>
-    <div className="actions"><span className="muted">{message}</span><button className="primary compact" disabled={saving}>{saving ? "Ukladám…" : "Uložiť profil"}</button></div>
+
+  return <form className="participant-profile-editor panel" onSubmit={save}>
+    <div><div className="eyebrow">{studentProfile ? "MOJE ÚDAJE" : "PROFIL ÚČASTNÍKA"}</div><h3>{studentProfile ? "Osobné údaje a skúsenosti" : "Parametre a skúsenosti"}</h3></div>
+    {studentProfile && <div className="form-grid">
+      <label>Meno<input name="first_name" defaultValue={studentProfile.first_name} maxLength={120} required /></label>
+      <label>Priezvisko<input name="last_name" defaultValue={studentProfile.last_name} maxLength={120} required /></label>
+      <label className="profile-email-field">E-mail<input name="email" type="email" defaultValue={studentProfile.email ?? studentProfile.username} maxLength={255} required /></label>
+    </div>}
+    {participant && <label className="checkbox-line"><input name="is_active" type="checkbox" defaultChecked={participant.is_active} /> Aktívny účastník</label>}
+    <div className="form-grid"><label>Dátum narodenia<input name="birth_date" type="date" defaultValue={values.birth_date ?? ""} /></label><label>Pohlavie<select name="sex" defaultValue={values.sex ?? ""}><option value="">Nevyplnené</option><option value="female">Žena</option><option value="male">Muž</option><option value="intersex">Intersex</option><option value="other">Iné</option><option value="prefer_not_to_say">Nechcem uviesť</option></select></label></div>
+    <div className="form-grid"><label>Dominantná ruka<select name="dominant_hand" defaultValue={values.dominant_hand ?? ""}><option value="">Nevyplnené</option><option value="right">Pravá</option><option value="left">Ľavá</option><option value="both">Obe ruky</option><option value="prefer_not_to_say">Nechcem uviesť</option></select></label><label>Zraková korekcia<select name="vision_correction" defaultValue={values.vision_correction ?? ""}><option value="">Nevyplnené</option><option value="none">Bez korekcie</option><option value="glasses">Okuliare</option><option value="contact_lenses">Kontaktné šošovky</option><option value="both">Okuliare aj šošovky</option><option value="other">Iná korekcia</option><option value="prefer_not_to_say">Nechcem uviesť</option></select></label></div>
+    <div className="form-grid"><label>Dioptrie ľavé oko<input name="vision_diopters_left" type="number" min="-30" max="30" step="0.25" defaultValue={values.vision_diopters_left ?? ""} /></label><label>Dioptrie pravé oko<input name="vision_diopters_right" type="number" min="-30" max="30" step="0.25" defaultValue={values.vision_diopters_right ?? ""} /></label></div>
+    <div className="form-grid"><label>Skúsenosť s pilotovaním<select name="pilot_experience" defaultValue={values.pilot_experience ?? ""}><option value="">Nevyplnené</option><option value="none">Žiadna</option><option value="under_1_year">Menej ako 1 rok</option><option value="1_3_years">1–3 roky</option><option value="3_5_years">3–5 rokov</option><option value="over_5_years">Viac ako 5 rokov</option></select></label><label>Letové hodiny<select name="flight_hours_range" defaultValue={values.flight_hours_range ?? ""}><option value="">Nevyplnené</option><option value="0">0</option><option value="under_10">Menej ako 10</option><option value="10_50">10–50</option><option value="51_200">51–200</option><option value="201_500">201–500</option><option value="over_500">Viac ako 500</option></select></label></div>
+    <div className="form-grid"><label>Osvedčenie<select name="pilot_certificate" defaultValue={values.pilot_certificate ?? ""}><option value="">Nevyplnené</option><option value="none">Žiadne</option><option value="a1_a3">A1/A3</option><option value="a2">A2</option><option value="sts">STS</option><option value="other">Iné</option></select></label><label>Typ UAV<select name="primary_uav_type" defaultValue={values.primary_uav_type ?? ""}><option value="">Nevyplnené</option><option value="multirotor">Multikoptéra</option><option value="fixed_wing">Pevné krídlo</option><option value="helicopter">Vrtuľník</option><option value="vtol">VTOL</option><option value="other">Iný / neviem</option></select></label></div>
+    <div className="form-grid"><label>Skúsenosť so simulátorom<select name="simulator_experience" defaultValue={values.simulator_experience ?? ""}><option value="">Nevyplnené</option><option value="none">Žiadna</option><option value="under_10">Menej ako 10 hodín</option><option value="10_50">10–50 hodín</option><option value="51_200">51–200 hodín</option><option value="over_200">Viac ako 200 hodín</option></select></label><label>Skúsenosť s RC ovládaním<select name="rc_experience" defaultValue={values.rc_experience ?? ""}><option value="">Nevyplnené</option><option value="none">Žiadna</option><option value="under_1_year">Menej ako 1 rok</option><option value="1_3_years">1–3 roky</option><option value="3_5_years">3–5 rokov</option><option value="over_5_years">Viac ako 5 rokov</option></select></label></div>
+    <div className="form-grid"><label>FPV<select name="fpv_experience" defaultValue={values.fpv_experience ?? ""}><option value="">Nevyplnené</option><option value="none">Žiadna</option><option value="under_1_year">Menej ako 1 rok</option><option value="1_3_years">1–3 roky</option><option value="3_5_years">3–5 rokov</option><option value="over_5_years">Viac ako 5 rokov</option></select></label><label>Herný ovládač / gamepad<select name="game_controller_experience" defaultValue={values.game_controller_experience ?? ""}><option value="">Nevyplnené</option><option value="none">Žiadna</option><option value="under_1_year">Menej ako 1 rok</option><option value="1_3_years">1–3 roky</option><option value="3_5_years">3–5 rokov</option><option value="over_5_years">Viac ako 5 rokov</option></select></label></div>
+    <div className="form-grid"><label>Video / počítačové hry<select name="video_game_experience" defaultValue={values.video_game_experience ?? ""}><option value="">Nevyplnené</option><option value="none">Nikdy</option><option value="under_2">Menej ako 2 h/týždeň</option><option value="2_5">2–5 h/týždeň</option><option value="6_10">6–10 h/týždeň</option><option value="over_10">Viac ako 10 h/týždeň</option></select></label><label>Sebahodnotenie zručností<select name="self_rated_skill" defaultValue={values.self_rated_skill?.toString() ?? ""}><option value="">Nevyplnené</option>{[1, 2, 3, 4, 5].map((value) => <option key={value} value={value}>{value}</option>)}</select></label></div>
+    <div className="profile-editor-actions"><span className="muted">{message}</span><button className="primary compact" disabled={saving}>{saving ? "Ukladám…" : "Uložiť údaje"}</button></div>
   </form>;
 }
 
