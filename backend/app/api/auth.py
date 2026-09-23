@@ -78,7 +78,16 @@ async def register(
     if participant_code is None:
         raise HTTPException(status_code=503, detail="Participant ID sa nepodarilo vygenerovať.")
 
-    participant = Participant(participant_code=participant_code)
+    participant = Participant(
+        participant_code=participant_code,
+        birth_date=payload.birth_date,
+        pilot_experience=payload.pilot_experience,
+        flight_hours_range=payload.flight_hours_range,
+        pilot_certificate=payload.pilot_certificate,
+        primary_uav_type=payload.primary_uav_type,
+        simulator_experience=payload.simulator_experience,
+        self_rated_skill=payload.self_rated_skill,
+    )
     db.add(participant)
     await db.flush()
     user = AdminUser(
