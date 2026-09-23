@@ -42,6 +42,13 @@ async def profile(
         first_name=student.first_name,
         last_name=student.last_name,
         created_at=participant.created_at,
+        birth_date=participant.birth_date,
+        pilot_experience=participant.pilot_experience,
+        flight_hours_range=participant.flight_hours_range,
+        pilot_certificate=participant.pilot_certificate,
+        primary_uav_type=participant.primary_uav_type,
+        simulator_experience=participant.simulator_experience,
+        self_rated_skill=participant.self_rated_skill,
     )
 
 
