@@ -524,6 +524,12 @@ h1 { max-width: 880px; margin: 20px 0; font-size: clamp(42px, 7vw, 84px); line-h
   align-items: start;
   gap: 18px;
 }
+.researcher-registration-form {
+  grid-template-columns: minmax(0, 1fr);
+  max-width: 820px;
+  margin-inline: auto;
+}
+.researcher-key-card { display: grid; align-content: start; gap: 16px; }
 .registration-card {
   min-width: 0;
   padding: 26px;
