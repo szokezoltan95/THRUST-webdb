@@ -76,7 +76,7 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
       throw new Error(body.detail);
     }
     if (response.status >= 500) {
-      throw new Error(`Server vrátil chybu HTTP ${response.status}. Pri registrácii účastníka skontroluj, či je databázová migrácia spustená; podrobnosti sú v logu backendu.`);
+      throw new Error(`Server vrátil chybu HTTP ${response.status} pri požiadavke ${url}. Podrobnosti sú v logu backendu.`);
     }
     const detail = body?.detail;
     if (typeof detail === "string") throw new Error(detail);
@@ -1181,19 +1181,25 @@ function StudentPortal({ user, onLogout }: { user: User; onLogout: () => Promise
   }
 
   useEffect(() => {
-    Promise.all([
-      request<StudentMeasurement[]>("/api/student/measurements"),
-      request<StudentComparison>("/api/student/comparison"),
-      request<ConsentStatuses>("/api/student/consents"),
-      request<ConsentDocuments>("/api/public/consent-texts"),
-      request<StudentProfile>("/api/student/profile"),
-    ]).then(([own, group, status, documents, studentProfile]) => {
-      setProfile(studentProfile);
-      setMeasurements(own);
-      setComparison(group);
-      setConsents(status);
-      setConsentTexts(documents);
-    }).catch((reason) => setError(reason instanceof Error ? reason.message : "Údaje sa nepodarilo načítať."));
+    async function load<T>(label: string, url: string, apply: (value: T) => void): Promise<string | null> {
+      try {
+        apply(await request<T>(url));
+        return null;
+      } catch (reason) {
+        const message = reason instanceof Error ? reason.message : "Údaje sa nepodarilo načítať.";
+        return `${label}: ${message}`;
+      }
+    }
+
+    void Promise.all([
+      load<StudentMeasurement[]>("Merania", "/api/student/measurements", setMeasurements),
+      load<StudentComparison>("Porovnanie", "/api/student/comparison", setComparison),
+      load<ConsentStatuses>("Súhlasy", "/api/student/consents", setConsents),
+      load<ConsentDocuments>("Texty súhlasov", "/api/public/consent-texts", setConsentTexts),
+      load<StudentProfile>("Profil", "/api/student/profile", setProfile),
+    ]).then((errors) => {
+      setError(errors.filter((message): message is string => message !== null).join(" "));
+    });
   }, []);
 
   return <main className="student-shell">
