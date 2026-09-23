@@ -644,3 +644,48 @@ h1 { max-width: 880px; margin: 20px 0; font-size: clamp(42px, 7vw, 84px); line-h
 .participant-history-table .data-table-row { min-height: 56px; }
 .participant-table .row-actions,
 .test-table .row-actions { justify-content: flex-start; align-items: center; flex-wrap: wrap; }
+
+/* Keep row actions in a consistent, right-aligned column across admin tables. */
+.participant-table .data-table-head,
+.participant-table .data-table-row {
+  grid-template-columns: minmax(100px, .75fr) minmax(190px, 1.3fr) minmax(120px, .8fr) minmax(120px, .8fr) 64px minmax(380px, 1.8fr);
+  min-width: 1140px;
+}
+.test-table .data-table-head,
+.test-table .data-table-row {
+  grid-template-columns: minmax(100px, .75fr) minmax(180px, 1.4fr) minmax(75px, .6fr) minmax(170px, 1.2fr) minmax(390px, 2fr);
+  min-width: 1020px;
+}
+.participant-history-table .data-table-head,
+.participant-history-table .data-table-row {
+  grid-template-columns: minmax(180px, 1.4fr) minmax(140px, 1fr) minmax(100px, .7fr) minmax(190px, 1.2fr);
+  min-width: 680px;
+}
+.participant-table .row-actions,
+.test-table .row-actions,
+.participant-history-table .row-actions {
+  display: flex;
+  width: 100%;
+  justify-content: flex-end;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 8px;
+}
+.participant-table .row-actions > *,
+.test-table .row-actions > *,
+.participant-history-table .row-actions {
+  flex: 0 0 auto;
+}
+.participant-history-table .data-table-head > :last-child {
+  text-align: right;
+}
+
+/* Give measurement status a fixed track so it stays aligned across rows. */
+.measurement-item {
+  grid-template-columns: 20px minmax(0, 1fr) 110px;
+}
+.measurement-item .measurement-status {
+  width: 110px;
+  text-align: right;
+  justify-self: end;
+}
