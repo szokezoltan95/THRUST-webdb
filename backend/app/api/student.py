@@ -1,4 +1,7 @@
+import base64
+import hashlib
 from collections import defaultdict
+from pathlib import Path
 from statistics import mean
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -10,7 +13,7 @@ from app.core.config import settings
 from app.db.session import get_db
 from app.models import Measurement, Participant, TestDefinition
 from app.schemas.auth import StudentProfileResponse
-from app.schemas.measurement import MeasurementResponse
+from app.schemas.measurement import MeasurementCreate, MeasurementResponse
 from app.schemas.test_definition import TestDefinitionResponse
 
 router = APIRouter(prefix="/student", tags=["student"])
@@ -127,3 +130,48 @@ async def test_configuration(
         "schema_version": "test-configuration-v1",
         "test": TestDefinitionResponse.model_validate(test).model_dump(mode="json"),
     }
+
+
+@router.post("/measurements", response_model=MeasurementResponse, status_code=201)
+async def create_measurement(
+    payload: MeasurementCreate,
+    auth: AuthContext = Depends(require_authenticated),
+    db: AsyncSession = Depends(get_db),
+) -> Measurement:
+    student = require_student(auth).user
+    participant = await db.get(Participant, student.participant_id)
+    test = await db.get(TestDefinition, payload.test_definition_id)
+    if participant is None or not participant.is_active or test is None or not test.is_active:
+        raise HTTPException(status_code=404, detail="Aktívny účastník alebo test neexistuje.")
+    raw_bytes = None
+    raw_sha256 = None
+    if payload.raw_log_base64:
+        try:
+            raw_bytes = base64.b64decode(payload.raw_log_base64, validate=True)
+        except (ValueError, TypeError) as exc:
+            raise HTTPException(status_code=400, detail="Raw log nie je platný Base64 súbor.") from exc
+        if not raw_bytes:
+            raise HTTPException(status_code=400, detail="Raw log je prázdny.")
+        if len(raw_bytes) > settings.max_raw_upload_bytes:
+            raise HTTPException(status_code=413, detail="Raw log prekračuje povolenú veľkosť.")
+        raw_sha256 = hashlib.sha256(raw_bytes).hexdigest()
+    measurement = Measurement(
+        participant_id=participant.id, test_definition_id=test.id,
+        test_type=f"{test.test_code} v{test.version}", status=payload.status,
+        started_at=payload.started_at, source_file_name=payload.source_file_name,
+        analysis_data=payload.analysis_data, raw_sha256=raw_sha256,
+        raw_size_bytes=len(raw_bytes) if raw_bytes is not None else None,
+        raw_content_type=payload.raw_content_type if raw_bytes is not None else None,
+    )
+    db.add(measurement)
+    await db.flush()
+    if raw_bytes is not None:
+        storage_root = Path(settings.measurement_storage_path).resolve()
+        storage_root.mkdir(parents=True, exist_ok=True)
+        target = storage_root / f"{measurement.id}.raw"
+        target.write_bytes(raw_bytes)
+        measurement.raw_storage_path = str(target)
+        measurement.raw_data = {"storage": "filesystem", "sha256": raw_sha256}
+    await db.commit()
+    await db.refresh(measurement)
+    return measurement
