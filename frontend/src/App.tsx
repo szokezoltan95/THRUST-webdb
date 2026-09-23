@@ -919,7 +919,7 @@ function AllMeasurementStats({ measurements }: { measurements: Measurement[] }) 
     const values = measurements.flatMap((item) => {
       const response = item.analysis_data?.normalized_step_response as NormalizedResponse | undefined;
       const channel = response?.channels?.[axis];
-      return channel ? [metricsFor(channel, response.time_s ?? [])] : [];
+      return channel ? [metricsFor(channel, response?.time_s ?? [])] : [];
     });
     const average = (key: keyof StepMetrics) => {
       const numbers = values.map((value) => value[key]).filter((value): value is number => typeof value === "number" && Number.isFinite(value));
