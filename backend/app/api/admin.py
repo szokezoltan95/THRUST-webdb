@@ -8,11 +8,13 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import AuthContext, require_admin
+from app.api.dependencies import AuthContext, effective_role, require_admin, require_superadmin_csrf
 from app.core.config import settings
 from app.db.session import get_db
-from app.models import AdminUser, Measurement, Participant, TestDefinition
+from app.models import AdminSession, AdminUser, Measurement, Participant, TestDefinition
 from app.schemas.participant import ParticipantCreate, ParticipantResponse, RegisteredStudentResponse
+from app.schemas.user_admin import AccountPasswordReset, AccountRoleUpdate, AdminAccountResponse
+from app.core.security import hash_password
 from app.schemas.measurement import MeasurementCreate, MeasurementResponse
 from app.schemas.test_definition import TestDefinitionCreate, TestDefinitionResponse, TestDefinitionUpdate
 
@@ -52,6 +54,104 @@ async def list_participants(
 ) -> list[Participant]:
     result = await db.scalars(select(Participant).order_by(Participant.created_at.desc()))
     return list(result)
+
+
+@router.get("/users", response_model=list[AdminAccountResponse])
+async def list_accounts(
+    auth: AuthContext = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+) -> list[dict]:
+    result = await db.execute(
+        select(AdminUser, Participant)
+        .outerjoin(Participant, Participant.id == AdminUser.participant_id)
+        .order_by(AdminUser.created_at.desc())
+    )
+    return [
+        {
+            "id": user.id,
+            "username": user.username,
+            "email": user.email,
+            "first_name": user.first_name,
+            "last_name": user.last_name,
+            "role": user.role,
+            "effective_role": effective_role(user),
+            "is_active": user.is_active and (participant.is_active if participant else True),
+            "participant_id": participant.id if participant else None,
+            "participant_code": participant.participant_code if participant else None,
+            "created_at": user.created_at,
+        }
+        for user, participant in result.all()
+    ]
+
+
+@router.patch("/users/{user_id}/role", response_model=AdminAccountResponse)
+async def update_account_role(
+    user_id: str,
+    payload: AccountRoleUpdate,
+    auth: AuthContext = Depends(require_superadmin_csrf),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    target = await db.get(AdminUser, user_id)
+    if target is None:
+        raise HTTPException(status_code=404, detail="Používateľ neexistuje.")
+    if target.id == auth.user.id or effective_role(target) == "superadmin":
+        raise HTTPException(status_code=409, detail="Rolu superadmin účtu nemožno meniť cez toto rozhranie.")
+    target.role = payload.role
+    await db.commit()
+    participant = await db.get(Participant, target.participant_id) if target.participant_id else None
+    return {
+        "id": target.id, "username": target.username, "email": target.email,
+        "first_name": target.first_name, "last_name": target.last_name,
+        "role": target.role, "effective_role": effective_role(target),
+        "is_active": target.is_active and (participant.is_active if participant else True),
+        "participant_id": participant.id if participant else None,
+        "participant_code": participant.participant_code if participant else None,
+        "created_at": target.created_at,
+    }
+
+
+@router.post("/users/{user_id}/password", status_code=status.HTTP_204_NO_CONTENT)
+async def reset_account_password(
+    user_id: str,
+    payload: AccountPasswordReset,
+    auth: AuthContext = Depends(require_superadmin_csrf),
+    db: AsyncSession = Depends(get_db),
+) -> None:
+    target = await db.get(AdminUser, user_id)
+    if target is None:
+        raise HTTPException(status_code=404, detail="Používateľ neexistuje.")
+    if target.id == auth.user.id or effective_role(target) == "superadmin":
+        raise HTTPException(status_code=409, detail="Heslo superadmin účtu nemožno resetovať cez toto rozhranie.")
+    target.password_hash = hash_password(payload.password)
+    await db.execute(delete(AdminSession).where(AdminSession.user_id == target.id))
+    await db.commit()
+
+
+@router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def anonymize_account(
+    user_id: str,
+    auth: AuthContext = Depends(require_superadmin_csrf),
+    db: AsyncSession = Depends(get_db),
+) -> None:
+    target = await db.get(AdminUser, user_id)
+    if target is None:
+        raise HTTPException(status_code=404, detail="Používateľ neexistuje.")
+    if target.id == auth.user.id or effective_role(target) == "superadmin":
+        raise HTTPException(status_code=409, detail="Superadmin účet nemožno odstrániť cez toto rozhranie.")
+    participant = await db.get(Participant, target.participant_id) if target.participant_id else None
+    if participant is not None:
+        measurement_count = await db.scalar(
+            select(func.count()).select_from(Measurement).where(Measurement.participant_id == participant.id)
+        ) or 0
+        if measurement_count == 0:
+            await db.delete(participant)
+    target.username = f"deleted-{target.id}"
+    target.email = None
+    target.first_name = None
+    target.last_name = None
+    target.is_active = False
+    await db.execute(delete(AdminSession).where(AdminSession.user_id == target.id))
+    await db.commit()
 
 
 @router.get("/students", response_model=list[RegisteredStudentResponse])
