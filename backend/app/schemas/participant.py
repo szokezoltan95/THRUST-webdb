@@ -22,3 +22,14 @@ class ParticipantResponse(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+
+class RegisteredStudentResponse(BaseModel):
+    participant_id: str
+    participant_code: str
+    email: str
+    first_name: str
+    last_name: str
+    is_active: bool
+    created_at: datetime
