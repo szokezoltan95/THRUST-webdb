@@ -70,6 +70,8 @@ export function App() {
   const [selectedTestId, setSelectedTestId] = useState<string | null>(null);
   const [editingTestId, setEditingTestId] = useState<string | null>(null);
   const [selectedParticipant, setSelectedParticipant] = useState<ParticipantDetail | null>(null);
+  const [participantDialog, setParticipantDialog] = useState<"detail" | "measurements" | null>(null);
+  const [selectedAccount, setSelectedAccount] = useState<AdminAccount | null>(null);
   const [measurements, setMeasurements] = useState<Measurement[]>([]);
   const [uploadMessage, setUploadMessage] = useState("");
   const [selectedMeasurementId, setSelectedMeasurementId] = useState<string | null>(null);
@@ -130,9 +132,10 @@ export function App() {
     }
   }
 
-  async function openParticipant(participant: Participant) {
+  async function openParticipant(participant: Participant, view: "detail" | "measurements") {
     const detail = await request<ParticipantDetail>(`/api/admin/participants/${participant.id}`);
     setSelectedParticipant(detail);
+    setParticipantDialog(view);
   }
 
   async function uploadMeasurement(event: FormEvent<HTMLFormElement>) {
@@ -256,6 +259,7 @@ export function App() {
         body: JSON.stringify({ role }),
       });
       setAdminAccounts((items) => items.map((item) => item.id === updated.id ? updated : item));
+      setSelectedAccount((current) => current?.id === updated.id ? updated : current);
       if (updated.participant_id && updated.participant_code && !participants.some((item) => item.id === updated.participant_id)) {
         setParticipants((items) => [{ id: updated.participant_id!, participant_code: updated.participant_code!, is_active: updated.is_active, created_at: updated.created_at }, ...items]);
       }
@@ -284,6 +288,7 @@ export function App() {
       await request<void>(`/api/admin/users/${account.id}`, { method: "DELETE", headers: { "X-CSRF-Token": user.csrf_token } });
       await refreshAccounts();
       setAccountMessage("Účet bol deaktivovaný a osobné údaje odstránené; merania zostali zachované.");
+      setSelectedAccount(null);
     } catch (reason) { setAccountMessage(reason instanceof Error ? reason.message : "Účet sa nepodarilo anonymizovať."); }
   }
 
@@ -365,13 +370,7 @@ export function App() {
     if (user?.role !== "superadmin" || account.effective_role === "superadmin") {
       return <span className="role-label">{account.effective_role}</span>;
     }
-    return <>
-      <select aria-label="Rola používateľa" value={account.role} onChange={(event) => void changeAccountRole(account, event.target.value)}>
-        <option value="student">Študent</option><option value="researcher">Researcher</option><option value="admin">Admin</option>
-      </select>
-      <button className="quiet compact" onClick={() => void resetAccountPassword(account)}>Reset hesla</button>
-      <button className="quiet compact danger" onClick={() => void anonymizeAccount(account)}>Anonymizovať</button>
-    </>;
+    return <button className="quiet compact" onClick={() => setSelectedAccount(account)}>Správa účtu</button>;
   }
 
   if (user?.role === "student") return <StudentPortal user={user} onLogout={logout} />;
@@ -415,7 +414,7 @@ export function App() {
                         <span>{first ? new Date(first).toLocaleDateString("sk-SK") : "—"}</span>
                         <span>{last ? new Date(last).toLocaleDateString("sk-SK") : "—"}</span>
                         <span>{rows.length}</span>
-                        <span className="row-actions">{accountManagementActions(account)}{participant && <><button className="quiet compact" onClick={() => openParticipant(participant)}>Detail</button><button className="quiet compact" onClick={() => { setMeasurementParticipantFilter(participant.id); setActiveSection("measurements"); }}>Merania</button></>}</span>
+                        <span className="row-actions">{accountManagementActions(account)}{participant && <><button className="quiet compact" onClick={() => void openParticipant(participant, "detail")}>Detail</button><button className="quiet compact" onClick={() => void openParticipant(participant, "measurements")}>Merania</button></>}</span>
                       </div>;
                     })}
                     {visibleAccountOnlyRows().map((account) => <div className="data-table-row" key={account.id}>
@@ -426,8 +425,41 @@ export function App() {
                   {filteredParticipants().length === 0 && visibleAccountOnlyRows().length === 0 && <div className="empty-list"><h2>Žiadni účastníci</h2><p className="muted">Filteru nezodpovedá žiadny záznam.</p></div>}
                 </section>
                 <section className="participant-create-strip"><div><div className="eyebrow">NOVÝ ÚČASTNÍK</div><strong>Vytvoriť anonymné ID</strong></div><form className="inline-create-form" onSubmit={createParticipant}><input id="new-participant-code" value={participantCode} onChange={(event) => setParticipantCode(event.target.value.toUpperCase())} maxLength={5} pattern="[A-Za-z0-9]{5}" placeholder="ABCDE" required /><button type="button" className="quiet compact" onClick={generateParticipantCode}>Generovať</button><button type="submit" className="primary compact">Vytvoriť</button></form>{participantMessage && <span className="notice">{participantMessage}</span>}</section>
-                {selectedParticipant && <section className={selectedParticipant ? "browser-detail detail-modal-open" : "browser-detail detail-modal-closed"}><div className="detail-header"><div><div className="eyebrow">DETAIL ÚČASTNÍKA</div><h2>{selectedParticipant.participant.participant_code}</h2></div><button className="quiet compact" onClick={() => setSelectedParticipant(null)}>Zavrieť detail</button></div><p className="muted">História synchronizovaných meraní účastníka.</p><div className="data-table"><div className="data-table-head"><span>Test</span><span>Dátum</span><span>Stav</span><span>Akcia</span></div>{selectedParticipant.measurements.filter((measurement) => measurement.raw_data_available).map((measurement) => <div className="data-table-row" key={measurement.id}><strong>{measurement.test_type}</strong><span>{new Date(measurement.started_at).toLocaleString("sk-SK")}</span><span>{measurement.status}</span><button className="quiet compact" onClick={() => { setSelectedMeasurementId(measurement.id); setActiveSection("measurements"); }}>Otvoriť výsledok</button></div>)}</div></section>}
+                {selectedParticipant && participantDialog && (() => {
+                  const participant = selectedParticipant.participant;
+                  const linkedAccount = adminAccounts.find((item) => item.participant_id === participant.id) || null;
+                  const rows = measurements.filter((item) => item.participant_id === participant.id);
+                  const dates = rows.map((item) => item.started_at).sort();
+                  if (participantDialog === "detail") return <section className="browser-detail detail-modal-open participant-detail-modal">
+                    <div className="detail-header"><div><div className="eyebrow">ZÁKLADNÉ ÚDAJE ÚČASTNÍKA</div><h2>{participant.participant_code}</h2></div><button className="quiet compact" onClick={() => setParticipantDialog(null)}>Zavrieť</button></div>
+                    <div className="detail-grid">
+                      <div><span>Participant ID</span><strong>{participant.participant_code}</strong></div>
+                      <div><span>Stav účastníka</span><strong>{participant.is_active ? "Aktívny" : "Neaktívny"}</strong></div>
+                      <div><span>Vytvorený</span><strong>{new Date(participant.created_at).toLocaleDateString("sk-SK")}</strong></div>
+                      <div><span>Počet meraní</span><strong>{rows.length}</strong></div>
+                      <div><span>Prvé meranie</span><strong>{dates.length ? new Date(dates[0]).toLocaleString("sk-SK") : "Zatiaľ bez merania"}</strong></div>
+                      <div><span>Posledné meranie</span><strong>{dates.length ? new Date(dates[dates.length - 1]).toLocaleString("sk-SK") : "Zatiaľ bez merania"}</strong></div>
+                      <div><span>Prepojené konto</span><strong>{linkedAccount ? [linkedAccount.first_name, linkedAccount.last_name].filter(Boolean).join(" ") || linkedAccount.username : "Bez konta"}</strong></div>
+                      <div><span>E-mail / rola</span><strong>{linkedAccount ? `${linkedAccount.email || linkedAccount.username} · ${linkedAccount.effective_role}` : "—"}</strong></div>
+                    </div>
+                    {rows.length > 0 && <p className="muted">Súhrn: {new Set(rows.map((item) => item.test_type)).size} typov testov, {rows.filter((item) => item.status === "completed" || item.status === "recorded").length} dokončených alebo zaznamenaných meraní.</p>}
+                  </section>;
+                  return <section className="browser-detail detail-modal-open participant-detail-modal">
+                    <div className="detail-header"><div><div className="eyebrow">MERANIA ÚČASTNÍKA</div><h2>{participant.participant_code}</h2></div><button className="quiet compact" onClick={() => setParticipantDialog(null)}>Zavrieť</button></div>
+                    <p className="muted">História synchronizovaných meraní účastníka.</p>
+                    <div className="data-table"><div className="data-table-head"><span>Test</span><span>Dátum</span><span>Stav</span><span>Akcia</span></div>{selectedParticipant.measurements.filter((measurement) => measurement.raw_data_available).map((measurement) => <div className="data-table-row" key={measurement.id}><strong>{measurement.test_type}</strong><span>{new Date(measurement.started_at).toLocaleString("sk-SK")}</span><span>{measurement.status}</span><button className="quiet compact" onClick={() => { setSelectedMeasurementId(measurement.id); setParticipantDialog(null); setActiveSection("measurements"); }}>Otvoriť výsledok</button></div>)}</div>
+                    {selectedParticipant.measurements.filter((measurement) => measurement.raw_data_available).length === 0 && <p className="muted">Pre tohto účastníka zatiaľ nie sú synchronizované merania.</p>}
+                  </section>;
+                })()}
               </>}
+              {selectedAccount && <div className="backdrop" onMouseDown={() => setSelectedAccount(null)}><section className="login account-dialog" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+                <div className="eyebrow">SUPERADMIN · SPRÁVA KONTA</div><h2>{[selectedAccount.first_name, selectedAccount.last_name].filter(Boolean).join(" ") || selectedAccount.username}</h2>
+                <p className="muted">{selectedAccount.email || selectedAccount.username}{selectedAccount.participant_code ? ` · ${selectedAccount.participant_code}` : ""}</p>
+                <label>Rola<select value={selectedAccount.role} disabled={selectedAccount.effective_role === "superadmin"} onChange={(event) => void changeAccountRole(selectedAccount, event.target.value)}><option value="student">Študent</option><option value="researcher">Researcher</option><option value="admin">Admin</option></select></label>
+                {selectedAccount.effective_role === "superadmin" && <p className="muted">Rola superadmin je chránená a nemožno ju meniť z tohto účtu.</p>}
+                {accountMessage && <p className="notice">{accountMessage}</p>}
+                <div className="account-dialog-actions"><button className="quiet" onClick={() => void resetAccountPassword(selectedAccount)}>Zmeniť / resetovať heslo</button><button className="quiet danger" onClick={() => void anonymizeAccount(selectedAccount)}>Zrušiť účet a anonymizovať údaje</button><button className="primary" onClick={() => setSelectedAccount(null)}>Hotovo</button></div>
+              </section></div>}
               {activeSection === "tests" && <>
                 <section className="browser-panel">
                   <div className="browser-header"><div><div className="eyebrow">KATALÓG TESTOV</div><h2>Testy a konfigurácie</h2><p className="muted">Každá verzia testu je samostatná, nemenná konfigurácia pre THRUST.</p></div></div>
