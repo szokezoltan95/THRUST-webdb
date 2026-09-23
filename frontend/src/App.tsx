@@ -1043,8 +1043,8 @@ function ResearcherRegistrationPage({ onSubmit, onBack, onStudentRegister, onLog
           <div className="form-grid"><label>Heslo<input name="password" type="password" minLength={10} autoComplete="new-password" required /></label><label>Zopakovať heslo<input name="password_confirmation" type="password" minLength={10} autoComplete="new-password" required /></label></div>
         </section>
         <section className="registration-card researcher-key-card">
-          <div><div className="eyebrow">OVERENIE PRÍSTUPU</div><h2>Pozývací kľúč</h2><p className="muted">Zadaj kľúč, ktorý ti poskytol správca. Overuje sa na serveri a určuje rolu výskumníka.</p></div>
-          <label>Pozývací kľúč<input name="registration_key" type="password" autoComplete="off" required /></label>
+          <div><div className="eyebrow">OVERENIE PRÍSTUPU</div><h2>Registračné heslo</h2><p className="muted">Zadaj krátke spoločné heslo, ktoré ti poskytol správca. Umožní vytvoriť účet výskumníka.</p></div>
+          <label>Registračné heslo<input name="registration_key" type="password" maxLength={64} autoComplete="off" required /></label>
           <label className="consent"><input name="gdpr_consent" type="checkbox" required /> <span>Súhlasím so spracovaním osobných údajov pre vytvorenie a správu účtu. <a href="#consent-gdpr" onClick={(event) => { event.preventDefault(); onOpenConsent("gdpr"); }}>Zobraziť informácie a GDPR súhlas</a></span></label>
           {error && <p className="error">{error}</p>}
           <div className="registration-actions"><span className="muted">Výskumný súhlas účastníka merania sa na tento účet nevzťahuje.</span><button className="primary" type="submit" disabled={!consentTexts}>Vytvoriť účet výskumníka</button></div>
