@@ -463,6 +463,7 @@ export function App() {
                   const resultMeasurement = [...rows].sort((left, right) => right.started_at.localeCompare(left.started_at)).find((item) => item.analysis_data?.normalized_step_response);
                   if (participantDialog === "detail") return <section className="browser-detail detail-modal-open participant-detail-modal">
                     <div className="detail-header"><div><div className="eyebrow">ZÁKLADNÉ ÚDAJE ÚČASTNÍKA</div><h2>{participant.participant_code}</h2></div><button className="quiet compact" onClick={() => setParticipantDialog(null)}>Zavrieť</button></div>
+                    {accountMessage && <p className="notice">{accountMessage}</p>}
                     <div className="detail-grid">
                       <div><span>Participant ID</span><strong>{participant.participant_code}</strong></div>
                       <div><span>Stav účastníka</span><strong>{participant.is_active ? "Aktívny" : "Neaktívny"}</strong></div>
@@ -496,6 +497,7 @@ export function App() {
               {selectedAccount && <div className="backdrop" onMouseDown={() => setSelectedAccount(null)}><section className="login account-dialog" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
                 <div className="eyebrow">DETAIL KONTA</div><h2>{[selectedAccount.first_name, selectedAccount.last_name].filter(Boolean).join(" ") || selectedAccount.username}</h2>
                 <p className="muted">{selectedAccount.email || selectedAccount.username} · {selectedAccount.effective_role}</p>
+                {accountMessage && <p className="notice">{accountMessage}</p>}
                 {user?.role === "superadmin" && selectedAccount.effective_role !== "superadmin" ? <>
                   <label>Rola<select value={selectedAccount.role} onChange={(event) => void changeAccountRole(selectedAccount, event.target.value)}><option value="student">Študent</option><option value="researcher">Researcher</option><option value="admin">Admin</option></select></label>
                   <div className="account-dialog-actions"><button className="quiet" onClick={() => void resetAccountPassword(selectedAccount)}>Resetovať heslo</button><button className="quiet danger" onClick={() => void anonymizeAccount(selectedAccount)}>Deaktivovať a anonymizovať</button><button className="quiet danger" onClick={() => void permanentlyDeleteStandaloneAccount(selectedAccount)}>Trvalo vymazať konto</button><button className="primary" onClick={() => setSelectedAccount(null)}>Zavrieť</button></div>
