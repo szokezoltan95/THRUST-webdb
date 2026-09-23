@@ -427,3 +427,17 @@ h1 { max-width: 880px; margin: 20px 0; font-size: clamp(42px, 7vw, 84px); line-h
 .account-actions select { background: #07121f; border: 1px solid var(--line); color: #eef5ff; padding: 8px; }
 .danger { border-color: #874c54; color: #ff9ba4; }
 @media (max-width: 850px) { .account-row { grid-template-columns: 1fr; } .account-actions { justify-content: flex-start; } }
+
+
+/* Consent information and status */
+.consent a, .consent-status-card a { color: #45d5ff; text-decoration: underline; text-underline-offset: 2px; }
+.consent a:hover, .consent-status-card a:hover { color: #a4ebff; }
+.consent-dialog { width: min(680px, calc(100vw - 32px)); max-height: min(84vh, 780px); overflow: auto; }
+.consent-dialog h2 { line-height: 1.25; }
+.consent-copy { white-space: pre-wrap; line-height: 1.7; color: #d5e3f1; }
+.consent-status-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.consent-status-card { display: flex; flex-direction: column; align-items: flex-start; gap: 9px; padding: 16px; border: 1px solid var(--line); background: rgba(255,255,255,.025); }
+.consent-status-card p { margin: 0; }
+.consent-status-card small { color: #8ea5bc; }
+.consent-active { color: #70e0ac; }
+@media (max-width: 680px) { .consent-status-grid { grid-template-columns: 1fr; } }
