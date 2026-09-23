@@ -38,19 +38,27 @@ function formatDate(value: string | null | undefined): string {
 }
 
 function parseFormattedDate(value: string): string | null {
-  const match = /^(\d{4})\/([A-Za-z]{3})\/(\d{2})$/.exec(value.trim());
+  const trimmed = value.trim();
+  const isoMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(trimmed);
+  const displayMatch = /^(\d{4})\/([A-Za-z]{3})\/(\d{2})$/.exec(trimmed);
+  const match = isoMatch ?? displayMatch;
   if (!match) return null;
   const year = Number(match[1]);
-  const month = MONTH_ABBREVIATIONS.findIndex((name) => name.toLowerCase() === match[2].toLowerCase());
+  const month = isoMatch
+    ? Number(match[2]) - 1
+    : MONTH_ABBREVIATIONS.findIndex((name) => name.toLowerCase() === match[2].toLowerCase());
   const day = Number(match[3]);
-  if (month < 0) return null;
+  if (month < 0 || month > 11) return null;
   const date = new Date(Date.UTC(year, month, day));
   if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month || date.getUTCDate() !== day) return null;
   return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
 function parseFormattedDateTime(value: string): string | null {
-  const match = /^(\d{4}\/[A-Za-z]{3}\/\d{2})[ T](\d{2}):(\d{2})$/.exec(value.trim());
+  const trimmed = value.trim();
+  const nativeMatch = /^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})$/.exec(trimmed);
+  const displayMatch = /^(\d{4}\/[A-Za-z]{3}\/\d{2})[ T](\d{2}):(\d{2})$/.exec(trimmed);
+  const match = nativeMatch ?? displayMatch;
   if (!match) return null;
   const isoDate = parseFormattedDate(match[1]);
   const hours = Number(match[2]);
@@ -194,7 +202,7 @@ export function App() {
     const startedAtInput = String(form.get("started_at") || "").trim();
     const startedAt = parseFormattedDateTime(startedAtInput);
     if (!startedAt) {
-      setUploadMessage("Dátum a čas zadaj vo formáte yyyy/MMM/dd HH:mm, napríklad 2026/Sep/23 14:30.");
+      setUploadMessage("Vyber platný dátum a čas merania.");
       return;
     }
     if (!(file instanceof File) || !file.size) {
@@ -325,7 +333,7 @@ export function App() {
     const birthDateInput = String(data.get("birth_date") || "").trim();
     const birthDate = birthDateInput ? parseFormattedDate(birthDateInput) : null;
     if (birthDateInput && !birthDate) {
-      setError("Dátum narodenia zadaj vo formáte yyyy/MMM/dd, napríklad 2001/Feb/09.");
+      setError("Vyber platný dátum narodenia.");
       return;
     }
     try {
@@ -640,8 +648,8 @@ export function App() {
                       <input placeholder="Hľadať ID, test alebo súbor…" value={measurementSearch} onChange={(event) => setMeasurementSearch(event.target.value)} />
                       <select value={measurementParticipantFilter} onChange={(event) => setMeasurementParticipantFilter(event.target.value)}><option value="">Všetci účastníci</option>{participants.map((participant) => <option key={participant.id} value={participant.id}>{participant.participant_code}</option>)}</select>
                       <select value={measurementTestFilter} onChange={(event) => setMeasurementTestFilter(event.target.value)}><option value="">Všetky testy</option>{tests.map((test) => <option key={test.id} value={test.id}>{test.name} · v{test.version}</option>)}</select>
-                      <input type="text" value={measurementDateFrom} onChange={(event) => setMeasurementDateFrom(event.target.value)} placeholder="Od yyyy/MMM/dd" aria-label="Od dátumu yyyy/MMM/dd" />
-                      <input type="text" value={measurementDateTo} onChange={(event) => setMeasurementDateTo(event.target.value)} placeholder="Do yyyy/MMM/dd" aria-label="Do dátumu yyyy/MMM/dd" />
+                      <input type="date" value={measurementDateFrom} onChange={(event) => setMeasurementDateFrom(event.target.value)} aria-label="Od dátumu" />
+                      <input type="date" value={measurementDateTo} onChange={(event) => setMeasurementDateTo(event.target.value)} aria-label="Do dátumu" />
                     </div>
                     <div className="selection-toolbar"><label><input type="checkbox" checked={filteredMeasurements().length > 0 && filteredMeasurements().every((item) => selectedMeasurementIds.includes(item.id))} onChange={() => setSelectedMeasurementIds(filteredMeasurements().every((item) => selectedMeasurementIds.includes(item.id)) ? [] : filteredMeasurements().map((item) => item.id))} /> Vybrať všetky</label>{user.role === "superadmin" && <button className="quiet compact danger" disabled={!selectedMeasurementIds.length} onClick={deleteSelectedMeasurements}>Odstrániť vybrané</button>}</div>
                     <div className="measurement-list">{filteredMeasurements().map((measurement) => <button className={selectedMeasurementId === measurement.id ? "measurement-item selected" : "measurement-item"} key={measurement.id} onClick={() => setSelectedMeasurementId(measurement.id)}><input type="checkbox" checked={selectedMeasurementIds.includes(measurement.id)} onChange={(event) => { event.stopPropagation(); toggleMeasurementSelection(measurement.id); }} onClick={(event) => event.stopPropagation()} /><span className="measurement-main"><strong>{participantCodeFor(measurement.participant_id)}</strong><span>{formatDate(measurement.started_at)} · {measurement.test_type} · {measurement.source_file_name ?? "raw"}</span></span><span className="measurement-status">{measurement.raw_sha256 ? "Archivované" : "Bez raw dát"}</span></button>)}</div>
@@ -652,7 +660,7 @@ export function App() {
                     {(() => { const selected = measurements.find((item) => item.id === selectedMeasurementId); return selected ? <><h2>{selected.test_type}</h2><p className="muted">{selected.source_file_name} · {formatDate(selected.started_at)}</p><div className="detail-grid"><div><span>Vzorky</span><strong>{String(selected.analysis_data?.sample_count ?? "—")}</strong></div><div><span>Trvanie</span><strong>{selected.analysis_data?.duration_s ? String(Number(selected.analysis_data.duration_s).toFixed(2)) + " s" : "—"}</strong></div><div><span>Raw dáta</span><strong>Archivované</strong></div><div><span>Normalizácia</span><strong>{selected.analysis_data?.normalized_step_response ? "Dostupná" : "Nie je dostupná"}</strong></div></div><div className="results-layout"><div className="results-chart-column"><div className="chart-toolbar"><label>Zobrazenie<select value={chartMode} onChange={(event) => setChartMode(event.target.value as "single" | "all")}><option value="single">Vybraný kanál</option><option value="all">Všetky osi</option></select></label>{chartMode === "single" && <label>Kanál<select value={chartChannel} onChange={(event) => setChartChannel(event.target.value)}><option>AILE</option><option>ELEV</option><option>THRO</option><option>RUDD</option></select></label>}</div><ResponseChart data={selected.analysis_data?.normalized_step_response} channel={chartChannel} mode={chartMode} /></div><ResponseMetrics data={selected.analysis_data?.normalized_step_response} /></div></> : <div className="empty-list"><h2>Vyber meranie</h2><p className="muted">V ľavom paneli vyber meranie, ktoré chceš preskúmať.</p></div> })()}
                   </section>
                 </div>
-                {manualUploadOpen && <div className="backdrop" onMouseDown={() => setManualUploadOpen(false)}><section className="login upload-dialog" onMouseDown={(event) => event.stopPropagation()}><div className="eyebrow">NÚDZOVÁ SYNCHRONIZÁCIA</div><h2>Manuálne nahrať dátový súbor</h2><p className="muted">Použi iba vtedy, ak upload počas sessionu zlyhal.</p><form className="measurement-form modal-form" onSubmit={async (event) => { await uploadMeasurement(event); setManualUploadOpen(false); }}><label>Účastník<select name="participant_id" required><option value="">Vyber účastníka</option>{participants.map((participant) => <option key={participant.id} value={participant.id}>{participant.participant_code}</option>)}</select></label><label>Test<select name="test_definition_id" required><option value="">Vyber test</option>{tests.filter((test) => test.is_active).map((test) => <option key={test.id} value={test.id}>{test.name} · v{test.version}</option>)}</select></label><label>Dátum a čas<input name="started_at" type="text" placeholder="yyyy/MMM/dd HH:mm" maxLength={17} required /></label><label>Raw SCoPE log<input name="raw_file" type="file" accept=".txt,.tsv,text/plain" required /></label><div className="actions"><button type="button" className="quiet" onClick={() => setManualUploadOpen(false)}>Zrušiť</button><button className="primary" type="submit">Nahrať dáta</button></div></form>{uploadMessage && <p className="notice">{uploadMessage}</p>}</section></div>}
+                {manualUploadOpen && <div className="backdrop" onMouseDown={() => setManualUploadOpen(false)}><section className="login upload-dialog" onMouseDown={(event) => event.stopPropagation()}><div className="eyebrow">NÚDZOVÁ SYNCHRONIZÁCIA</div><h2>Manuálne nahrať dátový súbor</h2><p className="muted">Použi iba vtedy, ak upload počas sessionu zlyhal.</p><form className="measurement-form modal-form" onSubmit={async (event) => { await uploadMeasurement(event); setManualUploadOpen(false); }}><label>Účastník<select name="participant_id" required><option value="">Vyber účastníka</option>{participants.map((participant) => <option key={participant.id} value={participant.id}>{participant.participant_code}</option>)}</select></label><label>Test<select name="test_definition_id" required><option value="">Vyber test</option>{tests.filter((test) => test.is_active).map((test) => <option key={test.id} value={test.id}>{test.name} · v{test.version}</option>)}</select></label><label>Dátum a čas<input name="started_at" type="datetime-local" step="60" required /></label><label>Raw SCoPE log<input name="raw_file" type="file" accept=".txt,.tsv,text/plain" required /></label><div className="actions"><button type="button" className="quiet" onClick={() => setManualUploadOpen(false)}>Zrušiť</button><button className="primary" type="submit">Nahrať dáta</button></div></form>{uploadMessage && <p className="notice">{uploadMessage}</p>}</section></div>}
               </>}
 
             </section>
@@ -706,7 +714,7 @@ function RegistrationPage({ onSubmit, onBack, onLogin, error, consentTexts, onOp
         </section>
         <section className="registration-card profile-questionnaire">
           <div><div className="eyebrow">PROFIL PILOTA · NEPOVINNÉ</div><h2>Skúsenosti a zručnosti</h2><p className="muted">Všetky odpovede sú nepovinné. Použijú sa na štatistické vyhodnotenie; môžeš ich preskočiť.</p></div>
-          <div className="form-grid"><label>Dátum narodenia<input name="birth_date" type="text" placeholder="yyyy/MMM/dd" maxLength={11} autoComplete="bday" /></label><label>Pohlavie<select name="sex" defaultValue=""><option value="">Nevyplnené</option><option value="female">Žena</option><option value="male">Muž</option><option value="intersex">Intersex</option><option value="other">Iné</option><option value="prefer_not_to_say">Nechcem uviesť</option></select></label></div>
+          <div className="form-grid"><label>Dátum narodenia<input name="birth_date" type="date" autoComplete="bday" /></label><label>Pohlavie<select name="sex" defaultValue=""><option value="">Nevyplnené</option><option value="female">Žena</option><option value="male">Muž</option><option value="intersex">Intersex</option><option value="other">Iné</option><option value="prefer_not_to_say">Nechcem uviesť</option></select></label></div>
           <div className="form-grid"><label>Dominantná ruka<select name="dominant_hand" defaultValue=""><option value="">Nevyplnené</option><option value="right">Pravá</option><option value="left">Ľavá</option><option value="both">Obe ruky</option><option value="prefer_not_to_say">Nechcem uviesť</option></select></label><label>Zraková korekcia<select name="vision_correction" defaultValue=""><option value="">Nevyplnené</option><option value="none">Bez korekcie</option><option value="glasses">Okuliare</option><option value="contact_lenses">Kontaktné šošovky</option><option value="both">Okuliare aj šošovky</option><option value="other">Iná korekcia</option><option value="prefer_not_to_say">Nechcem uviesť</option></select></label></div>
           <div><span className="muted">Približné dioptrie, nepovinné (D)</span><div className="form-grid"><label>Ľavé oko<input name="vision_diopters_left" type="number" min="-30" max="30" step="0.25" /></label><label>Pravé oko<input name="vision_diopters_right" type="number" min="-30" max="30" step="0.25" /></label></div></div>
           <div className="form-grid"><label>Skúsenosť s pilotovaním dronu<select name="pilot_experience" defaultValue=""><option value="">Nevyplnené</option><option value="none">Žiadna</option><option value="under_1_year">Menej ako 1 rok</option><option value="1_3_years">1–3 roky</option><option value="3_5_years">3–5 rokov</option><option value="over_5_years">Viac ako 5 rokov</option></select></label><label>Odhadovaný počet letových hodín<select name="flight_hours_range" defaultValue=""><option value="">Nevyplnené</option><option value="0">0</option><option value="under_10">Menej ako 10</option><option value="10_50">10–50</option><option value="51_200">51–200</option><option value="201_500">201–500</option><option value="over_500">Viac ako 500</option></select></label></div>
@@ -1088,7 +1096,7 @@ function ParticipantProfileEditor({ participant, csrfToken, onSaved }: { partici
   return <form className="participant-profile-editor" onSubmit={save}>
     <div><div className="eyebrow">PROFIL ÚČASTNÍKA</div><h3>Parametre a skúsenosti</h3><p className="muted">Editovať môžu admin a superadmin.</p></div>
     <label className="checkbox-line"><input name="is_active" type="checkbox" defaultChecked={participant.is_active} /> Aktívny účastník</label>
-    <div className="form-grid"><label>Dátum narodenia<input name="birth_date" type="text" placeholder="yyyy/MMM/dd" maxLength={11} defaultValue={participant.birth_date ? formatDate(participant.birth_date) : ""} /></label><label>Pohlavie<select name="sex" defaultValue={participant.sex ?? ""}><option value="">Nevyplnené</option><option value="female">Žena</option><option value="male">Muž</option><option value="intersex">Intersex</option><option value="other">Iné</option><option value="prefer_not_to_say">Nechcem uviesť</option></select></label></div>
+    <div className="form-grid"><label>Dátum narodenia<input name="birth_date" type="date" defaultValue={participant.birth_date ?? ""} /></label><label>Pohlavie<select name="sex" defaultValue={participant.sex ?? ""}><option value="">Nevyplnené</option><option value="female">Žena</option><option value="male">Muž</option><option value="intersex">Intersex</option><option value="other">Iné</option><option value="prefer_not_to_say">Nechcem uviesť</option></select></label></div>
     <div className="form-grid"><label>Dominantná ruka<select name="dominant_hand" defaultValue={participant.dominant_hand ?? ""}><option value="">Nevyplnené</option><option value="right">Pravá</option><option value="left">Ľavá</option><option value="both">Obe ruky</option><option value="prefer_not_to_say">Nechcem uviesť</option></select></label><label>Zraková korekcia<select name="vision_correction" defaultValue={participant.vision_correction ?? ""}><option value="">Nevyplnené</option><option value="none">Bez korekcie</option><option value="glasses">Okuliare</option><option value="contact_lenses">Kontaktné šošovky</option><option value="both">Okuliare aj šošovky</option><option value="other">Iná korekcia</option><option value="prefer_not_to_say">Nechcem uviesť</option></select></label></div>
     <div className="form-grid"><label>Dioptrie ľavé oko<input name="vision_diopters_left" type="number" min="-30" max="30" step="0.25" defaultValue={participant.vision_diopters_left ?? ""} /></label><label>Dioptrie pravé oko<input name="vision_diopters_right" type="number" min="-30" max="30" step="0.25" defaultValue={participant.vision_diopters_right ?? ""} /></label></div>
     <div className="form-grid"><label>Skúsenosť s pilotovaním<select name="pilot_experience" defaultValue={participant.pilot_experience ?? ""}><option value="">Nevyplnené</option><option value="none">Žiadna</option><option value="under_1_year">Menej ako 1 rok</option><option value="1_3_years">1–3 roky</option><option value="3_5_years">3–5 rokov</option><option value="over_5_years">Viac ako 5 rokov</option></select></label><label>Letové hodiny<select name="flight_hours_range" defaultValue={participant.flight_hours_range ?? ""}><option value="">Nevyplnené</option><option value="0">0</option><option value="under_10">Menej ako 10</option><option value="10_50">10–50</option><option value="51_200">51–200</option><option value="201_500">201–500</option><option value="over_500">Viac ako 500</option></select></label></div>
