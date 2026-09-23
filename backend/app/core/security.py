@@ -29,9 +29,4 @@ def new_csrf_token() -> str:
 
 
 def new_participant_code() -> str:
-    groups = [
-        "".join(secrets.choice(PARTICIPANT_ALPHABET) for _ in range(4))
-        for _ in range(3)
-    ]
-    return "-".join(groups)
-
+    return "".join(secrets.choice(PARTICIPANT_ALPHABET) for _ in range(5))
