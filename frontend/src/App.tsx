@@ -11,10 +11,11 @@ type User = { username: string; role: string; csrf_token: string; email?: string
 type Overview = { participant_count: number; measurement_count: number };
 type Participant = { id: string; participant_code: string; is_active: boolean; created_at: string };
 type RegisteredStudent = { participant_id: string; participant_code: string; email: string; first_name: string; last_name: string; is_active: boolean; created_at: string };
+type AdminAccount = { id: string; username: string; email: string | null; first_name: string | null; last_name: string | null; role: string; effective_role: string; is_active: boolean; participant_id: string | null; participant_code: string | null; created_at: string };
 type TestDefinition = { id: string; test_code: string; name: string; version: string; status: string; analysis_profile: string; configuration: Record<string, unknown>; is_active: boolean };
 type Measurement = { id: string; participant_id: string; test_definition_id: string | null; test_type: string; status: string; started_at: string; source_file_name: string | null; raw_sha256: string | null; raw_size_bytes: number | null; analysis_data: Record<string, unknown> | null };
 type ParticipantDetail = { participant: Participant; measurements: { id: string; test_type: string; status: string; started_at: string; raw_data_available?: boolean }[] };
-type AdminSection = "overview" | "participants" | "tests" | "measurements";
+type AdminSection = "overview" | "participants" | "users" | "tests" | "measurements";
 type StudentMeasurement = { id: string; test_type: string; status: string; started_at: string; analysis_data: Record<string, unknown> | null };
 type StudentComparison = { available: boolean; minimum_group_size: number; cohort_participant_count: number; own_measurement_count: number; own_average: Record<string, number>; cohort_average: Record<string, number> };
 
@@ -30,6 +31,8 @@ export function App() {
   const [overview, setOverview] = useState<Overview | null>(null);
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [registeredStudents, setRegisteredStudents] = useState<RegisteredStudent[]>([]);
+  const [adminAccounts, setAdminAccounts] = useState<AdminAccount[]>([]);
+  const [accountMessage, setAccountMessage] = useState("");
   const [participantCode, setParticipantCode] = useState("");
   const [participantMessage, setParticipantMessage] = useState("");
   const [participantSearch, setParticipantSearch] = useState("");
@@ -90,6 +93,7 @@ export function App() {
       request<Overview>("/api/admin/overview").then(setOverview).catch(() => setOverview(null));
       request<Participant[]>("/api/admin/participants").then(setParticipants).catch(() => setParticipants([]));
       request<RegisteredStudent[]>("/api/admin/students").then(setRegisteredStudents).catch(() => setRegisteredStudents([]));
+      request<AdminAccount[]>("/api/admin/users").then(setAdminAccounts).catch((reason) => setAccountMessage(reason instanceof Error ? reason.message : "Používateľov sa nepodarilo načítať."));
       request<TestDefinition[]>("/api/admin/tests").then(setTests).catch(() => setTests([]));
       request<Measurement[]>("/api/admin/measurements").then(setMeasurements).catch(() => setMeasurements([]));
     }
@@ -232,6 +236,45 @@ export function App() {
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Registrácia zlyhala."); }
   }
 
+  async function changeAccountRole(account: AdminAccount, role: string) {
+    if (!user || user.role !== "superadmin") return;
+    const ok = window.confirm(`Zmeniť rolu účtu ${account.email || account.username} na ${role}?`);
+    if (!ok) return;
+    try {
+      const updated = await request<AdminAccount>(`/api/admin/users/${account.id}/role`, {
+        method: "PATCH", headers: { "Content-Type": "application/json", "X-CSRF-Token": user.csrf_token },
+        body: JSON.stringify({ role }),
+      });
+      setAdminAccounts((items) => items.map((item) => item.id === updated.id ? updated : item));
+      setAccountMessage("Rola bola zmenená.");
+    } catch (reason) { setAccountMessage(reason instanceof Error ? reason.message : "Rolu sa nepodarilo zmeniť."); }
+  }
+
+  async function resetAccountPassword(account: AdminAccount) {
+    if (!user || user.role !== "superadmin") return;
+    const password = window.prompt(`Zadaj nové dočasné heslo pre ${account.email || account.username} (min. 10 znakov):`);
+    if (!password) return;
+    if (password.length < 10) { setAccountMessage("Heslo musí mať aspoň 10 znakov."); return; }
+    try {
+      await request<void>(`/api/admin/users/${account.id}/password`, {
+        method: "POST", headers: { "Content-Type": "application/json", "X-CSRF-Token": user.csrf_token },
+        body: JSON.stringify({ password }),
+      });
+      setAccountMessage("Heslo zmenené. Používateľ sa musí prihlásiť znova.");
+    } catch (reason) { setAccountMessage(reason instanceof Error ? reason.message : "Heslo sa nepodarilo resetovať."); }
+  }
+
+  async function anonymizeAccount(account: AdminAccount) {
+    if (!user || user.role !== "superadmin") return;
+    if (!window.confirm(`Anonymizovať a deaktivovať účet ${account.email || account.username}? Merania zostanú zachované pod pseudonymným ID.`)) return;
+    try {
+      await request<void>(`/api/admin/users/${account.id}`, { method: "DELETE", headers: { "X-CSRF-Token": user.csrf_token } });
+      setAdminAccounts((items) => items.filter((item) => item.id !== account.id));
+      setRegisteredStudents((items) => items.filter((item) => item.email !== account.email));
+      setAccountMessage("Účet bol deaktivovaný a osobné údaje odstránené; merania zostali zachované.");
+    } catch (reason) { setAccountMessage(reason instanceof Error ? reason.message : "Účet sa nepodarilo anonymizovať."); }
+  }
+
   async function login(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
@@ -240,7 +283,7 @@ export function App() {
       const signedIn = await request<User>("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username: data.get("username"), password: data.get("password") }),
+        body: JSON.stringify({ identifier: data.get("identifier"), password: data.get("password") }),
       });
       setUser(signedIn);
       setLoginOpen(false);
@@ -294,13 +337,14 @@ export function App() {
             <nav className="side-nav" aria-label="Administrácia">
               <button className={activeSection === "overview" ? "nav-item active" : "nav-item"} onClick={() => setActiveSection("overview")}><span>⌂</span>Prehľad</button>
               <button className={activeSection === "participants" ? "nav-item active" : "nav-item"} onClick={() => setActiveSection("participants")}><span>◎</span>Účastníci</button>
+              <button className={activeSection === "users" ? "nav-item active" : "nav-item"} onClick={() => setActiveSection("users")}><span>♙</span>Používatelia</button>
               <button className={activeSection === "tests" ? "nav-item active" : "nav-item"} onClick={() => setActiveSection("tests")}><span>▣</span>Testy a konfigurácie</button>
               <button className={activeSection === "measurements" ? "nav-item active" : "nav-item"} onClick={() => setActiveSection("measurements")}><span>↗</span>Merania a výsledky</button>
             </nav>
             <div className="sidebar-footer"><span>{user.username} · {user.role}</span><button className="quiet" onClick={logout}>Odhlásiť</button></div>
           </aside>
           <div className="app-main">
-            <header className="topbar"><div><div className="eyebrow">ADMINISTRÁCIA · {user.role.toUpperCase()}</div><h1>{activeSection === "overview" ? "Prehľad meraní" : activeSection === "participants" ? "Účastníci" : activeSection === "tests" ? "Testy a konfigurácie" : "Merania a výsledky"}</h1></div><span className="status-dot">Systém online</span></header>
+            <header className="topbar"><div><div className="eyebrow">ADMINISTRÁCIA · {user.role.toUpperCase()}</div><h1>{activeSection === "overview" ? "Prehľad meraní" : activeSection === "participants" ? "Účastníci" : activeSection === "users" ? "Používatelia" : activeSection === "tests" ? "Testy a konfigurácie" : "Merania a výsledky"}</h1></div><span className="status-dot">Systém online</span></header>
             <section className="workspace">
               {activeSection === "overview" && <>
                 <div className="stats"><Metric label="Účastníci" value={overview?.participant_count ?? "—"} /><Metric label="Merania" value={overview?.measurement_count ?? "—"} /><Metric label="Čakajúce synchronizácie" value="0" /></div>
@@ -316,6 +360,22 @@ export function App() {
                 </section>
                 <section className="participant-create-strip"><div><div className="eyebrow">NOVÝ ÚČASTNÍK</div><strong>Vytvoriť anonymné ID</strong></div><form className="inline-create-form" onSubmit={createParticipant}><input id="new-participant-code" value={participantCode} onChange={(event) => setParticipantCode(event.target.value.toUpperCase())} maxLength={5} pattern="[A-Za-z0-9]{5}" placeholder="ABCDE" required /><button type="button" className="quiet compact" onClick={generateParticipantCode}>Generovať</button><button type="submit" className="primary compact">Vytvoriť</button></form>{participantMessage && <span className="notice">{participantMessage}</span>}</section>
                 {selectedParticipant && <section className={selectedParticipant ? "browser-detail detail-modal-open" : "browser-detail detail-modal-closed"}><div className="detail-header"><div><div className="eyebrow">DETAIL ÚČASTNÍKA</div><h2>{selectedParticipant.participant.participant_code}</h2></div><button className="quiet compact" onClick={() => setSelectedParticipant(null)}>Zavrieť detail</button></div><p className="muted">História synchronizovaných meraní účastníka.</p><div className="data-table"><div className="data-table-head"><span>Test</span><span>Dátum</span><span>Stav</span><span>Akcia</span></div>{selectedParticipant.measurements.filter((measurement) => measurement.raw_data_available).map((measurement) => <div className="data-table-row" key={measurement.id}><strong>{measurement.test_type}</strong><span>{new Date(measurement.started_at).toLocaleString("sk-SK")}</span><span>{measurement.status}</span><button className="quiet compact" onClick={() => { setSelectedMeasurementId(measurement.id); setActiveSection("measurements"); }}>Otvoriť výsledok</button></div>)}</div></section>}
+              </>}
+              {activeSection === "users" && <>
+                <section className="browser-panel">
+                  <div className="browser-header"><div><div className="eyebrow">SPRÁVA ÚČTOV</div><h2>Používatelia a účastníci</h2><p className="muted">Prihlásenie funguje cez e-mail alebo pseudonymné Participant ID. Zmena rolí, reset hesla a anonymizácia sú dostupné iba superadminovi.</p></div></div>
+                  {accountMessage && <p className="notice">{accountMessage}</p>}
+                  <div className="account-list">{adminAccounts.map((account) => <article className="account-row" key={account.id}>
+                    <div><strong>{[account.first_name, account.last_name].filter(Boolean).join(" ") || account.username}</strong><small>{account.email || account.username}</small></div>
+                    <div><strong>{account.participant_code || "—"}</strong><small>{account.effective_role}{account.is_active ? "" : " · deaktivovaný"}</small></div>
+                    <div className="account-actions">{user.role === "superadmin" && account.effective_role !== "superadmin" ? <>
+                      <select aria-label="Rola používateľa" value={account.role} onChange={(event) => void changeAccountRole(account, event.target.value)}><option value="student">Študent</option><option value="researcher">Researcher</option><option value="admin">Admin</option></select>
+                      <button className="quiet compact" onClick={() => void resetAccountPassword(account)}>Resetovať heslo</button>
+                      <button className="quiet compact danger" onClick={() => void anonymizeAccount(account)}>Zmazať/anonymizovať</button>
+                    </> : <span className="muted">{account.effective_role === "superadmin" ? "Superadmin" : "Bez oprávnenia na správu"}</span>}</div>
+                  </article>)}</div>
+                  {!adminAccounts.length && !accountMessage && <div className="empty-list"><h2>Žiadne účty</h2><p className="muted">Registrované účty sa zobrazia tu.</p></div>}
+                </section>
               </>}
               {activeSection === "tests" && <>
                 <section className="browser-panel">
@@ -356,7 +416,7 @@ export function App() {
         </div>
       ) : (
         <>
-          <header><div className="brand"><span className="mark">T</span><div><strong>THRUST</strong><small>UAV Human Performance Research</small></div></div><div className="actions"><button className="quiet" onClick={() => setRegisterOpen(true)}>Registrácia študenta</button><button className="quiet" onClick={() => setLoginOpen(true)}>Prihlásenie</button></div></header>
+          <header><div className="brand"><span className="mark">T</span><div><strong>THRUST</strong><small>UAV Human Performance Research</small></div></div><div className="actions"><button className="quiet" onClick={() => setRegisterOpen(true)}>Registrácia</button><button className="quiet" onClick={() => setLoginOpen(true)}>Prihlásenie</button></div></header>
           <section className="public">
           <div className="eyebrow">TESTING HUB FOR RESEARCH IN UAV SIMULATION AND TRAINING</div>
           <h1>Merateľný pohľad na výkon pilotov UAV.</h1>
@@ -371,8 +431,8 @@ export function App() {
         </>
       )}
 
-      {loginOpen && <div className="backdrop" onMouseDown={() => setLoginOpen(false)}><form className="login" onSubmit={login} onMouseDown={(e) => e.stopPropagation()}><div className="eyebrow">CHRÁNENÝ PRÍSTUP</div><h2>Administrácia</h2><label>Používateľské meno<input name="username" autoComplete="username" required autoFocus /></label><label>Heslo<input name="password" type="password" autoComplete="current-password" required /></label>{error && <p className="error">{error}</p>}<div className="actions"><button type="button" className="quiet" onClick={() => setLoginOpen(false)}>Zrušiť</button><button type="submit" className="primary">Prihlásiť</button></div></form></div>} 
-      {registerOpen && <div className="backdrop" onMouseDown={() => setRegisterOpen(false)}><form className="login register-form" onSubmit={register} onMouseDown={(e) => e.stopPropagation()}><div className="eyebrow">NOVÝ ÚČET</div><h2>Registrácia študenta</h2><p className="muted">Po registrácii dostaneš vlastné anonymné ID a prístup k svojim výsledkom.</p><div className="form-grid"><label>Meno<input name="first_name" required /></label><label>Priezvisko<input name="last_name" required /></label></div><label>E-mail<input name="email" type="email" autoComplete="email" required /></label><div className="form-grid"><label>Heslo<input name="password" type="password" minLength={10} autoComplete="new-password" required /></label><label>Zopakovať heslo<input name="password_confirmation" type="password" minLength={10} autoComplete="new-password" required /></label></div><label className="consent"><input name="research_consent" type="checkbox" required /> Súhlasím s použitím mojich pseudonymizovaných údajov na výskumné účely.</label>{error && <p className="error">{error}</p>}<div className="actions"><button type="button" className="quiet" onClick={() => setRegisterOpen(false)}>Zrušiť</button><button type="submit" className="primary">Vytvoriť účet</button></div></form></div>}
+      {loginOpen && <div className="backdrop" onMouseDown={() => setLoginOpen(false)}><form className="login" onSubmit={login} onMouseDown={(e) => e.stopPropagation()}><div className="eyebrow">CHRÁNENÝ PRÍSTUP</div><h2>Prihlásenie</h2><label>E-mail alebo ID účastníka<input name="identifier" autoComplete="username" required autoFocus /></label><label>Heslo<input name="password" type="password" autoComplete="current-password" required /></label>{error && <p className="error">{error}</p>}<div className="actions"><button type="button" className="quiet" onClick={() => setLoginOpen(false)}>Zrušiť</button><button type="submit" className="primary">Prihlásiť</button></div></form></div>} 
+      {registerOpen && <div className="backdrop" onMouseDown={() => setRegisterOpen(false)}><form className="login register-form" onSubmit={register} onMouseDown={(e) => e.stopPropagation()}><div className="eyebrow">NOVÝ ÚČET</div><h2>Vytvoriť účet</h2><p className="muted">Účet dostane Participant ID a základnú rolu študenta. Oprávnenia môže zvýšiť iba superadmin.</p><div className="form-grid"><label>Meno<input name="first_name" required /></label><label>Priezvisko<input name="last_name" required /></label></div><label>E-mail<input name="email" type="email" autoComplete="email" required /></label><div className="form-grid"><label>Heslo<input name="password" type="password" minLength={10} autoComplete="new-password" required /></label><label>Zopakovať heslo<input name="password_confirmation" type="password" minLength={10} autoComplete="new-password" required /></label></div><label className="consent"><input name="research_consent" type="checkbox" required /> Súhlasím s použitím mojich pseudonymizovaných údajov na výskumné účely.</label>{error && <p className="error">{error}</p>}<div className="actions"><button type="button" className="quiet" onClick={() => setRegisterOpen(false)}>Zrušiť</button><button type="submit" className="primary">Vytvoriť účet</button></div></form></div>}
     </main>
   );
 }
