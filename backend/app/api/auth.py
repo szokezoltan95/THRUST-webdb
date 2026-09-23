@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import AuthContext, require_authenticated, require_user_csrf
+from app.api.dependencies import AuthContext, effective_role, require_authenticated, require_user_csrf
 from app.core.config import settings
 from app.core.security import (
     hash_password,
@@ -31,7 +31,7 @@ def response_for_user(user: AdminUser, csrf_token: str, participant_code: str | 
     return UserResponse(
         username=user.username,
         email=user.email,
-        role=user.role,
+        role=effective_role(user),
         csrf_token=csrf_token,
         participant_id=user.participant_id,
         participant_code=participant_code,
@@ -112,9 +112,19 @@ async def register(
 
 @router.post("/login", response_model=UserResponse)
 async def login(payload: LoginRequest, response: Response, db: AsyncSession = Depends(get_db)) -> UserResponse:
-    identifier = payload.username.strip().lower()
+    raw_identifier = (payload.identifier or payload.username or "").strip()
+    if not raw_identifier:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Login identifier is required")
+    identifier = raw_identifier.lower()
+    participant_code = raw_identifier.upper()
     result = await db.execute(
-        select(AdminUser).where((AdminUser.username == identifier) | (AdminUser.email == identifier))
+        select(AdminUser)
+        .outerjoin(Participant, Participant.id == AdminUser.participant_id)
+        .where(
+            (AdminUser.username == identifier)
+            | (AdminUser.email == identifier)
+            | (Participant.participant_code == participant_code)
+        )
     )
     user = result.scalar_one_or_none()
     if user is None or not user.is_active or not verify_password(payload.password, user.password_hash):
