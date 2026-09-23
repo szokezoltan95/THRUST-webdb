@@ -412,8 +412,11 @@ h1 { max-width: 880px; margin: 20px 0; font-size: clamp(42px, 7vw, 84px); line-h
 
 .participant-table .data-table-head,
 .participant-table .data-table-row {
-  grid-template-columns: minmax(95px, .75fr) minmax(190px, 1.5fr) minmax(110px, .9fr) minmax(110px, .9fr) 70px minmax(150px, 1.2fr);
+  grid-template-columns: minmax(95px, .75fr) minmax(190px, 1.5fr) minmax(110px, .9fr) minmax(110px, .9fr) 70px minmax(270px, 2fr);
 }
+.participant-table .row-actions { justify-content: flex-start; flex-wrap: wrap; align-items: center; }
+.participant-table .row-actions select { max-width: 110px; background: #07121f; border: 1px solid var(--line); color: #eef5ff; padding: 6px; }
+.role-label { padding: 4px 8px; color: #9db0c4; border: 1px solid var(--line); border-radius: 4px; font-size: .75rem; }
 .student-email { display: block; color: #8199b2; font-size: .74rem; margin-top: 2px; }
 
 
