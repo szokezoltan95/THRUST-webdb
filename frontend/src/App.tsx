@@ -195,12 +195,18 @@ export function App() {
 
   async function deleteTestVersion(test: TestDefinition) {
     if (!user || user.role !== "superadmin") return;
-    if (!window.confirm("Trvalo odstrániť verziu " + test.test_code + " v" + test.version + "? Verziu s meraniami nebude možné zmazať.")) return;
+    const attached = measurements.filter((item) => item.test_definition_id === test.id);
+    if (!window.confirm("Trvalo odstrániť verziu " + test.test_code + " v" + test.version + " a všetkých " + attached.length + " priradených meraní vrátane archivovaných raw súborov? Akcia sa nedá vrátiť späť.")) return;
     try {
       await request<void>("/api/admin/tests/" + test.id, { method: "DELETE", headers: { "X-CSRF-Token": user.csrf_token } });
+      const removedIds = new Set(attached.map((item) => item.id));
+      setMeasurements((current) => current.filter((item) => !removedIds.has(item.id)));
+      setSelectedMeasurementIds((current) => current.filter((id) => !removedIds.has(id)));
+      if (selectedMeasurementId && removedIds.has(selectedMeasurementId)) setSelectedMeasurementId(null);
+      setOverview((current) => current ? { ...current, measurement_count: Math.max(0, current.measurement_count - attached.length) } : current);
       setTests((current) => current.filter((item) => item.id !== test.id));
       if (selectedTestId === test.id) setSelectedTestId(null);
-      setTestMessage("Verzia " + test.test_code + " v" + test.version + " bola odstránená.");
+      setTestMessage("Verzia " + test.test_code + " v" + test.version + " a jej merania boli odstránené.");
     } catch (reason) {
       setTestMessage(reason instanceof Error ? reason.message : "Verziu testu sa nepodarilo odstrániť.");
     }
