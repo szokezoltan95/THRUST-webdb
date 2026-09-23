@@ -69,7 +69,24 @@ function parseFormattedDateTime(value: string): string | null {
 
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(url, { credentials: "same-origin", ...options });
-  if (!response.ok) throw new Error(response.status === 401 ? "Nesprávne prihlasovacie údaje." : "Požiadavku sa nepodarilo dokončiť.");
+  if (!response.ok) {
+    const body = await response.json().catch(() => null) as { detail?: unknown } | null;
+    if (response.status === 401) throw new Error("Nesprávne prihlasovacie údaje.");
+    if (response.status >= 500) {
+      throw new Error(`Server vrátil chybu HTTP ${response.status}. Pri registrácii účastníka skontroluj, či je databázová migrácia spustená; podrobnosti sú v logu backendu.`);
+    }
+    const detail = body?.detail;
+    if (typeof detail === "string") throw new Error(detail);
+    if (Array.isArray(detail)) {
+      const validationErrors = detail.filter((item) => item && typeof item === "object") as { loc?: unknown[]; msg?: unknown }[];
+      if (validationErrors.some((item) => item.loc?.includes("email"))) {
+        throw new Error("Zadaj platnú e-mailovú adresu.");
+      }
+      const messages = validationErrors.map((item) => String(item.msg ?? "Neplatná hodnota."));
+      throw new Error(messages.join(" "));
+    }
+    throw new Error("Požiadavku sa nepodarilo dokončiť (HTTP " + response.status + ").");
+  }
   return response.status === 204 ? (undefined as T) : response.json();
 }
 
@@ -129,6 +146,7 @@ export function App() {
   const [manualUploadOpen, setManualUploadOpen] = useState(false);
   const [loginOpen, setLoginOpen] = useState(false);
   const [isRegisterPage, setIsRegisterPage] = useState(() => window.location.pathname.replace(/\/+$/, "") === "/register");
+  const [isResearcherRegisterPage, setIsResearcherRegisterPage] = useState(() => window.location.pathname.replace(/\/+$/, "") === "/register/researcher");
   const [consentTexts, setConsentTexts] = useState<ConsentDocuments | null>(null);
   const [consentDialog, setConsentDialog] = useState<ConsentKind | null>(null);
   const [activeConsentDocument, setActiveConsentDocument] = useState<ConsentDocument | null>(null);
@@ -136,7 +154,11 @@ export function App() {
   const [activeSection, setActiveSection] = useState<AdminSection>("overview");
 
   useEffect(() => {
-    const syncRoute = () => setIsRegisterPage(window.location.pathname.replace(/\/+$/, "") === "/register");
+    const syncRoute = () => {
+      const path = window.location.pathname.replace(/\/+$/, "");
+      setIsRegisterPage(path === "/register");
+      setIsResearcherRegisterPage(path === "/register/researcher");
+    };
     window.addEventListener("popstate", syncRoute);
     return () => window.removeEventListener("popstate", syncRoute);
   }, []);
@@ -146,9 +168,10 @@ export function App() {
     request<ConsentDocuments>("/api/public/consent-texts").then(setConsentTexts).catch(() => setConsentTexts(null));
     request<User>("/api/auth/me").then((sessionUser) => {
       setUser(sessionUser);
-      if (window.location.pathname.replace(/\/+$/, "") === "/register") {
+      if (["/register", "/register/researcher"].includes(window.location.pathname.replace(/\/+$/, ""))) {
         window.history.replaceState({}, "", "/");
         setIsRegisterPage(false);
+        setIsResearcherRegisterPage(false);
       }
     }).catch(() => undefined);
   }, []);
@@ -311,6 +334,15 @@ export function App() {
   function openRegistration() {
     window.history.pushState({}, "", "/register");
     setIsRegisterPage(true);
+    setIsResearcherRegisterPage(false);
+    setError("");
+    window.scrollTo(0, 0);
+  }
+
+  function openResearcherRegistration() {
+    window.history.pushState({}, "", "/register/researcher");
+    setIsRegisterPage(false);
+    setIsResearcherRegisterPage(true);
     setError("");
     window.scrollTo(0, 0);
   }
@@ -318,6 +350,7 @@ export function App() {
   function leaveRegistration() {
     window.history.pushState({}, "", "/");
     setIsRegisterPage(false);
+    setIsResearcherRegisterPage(false);
     setError("");
     window.scrollTo(0, 0);
   }
@@ -366,6 +399,35 @@ export function App() {
       });
       setUser(signedIn); leaveRegistration();
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Registrácia zlyhala."); }
+  }
+
+  async function registerResearcher(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError("");
+    const data = new FormData(event.currentTarget);
+    if (data.get("password") !== data.get("password_confirmation")) {
+      setError("Heslá sa nezhodujú.");
+      return;
+    }
+    try {
+      const signedIn = await request<User>("/api/auth/register/researcher", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          first_name: data.get("first_name"),
+          last_name: data.get("last_name"),
+          email: data.get("email"),
+          password: data.get("password"),
+          registration_key: data.get("registration_key"),
+          gdpr_consent: data.get("gdpr_consent") === "on",
+          gdpr_consent_version: consentTexts?.gdpr.version || "gdpr-v3",
+        }),
+      });
+      setUser(signedIn);
+      leaveRegistration();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Registrácia výskumníka zlyhala.");
+    }
   }
 
   async function changeAccountRole(account: AdminAccount, role: string) {
@@ -527,7 +589,11 @@ export function App() {
 
   if (user?.role === "student") return <StudentPortal user={user} onLogout={logout} />;
   if (isRegisterPage && !user) return <>
-    <RegistrationPage onSubmit={register} onBack={leaveRegistration} onLogin={() => { leaveRegistration(); setLoginOpen(true); }} error={error} consentTexts={consentTexts} onOpenConsent={setConsentDialog} />
+    <RegistrationPage onSubmit={register} onBack={leaveRegistration} onLogin={() => { leaveRegistration(); setLoginOpen(true); }} onResearcherRegister={openResearcherRegistration} error={error} consentTexts={consentTexts} onOpenConsent={setConsentDialog} />
+    {consentDialog && consentTexts && <ConsentTextDialog kind={consentDialog} document={activeConsentDocument || consentTexts[consentDialog]} onClose={() => { setConsentDialog(null); setActiveConsentDocument(null); }} />}
+  </>;
+  if (isResearcherRegisterPage && !user) return <>
+    <ResearcherRegistrationPage onSubmit={registerResearcher} onBack={leaveRegistration} onStudentRegister={openRegistration} onLogin={() => { leaveRegistration(); setLoginOpen(true); }} error={error} consentTexts={consentTexts} onOpenConsent={setConsentDialog} />
     {consentDialog && consentTexts && <ConsentTextDialog kind={consentDialog} document={activeConsentDocument || consentTexts[consentDialog]} onClose={() => { setConsentDialog(null); setActiveConsentDocument(null); }} />}
   </>;
 
@@ -690,10 +756,11 @@ export function App() {
 }
 
 
-function RegistrationPage({ onSubmit, onBack, onLogin, error, consentTexts, onOpenConsent }: {
+function RegistrationPage({ onSubmit, onBack, onLogin, onResearcherRegister, error, consentTexts, onOpenConsent }: {
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onBack: () => void;
   onLogin: () => void;
+  onResearcherRegister: () => void;
   error: string;
   consentTexts: ConsentDocuments | null;
   onOpenConsent: (kind: ConsentKind) => void;
@@ -701,7 +768,7 @@ function RegistrationPage({ onSubmit, onBack, onLogin, error, consentTexts, onOp
   return <main className="registration-page">
     <header className="registration-header">
       <div className="brand"><span className="mark">T</span><div><strong>THRUST</strong><small>UAV Human Performance Research</small></div></div>
-      <div className="actions"><button type="button" className="quiet" onClick={onBack}>Späť na hlavnú stránku</button><button type="button" className="quiet" onClick={onLogin}>Už mám účet · Prihlásiť sa</button></div>
+      <div className="actions"><button type="button" className="quiet" onClick={onBack}>Späť na hlavnú stránku</button><button type="button" className="quiet" onClick={onResearcherRegister}>Registrácia výskumníka</button><button type="button" className="quiet" onClick={onLogin}>Už mám účet · Prihlásiť sa</button></div>
     </header>
     <section className="registration-content">
       <div className="registration-heading"><div className="eyebrow">NOVÝ ŠTUDENTSKÝ ÚČET</div><h1>Vytvor si účet</h1><p className="lead">Po registrácii dostaneš svoje Participant ID. Výskumník ho použije pri meraní v lokálnom THRUSTe.</p></div>
@@ -947,6 +1014,38 @@ function TestEditor({ test, onClose, onSaved }: { test: TestDefinition; onClose:
     </div>
     <div className="editor-preview"><div className="eyebrow">ŽIVÝ NÁHĽAD</div><h3>SCoPE obrazovka</h3><GimbalPreview configuration={configuration} onPick={pickColor} /><details className="json-disclosure"><summary>Rozšírený JSON náhľad</summary><pre className="config-preview live">{JSON.stringify({ ...configuration, difficulty: String(configuration.difficulty).toLowerCase() }, null, 2)}</pre></details></div>
   </div><footer className="editor-footer"><button type="button" className="quiet" onClick={onClose}>Zrušiť</button><button className="primary" onClick={save}>Uložiť nastavenia</button>{message && <span className="notice">{message}</span>}</footer></section></div>;
+}
+
+function ResearcherRegistrationPage({ onSubmit, onBack, onStudentRegister, onLogin, error, consentTexts, onOpenConsent }: {
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  onBack: () => void;
+  onStudentRegister: () => void;
+  onLogin: () => void;
+  error: string;
+  consentTexts: ConsentDocuments | null;
+  onOpenConsent: (kind: ConsentKind) => void;
+}) {
+  return <main className="registration-page">
+    <header className="registration-header">
+      <div className="brand"><span className="mark">T</span><div><strong>THRUST</strong><small>UAV Human Performance Research</small></div></div>
+      <div className="actions"><button type="button" className="quiet" onClick={onBack}>Späť na hlavnú stránku</button><button type="button" className="quiet" onClick={onStudentRegister}>Registrácia študenta</button><button type="button" className="quiet" onClick={onLogin}>Prihlásiť sa</button></div>
+    </header>
+    <section className="registration-content">
+      <div className="registration-heading"><div className="eyebrow">VÝSKUMNÝ ÚČET</div><h1>Registrácia výskumníka</h1><p className="lead">Účet získa rolu researcher a nebude mať Participant ID. Na registráciu potrebuješ pozývací kľúč od správcu systému.</p></div>
+      <form className="registration-form researcher-registration-form" onSubmit={onSubmit}>
+        <section className="registration-card registration-account-fields">
+          <div className="eyebrow">ÚDAJE ÚČTU</div><h2>Prístup pre výskumníka</h2>
+          <div className="form-grid"><label>Meno<input name="first_name" autoComplete="given-name" required /></label><label>Priezvisko<input name="last_name" autoComplete="family-name" required /></label></div>
+          <label>E-mail<input name="email" type="email" autoComplete="email" required /></label>
+          <label>Pozývací kľúč<input name="registration_key" type="password" autoComplete="off" required /></label>
+          <div className="form-grid"><label>Heslo<input name="password" type="password" minLength={10} autoComplete="new-password" required /></label><label>Zopakovať heslo<input name="password_confirmation" type="password" minLength={10} autoComplete="new-password" required /></label></div>
+          <label className="consent"><input name="gdpr_consent" type="checkbox" required /> <span>Súhlasím so spracovaním osobných údajov pre vytvorenie a správu účtu. <a href="#consent-gdpr" onClick={(event) => { event.preventDefault(); onOpenConsent("gdpr"); }}>Zobraziť informácie a GDPR súhlas</a></span></label>
+          {error && <p className="error">{error}</p>}
+          <div className="registration-actions"><span className="muted">Pozývací kľúč sa overuje na serveri. Výskumný súhlas účastníka merania sa na tento účet nevzťahuje.</span><button className="primary" type="submit" disabled={!consentTexts}>Vytvoriť účet výskumníka</button></div>
+        </section>
+      </form>
+    </section>
+  </main>;
 }
 
 function ConsentTextDialog({ kind, document, onClose }: { kind: ConsentKind; document: ConsentDocument; onClose: () => void }) {
