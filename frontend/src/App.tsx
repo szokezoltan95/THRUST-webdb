@@ -10,6 +10,7 @@ type PublicMetrics = {
 type User = { username: string; role: string; csrf_token: string; email?: string | null; participant_id?: string | null; participant_code?: string | null; first_name?: string | null; last_name?: string | null };
 type Overview = { participant_count: number; measurement_count: number };
 type Participant = { id: string; participant_code: string; is_active: boolean; created_at: string };
+type RegisteredStudent = { participant_id: string; participant_code: string; email: string; first_name: string; last_name: string; is_active: boolean; created_at: string };
 type TestDefinition = { id: string; test_code: string; name: string; version: string; status: string; analysis_profile: string; configuration: Record<string, unknown>; is_active: boolean };
 type Measurement = { id: string; participant_id: string; test_definition_id: string | null; test_type: string; status: string; started_at: string; source_file_name: string | null; raw_sha256: string | null; raw_size_bytes: number | null; analysis_data: Record<string, unknown> | null };
 type ParticipantDetail = { participant: Participant; measurements: { id: string; test_type: string; status: string; started_at: string; raw_data_available?: boolean }[] };
@@ -28,6 +29,7 @@ export function App() {
   const [user, setUser] = useState<User | null>(null);
   const [overview, setOverview] = useState<Overview | null>(null);
   const [participants, setParticipants] = useState<Participant[]>([]);
+  const [registeredStudents, setRegisteredStudents] = useState<RegisteredStudent[]>([]);
   const [participantCode, setParticipantCode] = useState("");
   const [participantMessage, setParticipantMessage] = useState("");
   const [participantSearch, setParticipantSearch] = useState("");
@@ -87,6 +89,7 @@ export function App() {
     if (user && user.role !== "student") {
       request<Overview>("/api/admin/overview").then(setOverview).catch(() => setOverview(null));
       request<Participant[]>("/api/admin/participants").then(setParticipants).catch(() => setParticipants([]));
+      request<RegisteredStudent[]>("/api/admin/students").then(setRegisteredStudents).catch(() => setRegisteredStudents([]));
       request<TestDefinition[]>("/api/admin/tests").then(setTests).catch(() => setTests([]));
       request<Measurement[]>("/api/admin/measurements").then(setMeasurements).catch(() => setMeasurements([]));
     }
@@ -269,7 +272,7 @@ export function App() {
   function filteredParticipants() {
     const query = participantSearch.trim().toLowerCase();
     return [...participants]
-      .filter((participant) => !query || participant.participant_code.toLowerCase().includes(query))
+      .filter((participant) => { const student = registeredStudents.find((item) => item.participant_id === participant.id); return !query || [participant.participant_code, student?.first_name, student?.last_name, student?.email].filter(Boolean).join(" ").toLowerCase().includes(query); })
       .sort((left, right) => {
         const leftMeasurements = participantMeasurements(left.id);
         const rightMeasurements = participantMeasurements(right.id);
@@ -308,7 +311,7 @@ export function App() {
                 <section className="browser-panel">
                   <div className="browser-header"><div><div className="eyebrow">ÚČASTNÍCI</div><h2>Databáza účastníkov</h2><p className="muted">Na serveri sa uchováva iba pseudonymné päťznakové ID.</p></div><button className="primary compact" onClick={() => document.getElementById("new-participant-code")?.focus()}>Nový účastník</button></div>
                   <div className="browser-toolbar"><input placeholder="Hľadať ID účastníka…" value={participantSearch} onChange={(event) => setParticipantSearch(event.target.value)} /><select value={participantSort} onChange={(event) => setParticipantSort(event.target.value as typeof participantSort)}><option value="code">Zoradiť podľa ID</option><option value="first">Najstarší prvý test</option><option value="last">Najnovší posledný test</option><option value="count">Počet meraní</option></select></div>
-                  <div className="data-table participant-table"><div className="data-table-head"><span>ID účastníka</span><span>Prvé meranie</span><span>Posledné meranie</span><span>Meraní</span><span>Akcie</span></div>{filteredParticipants().map((participant) => { const rows = participantMeasurements(participant.id); const first = rows.length ? rows[rows.length - 1].started_at : null; const last = rows.length ? rows[0].started_at : null; return <div className="data-table-row" key={participant.id}><strong>{participant.participant_code}</strong><span>{first ? new Date(first).toLocaleDateString("sk-SK") : "—"}</span><span>{last ? new Date(last).toLocaleDateString("sk-SK") : "—"}</span><span>{rows.length}</span><span className="row-actions"><button className="quiet compact" onClick={() => openParticipant(participant)}>Otvoriť</button><button className="quiet compact" onClick={() => { setMeasurementParticipantFilter(participant.id); setActiveSection("measurements"); }}>Merania</button></span></div>; })}</div>
+                  <div className="data-table participant-table"><div className="data-table-head"><span>ID účastníka</span><span>Registrovaný študent</span><span>Prvé meranie</span><span>Posledné meranie</span><span>Meraní</span><span>Akcie</span></div>{filteredParticipants().map((participant) => { const rows = participantMeasurements(participant.id); const first = rows.length ? rows[rows.length - 1].started_at : null; const last = rows.length ? rows[0].started_at : null; return <div className="data-table-row" key={participant.id}><strong>{participant.participant_code}</strong><span>{registeredStudents.find((item) => item.participant_id === participant.id) ? <>{registeredStudents.find((item) => item.participant_id === participant.id)?.first_name} {registeredStudents.find((item) => item.participant_id === participant.id)?.last_name}<small className="student-email">{registeredStudents.find((item) => item.participant_id === participant.id)?.email}</small></> : <span className="muted">Manuálny účet</span>}</span><span>{first ? new Date(first).toLocaleDateString("sk-SK") : "—"}</span><span>{last ? new Date(last).toLocaleDateString("sk-SK") : "—"}</span><span>{rows.length}</span><span className="row-actions"><button className="quiet compact" onClick={() => openParticipant(participant)}>Otvoriť</button><button className="quiet compact" onClick={() => { setMeasurementParticipantFilter(participant.id); setActiveSection("measurements"); }}>Merania</button></span></div>; })}</div>
                   {filteredParticipants().length === 0 && <div className="empty-list"><h2>Žiadni účastníci</h2><p className="muted">Filteru nezodpovedá žiadny záznam.</p></div>}
                 </section>
                 <section className="participant-create-strip"><div><div className="eyebrow">NOVÝ ÚČASTNÍK</div><strong>Vytvoriť anonymné ID</strong></div><form className="inline-create-form" onSubmit={createParticipant}><input id="new-participant-code" value={participantCode} onChange={(event) => setParticipantCode(event.target.value.toUpperCase())} maxLength={5} pattern="[A-Za-z0-9]{5}" placeholder="ABCDE" required /><button type="button" className="quiet compact" onClick={generateParticipantCode}>Generovať</button><button type="submit" className="primary compact">Vytvoriť</button></form>{participantMessage && <span className="notice">{participantMessage}</span>}</section>
