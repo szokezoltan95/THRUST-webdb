@@ -27,23 +27,32 @@ def generate_participant_code() -> str:
     return "".join(secrets.choice(CODE_ALPHABET) for _ in range(5))
 
 
-def normalize_test_configuration(source: dict) -> dict:
-    """Keep WebDB test definitions compatible with the local THRUST data flow."""
+def normalize_test_configuration(source: dict, analysis_profile: str = "SCOPE_STEP_RESPONSE_V1") -> dict:
+    """Remove machine-local controls while retaining each mode's test parameters."""
     configuration = dict(source)
-    for key in ("user", "profile_name", "expert_mode", "output_root", "use_dated_subfolders", "joystick_index", "break_axis", "axis_map", "deadzone"):
+    for key in (
+        "user", "profile_name", "expert_mode", "output_root", "use_dated_subfolders",
+        "joystick_index", "break_axis", "reset_axis", "axis_map", "deadzone",
+    ):
         configuration.pop(key, None)
-    if isinstance(configuration.get("difficulty"), str):
-        configuration["difficulty"] = configuration["difficulty"].lower()
-    # A measurement cannot be uploaded without its raw source log.
-    configuration["save_raw_log"] = True
-    # Evaluation produces the normalized step-response artifact consumed by WebDB.
-    if configuration.get("run_evaluation", False):
-        configuration["save_step_file"] = True
-    if not configuration.get("run_evaluation", False):
-        configuration["auto_open_graph"] = False
-        configuration["show_graph"] = False
-    if not configuration.get("save_graph_pdf", False):
-        configuration["auto_open_graph"] = False
+
+    profile = analysis_profile.strip().upper()
+    if profile.startswith("SCOPE"):
+        if isinstance(configuration.get("difficulty"), str):
+            configuration["difficulty"] = configuration["difficulty"].lower()
+        # SCoPE measurements require a raw source log for WebDB archival.
+        configuration["save_raw_log"] = True
+        if configuration.get("run_evaluation", False):
+            configuration["save_step_file"] = True
+        if not configuration.get("run_evaluation", False):
+            configuration["auto_open_graph"] = False
+            configuration["show_graph"] = False
+        if not configuration.get("save_graph_pdf", False):
+            configuration["auto_open_graph"] = False
+    elif profile.startswith("SIMPLE"):
+        # SimPLE has its own world/physics parameters and versioned analysis format.
+        for key in ("visual", "gui_gimbal_size", "gui_stick_size"):
+            configuration.pop(key, None)
     return configuration
 
 
@@ -339,7 +348,7 @@ async def create_test(
     if existing:
         raise HTTPException(status_code=409, detail="Táto verzia testu už existuje.")
     data = payload.model_dump()
-    data["configuration"] = normalize_test_configuration(data["configuration"])
+    data["configuration"] = normalize_test_configuration(data["configuration"], data["analysis_profile"])
     test = TestDefinition(**data)
     db.add(test)
     await db.commit()
@@ -363,7 +372,7 @@ async def update_test(
     if "name" in data:
         test.name = data["name"]
     if "configuration" in data and data["configuration"] is not None:
-        configuration = normalize_test_configuration(data["configuration"])
+        configuration = normalize_test_configuration(data["configuration"], test.analysis_profile)
         test.configuration = configuration
     await db.commit()
     await db.refresh(test)

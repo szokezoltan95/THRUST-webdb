@@ -1,0 +1,144 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://thrust.local/contracts/simple-analysis-v1.schema.json",
+  "title": "SimPLE local flight analysis",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "analysis_type",
+    "algorithm_version",
+    "source_format",
+    "sample_count",
+    "duration_s",
+    "estimated_sampling_hz",
+    "metrics",
+    "step_response"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "simple-analysis-v1"
+    },
+    "analysis_type": {
+      "const": "SIMPLE_2D_FLIGHT"
+    },
+    "algorithm_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source_format": {
+      "const": "SIMPLE_TSV_V1"
+    },
+    "source_file": {
+      "type": "string"
+    },
+    "started_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "sample_count": {
+      "type": "integer",
+      "minimum": 2
+    },
+    "duration_s": {
+      "type": "number",
+      "minimum": 0
+    },
+    "estimated_sampling_hz": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": {
+        "type": [
+          "number",
+          "integer",
+          "boolean",
+          "string",
+          "null"
+        ]
+      }
+    },
+    "step_response": {
+      "type": "object",
+      "required": [
+        "schema_version",
+        "channels"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "simple-normalized-response-v1"
+        },
+        "channels": {
+          "type": "object",
+          "required": [
+            "x",
+            "y"
+          ],
+          "properties": {
+            "x": {
+              "$ref": "#/$defs/responseChannel"
+            },
+            "y": {
+              "$ref": "#/$defs/responseChannel"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": true,
+  "$defs": {
+    "responseChannel": {
+      "type": "object",
+      "required": [
+        "mean",
+        "median",
+        "std",
+        "time_s",
+        "transition_count"
+      ],
+      "properties": {
+        "mean": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          }
+        },
+        "median": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          }
+        },
+        "std": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "minimum": 0
+          }
+        },
+        "time_s": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "minimum": 0
+          }
+        },
+        "transition_count": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

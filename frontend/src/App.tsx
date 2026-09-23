@@ -740,12 +740,12 @@ export function App() {
                 <section className="browser-panel">
                   <div className="browser-header"><div><div className="eyebrow">KATALÓG TESTOV</div><h2>Testy a konfigurácie</h2><p className="muted">Každá verzia testu je samostatná, nemenná konfigurácia pre THRUST.</p></div></div>
                   <div className="browser-toolbar"><input placeholder="Hľadať kód, názov alebo profil…" value={testSearch} onChange={(event) => setTestSearch(event.target.value)} /></div>
-                  <div className="data-table test-table"><div className="data-table-head"><span>Kód</span><span>Názov</span><span>Verzia</span><span>Profil</span><span>Stav / akcie</span></div>{filteredTests().map((test) => <div className="data-table-row" key={test.id}><strong>{test.test_code}</strong><span>{test.name}</span><span>v{test.version}</span><span>{test.analysis_profile}</span><span className="row-actions"><span>{test.status}</span><button className="quiet compact" onClick={() => setSelectedTestId(test.id)}>Otvoriť</button><button className="quiet compact" onClick={() => setEditingTestId(test.id)}>Editovať</button>{user.role === "superadmin" && <button className="quiet compact danger" onClick={() => void deleteTestVersion(test)}>Zmazať</button>}</span></div>)}</div>
+                  <div className="data-table test-table"><div className="data-table-head"><span>Kód</span><span>Názov</span><span>Verzia</span><span>Profil</span><span>Stav / akcie</span></div>{filteredTests().map((test) => <div className="data-table-row" key={test.id}><strong className="test-code-cell"><ProgramWordmark mode={test.analysis_profile.toUpperCase().startsWith("SIMPLE") ? "SIMPLE" : "SCOPE"} compact />{test.test_code}</strong><span>{test.name}</span><span>v{test.version}</span><span>{test.analysis_profile}</span><span className="row-actions"><span>{test.status}</span><button className="quiet compact" onClick={() => setSelectedTestId(test.id)}>Otvoriť</button><button className="quiet compact" onClick={() => setEditingTestId(test.id)}>Editovať</button>{user.role === "superadmin" && <button className="quiet compact danger" onClick={() => void deleteTestVersion(test)}>Zmazať</button>}</span></div>)}</div>
                   {filteredTests().length === 0 && <div className="empty-list"><h2>Žiadne testy</h2><p className="muted">Filteru nezodpovedá žiadna verzia testu.</p></div>}
                 </section>
                 {selectedTestId && (() => { const selected = tests.find((test) => test.id === selectedTestId); return selected ? <section className={selectedTestId ? "browser-detail detail-modal-open" : "browser-detail detail-modal-closed"}><div className="detail-header"><div><div className="eyebrow">KONFIGURÁCIA TESTU</div><h2>{selected.name} · v{selected.version}</h2></div><button className="quiet compact" onClick={() => setSelectedTestId(null)}>Zavrieť detail</button></div><div className="detail-grid"><div><span>Kód</span><strong>{selected.test_code}</strong></div><div><span>Profil</span><strong>{selected.analysis_profile}</strong></div><div><span>Stav</span><strong>{selected.status}</strong></div><div><span>Aktívny</span><strong>{selected.is_active ? "Áno" : "Nie"}</strong></div></div><pre className="config-preview">{JSON.stringify(selected.configuration, null, 2)}</pre></section> : null })()}
                 <TestCreator onCreated={(test) => { setTests((current) => [...current, test]); setEditingTestId(test.id); }} />
-                {editingTestId && (() => { const editing = tests.find((test) => test.id === editingTestId); return editing ? <TestEditor test={editing} onClose={() => setEditingTestId(null)} onSaved={(saved) => { setTests((current) => current.map((item) => item.id === saved.id ? saved : item)); setEditingTestId(null); }} /> : null; })()}
+                {editingTestId && (() => { const editing = tests.find((test) => test.id === editingTestId); if (!editing) return null; const onSaved = (saved: TestDefinition) => { setTests((current) => current.map((item) => item.id === saved.id ? saved : item)); setEditingTestId(null); }; return editing.analysis_profile.toUpperCase().startsWith("SIMPLE") ? <SimpleTestEditor test={editing} onClose={() => setEditingTestId(null)} onSaved={onSaved} /> : <TestEditor test={editing} onClose={() => setEditingTestId(null)} onSaved={onSaved} />; })()}
               </>}
               {activeSection === "measurements" && <>
                 <div className="workbench">
@@ -1024,8 +1024,33 @@ function makeScopeConfiguration(value: Record<string, unknown>): ScopeConfigurat
   return { ...initialScopeConfiguration, ...normalized, difficulty: String(value.difficulty ?? "hard").toLowerCase() } as ScopeConfiguration;
 }
 
+const initialSimpleConfiguration: Record<string, number> = {
+  sampling_hz: 100,
+  action_timeout_s: 5,
+  hold_time_s: 1,
+  countdown_s: 3,
+  zoom_px_per_m: 500,
+  target_zone_radius_px: 100,
+  completion_radius_m: 0.1,
+  target_x_limit_m: 1.5,
+  target_y_max_m: 2,
+  field_width_px: 1500,
+  field_height_px: 1000,
+  mass_kg: 0.8,
+  max_thrust_n: 16,
+  drag_coefficient: 0.3,
+};
+
+function ProgramWordmark({ mode, compact = false }: { mode: "SCOPE" | "SIMPLE"; compact?: boolean }) {
+  return <span className={`program-wordmark ${mode.toLowerCase()} ${compact ? "compact" : ""}`}>
+    <span className="program-symbol">{mode === "SCOPE" ? "S" : "2D"}</span>
+    <span>{mode === "SCOPE" ? "SCoPE" : "SimPLE"}</span>
+  </span>;
+}
+
 function TestCreator({ onCreated }: { onCreated: (test: TestDefinition) => void }) {
   const [name, setName] = useState("");
+  const [mode, setMode] = useState<"SCOPE" | "SIMPLE">("SCOPE");
   const [message, setMessage] = useState("");
   async function create(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -1033,15 +1058,83 @@ function TestCreator({ onCreated }: { onCreated: (test: TestDefinition) => void 
     if (!cleanName) return;
     setMessage("");
     const slug = cleanName.toUpperCase().replace(/[^A-Z0-9]+/g, "_").replace(/^_|_$/g, "").slice(0, 42) || "TEST";
+    const isSimple = mode === "SIMPLE";
     try {
       const created = await request<TestDefinition>("/api/admin/tests", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ test_code: "SCOPE_" + slug, name: cleanName, version: "1.0", analysis_profile: "SCOPE_STEP_RESPONSE_V1", configuration: { ...initialScopeConfiguration } })
+        body: JSON.stringify({
+          test_code: (isSimple ? "SIMPLE_" : "SCOPE_") + slug,
+          name: cleanName,
+          version: "1.0",
+          analysis_profile: isSimple ? "SIMPLE_FLIGHT_V1" : "SCOPE_STEP_RESPONSE_V1",
+          configuration: isSimple ? { ...initialSimpleConfiguration } : { ...initialScopeConfiguration },
+        })
       });
       setName(""); onCreated(created);
     } catch (reason) { setMessage(reason instanceof Error ? reason.message : "Test sa nepodarilo vytvoriť."); }
   }
-  return <section className="test-create-strip"><div><div className="eyebrow">NOVÝ TEST</div><strong>Vytvoriť novú definíciu</strong><p className="muted">Najprv zadaj iba názov. Parametre nastavíš v ďalšom okne.</p></div><form className="test-create-form" onSubmit={create}><input value={name} onChange={(event) => setName(event.target.value)} placeholder="Názov testu" required /><button className="primary compact" type="submit">Vytvoriť</button></form>{message && <span className="notice">{message}</span>}</section>;
+  return <section className="test-create-strip mode-create-panel">
+    <div className="mode-create-heading"><div className="eyebrow">NOVÝ MERACÍ REŽIM</div><strong>Vytvor definíciu testu</strong><p className="muted">Vyber program, zadaj názov a parametre uprav v editore.</p></div>
+    <div className="program-choice-grid" role="group" aria-label="Merací program">
+      {(["SCOPE", "SIMPLE"] as const).map((item) => <button type="button" key={item} onClick={() => setMode(item)} className={mode === item ? "program-choice selected" : "program-choice"}>
+        <ProgramWordmark mode={item} />
+        <span>{item === "SCOPE" ? "Joystick step response" : "Simulovaný let v 2D priestore"}</span>
+        <small>{item === "SCOPE" ? "SCoPE" : "SimPLE"}</small>
+      </button>)}
+    </div>
+    <form className="test-create-form" onSubmit={create}>
+      <input value={name} onChange={(event) => setName(event.target.value)} placeholder="Názov testu" required />
+      <button className="primary compact" type="submit">Vytvoriť</button>
+    </form>
+    {message && <span className="notice">{message}</span>}
+  </section>;
+}
+
+function SimpleTestEditor({ test, onClose, onSaved }: { test: TestDefinition; onClose: () => void; onSaved: (test: TestDefinition) => void }) {
+  const [configuration, setConfiguration] = useState<Record<string, number>>(() => {
+    const values: Record<string, number> = { ...initialSimpleConfiguration };
+    for (const [key, value] of Object.entries(test.configuration)) {
+      if (typeof value === "number" && Number.isFinite(value)) values[key] = value;
+    }
+    return values;
+  });
+  const [message, setMessage] = useState("");
+  const fields: [keyof typeof initialSimpleConfiguration, string, number, number, number][] = [
+    ["sampling_hz", "Vzorkovacia frekvencia [Hz]", 20, 500, 1],
+    ["action_timeout_s", "Limit času na cieľ [s]", 0.1, 60, 0.1],
+    ["hold_time_s", "Výdrž v cieľovej zóne [s]", 0.1, 30, 0.1],
+    ["countdown_s", "Odpočítavanie [s]", 0, 60, 1],
+    ["zoom_px_per_m", "Mierka sveta [px/m]", 50, 2000, 10],
+    ["target_zone_radius_px", "Polomer vykreslenej zóny [px]", 10, 1000, 5],
+    ["completion_radius_m", "Tolerancia zásahu [m]", 0.01, 2, 0.01],
+    ["target_x_limit_m", "Limit cieľa v osi X [m]", 0.1, 20, 0.1],
+    ["target_y_max_m", "Maximálna výška cieľa [m]", 0.1, 20, 0.1],
+    ["field_width_px", "Šírka sveta [px]", 600, 4000, 50],
+    ["field_height_px", "Výška sveta [px]", 400, 3000, 50],
+    ["mass_kg", "Hmotnosť modelu [kg]", 0.1, 10, 0.1],
+    ["max_thrust_n", "Maximálny ťah [N]", 1, 100, 0.5],
+    ["drag_coefficient", "Koeficient odporu", 0, 5, 0.05],
+  ];
+  async function save() {
+    setMessage("");
+    try {
+      const saved = await request<TestDefinition>(`/api/admin/tests/${test.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ configuration }),
+      });
+      onSaved(saved);
+    } catch (reason) {
+      setMessage(reason instanceof Error ? reason.message : "Nastavenia SimPLE sa nepodarilo uložiť.");
+    }
+  }
+  return <div className="editor-backdrop"><section className="test-editor-window simple-editor-window">
+    <header className="editor-header"><div><div className="eyebrow">SIMPLE · NASTAVENIE TESTU</div><h2>{test.name}</h2><p className="muted">{test.test_code} · v{test.version}</p></div><button type="button" className="quiet compact" onClick={onClose}>Zavrieť</button></header>
+    <div className="simple-editor-intro"><ProgramWordmark mode="SIMPLE" /><p>Určuje sa tu letová úloha, mierka 2D sveta a fyzikálne parametre modelu. Joystick a break/reset zostávajú lokálnymi nastaveniami THRUSTu.</p></div>
+    <div className="simple-config-grid">{fields.map(([key, label, min, max, step]) => <label key={key}>{label}<input type="number" min={min} max={max} step={step} value={configuration[key] ?? initialSimpleConfiguration[key]} onChange={(event) => setConfiguration((current) => ({ ...current, [key]: Number(event.target.value) }))} /></label>)}</div>
+    {message && <p className="error">{message}</p>}
+    <div className="simple-editor-actions"><button type="button" className="quiet" onClick={onClose}>Zrušiť</button><button type="button" className="primary" onClick={() => void save()}>Uložiť nastavenia</button></div>
+  </section></div>;
 }
 
 function GimbalPreview({ configuration, onPick }: { configuration: ScopeConfiguration; onPick: (key: string) => void }) {
