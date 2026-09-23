@@ -15,13 +15,14 @@ type PublicMetrics = {
 
 type User = { username: string; role: string; csrf_token: string; email?: string | null; participant_id?: string | null; participant_code?: string | null; first_name?: string | null; last_name?: string | null };
 type Overview = { participant_count: number; measurement_count: number };
-type Participant = { id: string; participant_code: string; is_active: boolean; created_at: string };
+type Participant = { id: string; participant_code: string; is_active: boolean; created_at: string; birth_date?: string | null; pilot_experience?: string | null; flight_hours_range?: string | null; pilot_certificate?: string | null; primary_uav_type?: string | null; simulator_experience?: string | null; self_rated_skill?: number | null };
 type AdminAccount = { id: string; username: string; email: string | null; first_name: string | null; last_name: string | null; role: string; effective_role: string; is_active: boolean; participant_id: string | null; participant_code: string | null; created_at: string };
 type TestDefinition = { id: string; test_code: string; name: string; version: string; status: string; analysis_profile: string; configuration: Record<string, unknown>; is_active: boolean };
 type Measurement = { id: string; participant_id: string; test_definition_id: string | null; test_type: string; status: string; started_at: string; source_file_name: string | null; raw_sha256: string | null; raw_size_bytes: number | null; analysis_data: Record<string, unknown> | null };
 type ParticipantDetail = { participant: Participant; measurements: { id: string; test_type: string; status: string; started_at: string; raw_data_available?: boolean }[] };
 type AdminSection = "overview" | "participants" | "tests" | "measurements";
 type StudentMeasurement = { id: string; test_type: string; status: string; started_at: string; analysis_data: Record<string, unknown> | null };
+type StudentProfile = { birth_date: string | null; pilot_experience: string | null; flight_hours_range: string | null; pilot_certificate: string | null; primary_uav_type: string | null; simulator_experience: string | null; self_rated_skill: number | null };
 type StudentComparison = { available: boolean; minimum_group_size: number; cohort_participant_count: number; own_measurement_count: number; own_average: Record<string, number>; cohort_average: Record<string, number> };
 
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
@@ -102,7 +103,8 @@ export function App() {
     if (user && user.role !== "student") {
       request<Overview>("/api/admin/overview").then(setOverview).catch(() => setOverview(null));
       request<Participant[]>("/api/admin/participants").then(setParticipants).catch(() => setParticipants([]));
-      request<AdminAccount[]>("/api/admin/users").then(setAdminAccounts).catch((reason) => setAccountMessage(reason instanceof Error ? reason.message : "Používateľov sa nepodarilo načítať."));
+      if (user.role === "admin" || user.role === "superadmin") request<AdminAccount[]>("/api/admin/users").then(setAdminAccounts).catch((reason) => setAccountMessage(reason instanceof Error ? reason.message : "Používateľov sa nepodarilo načítať."));
+      else setAdminAccounts([]);
       request<TestDefinition[]>("/api/admin/tests").then(setTests).catch(() => setTests([]));
       request<Measurement[]>("/api/admin/measurements").then(setMeasurements).catch(() => setMeasurements([]));
     }
@@ -191,6 +193,19 @@ export function App() {
     setSelectedMeasurementIds((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
   }
 
+  async function deleteTestVersion(test: TestDefinition) {
+    if (!user || user.role !== "superadmin") return;
+    if (!window.confirm("Trvalo odstrániť verziu " + test.test_code + " v" + test.version + "? Verziu s meraniami nebude možné zmazať.")) return;
+    try {
+      await request<void>("/api/admin/tests/" + test.id, { method: "DELETE", headers: { "X-CSRF-Token": user.csrf_token } });
+      setTests((current) => current.filter((item) => item.id !== test.id));
+      if (selectedTestId === test.id) setSelectedTestId(null);
+      setTestMessage("Verzia " + test.test_code + " v" + test.version + " bola odstránená.");
+    } catch (reason) {
+      setTestMessage(reason instanceof Error ? reason.message : "Verziu testu sa nepodarilo odstrániť.");
+    }
+  }
+
   async function deleteSelectedMeasurements() {
     if (!selectedMeasurementIds.length) return;
     if (!window.confirm(`Naozaj chceš odstrániť ${selectedMeasurementIds.length} vybraných meraní? Odstránia sa aj archivované raw súbory.`)) return;
@@ -241,8 +256,15 @@ export function App() {
           email: data.get("email"), first_name: data.get("first_name"), last_name: data.get("last_name"),
           password: data.get("password"), research_consent: data.get("research_consent") === "on",
           gdpr_consent: data.get("gdpr_consent") === "on",
-          consent_version: consentTexts?.research.version || "research-v2",
-          gdpr_consent_version: consentTexts?.gdpr.version || "gdpr-v1",
+          birth_date: data.get("birth_date") || null,
+          pilot_experience: data.get("pilot_experience") || null,
+          flight_hours_range: data.get("flight_hours_range") || null,
+          pilot_certificate: data.get("pilot_certificate") || null,
+          primary_uav_type: data.get("primary_uav_type") || null,
+          simulator_experience: data.get("simulator_experience") || null,
+          self_rated_skill: data.get("self_rated_skill") ? Number(data.get("self_rated_skill")) : null,
+          consent_version: consentTexts?.research.version || "research-v3",
+          gdpr_consent_version: consentTexts?.gdpr.version || "gdpr-v2",
         }),
       });
       setUser(signedIn); setRegisterOpen(false);
@@ -352,13 +374,16 @@ export function App() {
   async function refreshAccounts() {
     setAccountMessage("");
     try {
-      const [accounts, participants] = await Promise.all([
-        request<AdminAccount[]>("/api/admin/users"),
-        request<Participant[]>("/api/admin/participants"),
-      ]);
-      setAdminAccounts(accounts);
+      const participants = await request<Participant[]>("/api/admin/participants");
       setParticipants(participants);
-      setAccountMessage(`Načítaných ${accounts.length} účtov a ${participants.length} účastníkov.`);
+      if (user?.role === "admin" || user?.role === "superadmin") {
+        const accounts = await request<AdminAccount[]>("/api/admin/users");
+        setAdminAccounts(accounts);
+        setAccountMessage(`Načítaných ${accounts.length} účtov a ${participants.length} účastníkov.`);
+      } else {
+        setAdminAccounts([]);
+        setAccountMessage(`Načítaných ${participants.length} Participant ID.`);
+      }
     } catch (reason) {
       setAccountMessage(reason instanceof Error ? reason.message : "Údaje sa nepodarilo obnoviť.");
     }
@@ -429,7 +454,7 @@ export function App() {
               </>}
               {activeSection === "participants" && <>
                 <section className="browser-panel">
-                  <div className="browser-header"><div><div className="eyebrow">ÚČASTNÍCI A ÚČTY</div><h2>Spoločná evidencia účastníkov a kont</h2><p className="muted">Participant ID, používateľské konto a rola sú zobrazené spolu. Účty bez Participant ID sú súčasťou toho istého zoznamu.</p></div><div className="actions"><button className="quiet compact" onClick={() => void refreshAccounts()}>Obnoviť</button><button className="primary compact" onClick={() => document.getElementById("new-participant-code")?.focus()}>Nové anonymné ID</button></div></div>
+                  <div className="browser-header"><div><div className="eyebrow">ÚČASTNÍCI A ÚČTY</div><h2>Spoločná evidencia účastníkov a kont</h2><p className="muted">Participant ID, používateľské konto a rola sú zobrazené spolu. Účty bez Participant ID sú súčasťou toho istého zoznamu.</p></div><div className="actions"><button className="quiet compact" onClick={() => void refreshAccounts()}>Obnoviť</button>{(user.role === "admin" || user.role === "superadmin") && <button className="primary compact" onClick={() => document.getElementById("new-participant-code")?.focus()}>Nové anonymné ID</button>}</div></div>
                   {accountMessage && <p className="notice">{accountMessage}</p>}
                   <div className="browser-toolbar"><input placeholder="Hľadať ID, meno, e-mail alebo login…" value={participantSearch} onChange={(event) => setParticipantSearch(event.target.value)} /><select value={participantSort} onChange={(event) => setParticipantSort(event.target.value as typeof participantSort)}><option value="code">Zoradiť podľa ID</option><option value="first">Najstarší prvý test</option><option value="last">Najnovší posledný test</option><option value="count">Počet meraní</option></select></div>
                   <div className="data-table participant-table"><div className="data-table-head"><span>Participant ID</span><span>Konto / rola</span><span>Prvé meranie</span><span>Posledné meranie</span><span>Meraní</span><span>Akcie</span></div>
@@ -454,7 +479,7 @@ export function App() {
                   </div>
                   {filteredParticipants().length === 0 && visibleAccountOnlyRows().length === 0 && <div className="empty-list"><h2>Žiadni účastníci</h2><p className="muted">Filteru nezodpovedá žiadny záznam.</p></div>}
                 </section>
-                <section className="participant-create-strip"><div><div className="eyebrow">NOVÝ ÚČASTNÍK</div><strong>Vytvoriť anonymné ID</strong></div><form className="inline-create-form" onSubmit={createParticipant}><input id="new-participant-code" value={participantCode} onChange={(event) => setParticipantCode(event.target.value.toUpperCase())} maxLength={5} pattern="[A-Za-z0-9]{5}" placeholder="ABCDE" required /><button type="button" className="quiet compact" onClick={generateParticipantCode}>Generovať</button><button type="submit" className="primary compact">Vytvoriť</button></form>{participantMessage && <span className="notice">{participantMessage}</span>}</section>
+                {(user.role === "admin" || user.role === "superadmin") && <section className="participant-create-strip"><div><div className="eyebrow">NOVÝ ÚČASTNÍK</div><strong>Vytvoriť anonymné ID</strong></div><form className="inline-create-form" onSubmit={createParticipant}><input id="new-participant-code" value={participantCode} onChange={(event) => setParticipantCode(event.target.value.toUpperCase())} maxLength={5} pattern="[A-Za-z0-9]{5}" placeholder="ABCDE" required /><button type="button" className="quiet compact" onClick={generateParticipantCode}>Generovať</button><button type="submit" className="primary compact">Vytvoriť</button></form>{participantMessage && <span className="notice">{participantMessage}</span>}</section>}
                 {selectedParticipant && participantDialog && (() => {
                   const participant = selectedParticipant.participant;
                   const linkedAccount = adminAccounts.find((item) => item.participant_id === participant.id) || null;
@@ -474,7 +499,7 @@ export function App() {
                       <div><span>Prepojené konto</span><strong>{linkedAccount ? [linkedAccount.first_name, linkedAccount.last_name].filter(Boolean).join(" ") || linkedAccount.username : "Bez konta"}</strong></div>
                       <div><span>E-mail / rola</span><strong>{linkedAccount ? `${linkedAccount.email || linkedAccount.username} · ${linkedAccount.effective_role}` : "—"}</strong></div>
                     </div>
-                    {rows.length > 0 && <p className="muted">Súhrn: {new Set(rows.map((item) => item.test_type)).size} typov testov, {rows.filter((item) => item.status === "completed" || item.status === "recorded").length} dokončených alebo zaznamenaných meraní.</p>}
+                    {rows.length > 0 && <p className="muted">Súhrn: {new Set(rows.map((item) => item.test_type)).size} typov testov, {rows.filter((item) => item.status === "completed" || item.status === "recorded").length} dokončených alebo zaznamenaných meraní.</p>}{(user?.role === "admin" || user?.role === "superadmin") && <ParticipantProfileEditor participant={participant} csrfToken={user.csrf_token} onSaved={(updated) => { setParticipants((items) => items.map((item) => item.id === updated.id ? updated : item)); setSelectedParticipant((current) => current ? { ...current, participant: updated } : current); setAccountMessage("Profil účastníka bol uložený."); }} />}
                     {user?.role === "superadmin" && linkedAccount && linkedAccount.effective_role !== "superadmin" && <section className="account-management-panel">
                       <div><div className="eyebrow">SPRÁVA KONTA</div><strong>{linkedAccount.email || linkedAccount.username}</strong><small>Rola, prístup a údaje konta</small></div>
                       <div className="account-management-controls">
@@ -507,7 +532,7 @@ export function App() {
                 <section className="browser-panel">
                   <div className="browser-header"><div><div className="eyebrow">KATALÓG TESTOV</div><h2>Testy a konfigurácie</h2><p className="muted">Každá verzia testu je samostatná, nemenná konfigurácia pre THRUST.</p></div></div>
                   <div className="browser-toolbar"><input placeholder="Hľadať kód, názov alebo profil…" value={testSearch} onChange={(event) => setTestSearch(event.target.value)} /></div>
-                  <div className="data-table test-table"><div className="data-table-head"><span>Kód</span><span>Názov</span><span>Verzia</span><span>Profil</span><span>Stav / akcie</span></div>{filteredTests().map((test) => <div className="data-table-row" key={test.id}><strong>{test.test_code}</strong><span>{test.name}</span><span>v{test.version}</span><span>{test.analysis_profile}</span><span className="row-actions"><span>{test.status}</span><button className="quiet compact" onClick={() => setSelectedTestId(test.id)}>Otvoriť</button><button className="quiet compact" onClick={() => setEditingTestId(test.id)}>Editovať</button></span></div>)}</div>
+                  <div className="data-table test-table"><div className="data-table-head"><span>Kód</span><span>Názov</span><span>Verzia</span><span>Profil</span><span>Stav / akcie</span></div>{filteredTests().map((test) => <div className="data-table-row" key={test.id}><strong>{test.test_code}</strong><span>{test.name}</span><span>v{test.version}</span><span>{test.analysis_profile}</span><span className="row-actions"><span>{test.status}</span><button className="quiet compact" onClick={() => setSelectedTestId(test.id)}>Otvoriť</button><button className="quiet compact" onClick={() => setEditingTestId(test.id)}>Editovať</button>{user.role === "superadmin" && <button className="quiet compact danger" onClick={() => void deleteTestVersion(test)}>Zmazať</button>}</span></div>)}</div>
                   {filteredTests().length === 0 && <div className="empty-list"><h2>Žiadne testy</h2><p className="muted">Filteru nezodpovedá žiadna verzia testu.</p></div>}
                 </section>
                 {selectedTestId && (() => { const selected = tests.find((test) => test.id === selectedTestId); return selected ? <section className={selectedTestId ? "browser-detail detail-modal-open" : "browser-detail detail-modal-closed"}><div className="detail-header"><div><div className="eyebrow">KONFIGURÁCIA TESTU</div><h2>{selected.name} · v{selected.version}</h2></div><button className="quiet compact" onClick={() => setSelectedTestId(null)}>Zavrieť detail</button></div><div className="detail-grid"><div><span>Kód</span><strong>{selected.test_code}</strong></div><div><span>Profil</span><strong>{selected.analysis_profile}</strong></div><div><span>Stav</span><strong>{selected.status}</strong></div><div><span>Aktívny</span><strong>{selected.is_active ? "Áno" : "Nie"}</strong></div></div><pre className="config-preview">{JSON.stringify(selected.configuration, null, 2)}</pre></section> : null })()}
@@ -525,7 +550,7 @@ export function App() {
                       <input type="date" value={measurementDateFrom} onChange={(event) => setMeasurementDateFrom(event.target.value)} aria-label="Od dátumu" />
                       <input type="date" value={measurementDateTo} onChange={(event) => setMeasurementDateTo(event.target.value)} aria-label="Do dátumu" />
                     </div>
-                    <div className="selection-toolbar"><label><input type="checkbox" checked={filteredMeasurements().length > 0 && filteredMeasurements().every((item) => selectedMeasurementIds.includes(item.id))} onChange={() => setSelectedMeasurementIds(filteredMeasurements().every((item) => selectedMeasurementIds.includes(item.id)) ? [] : filteredMeasurements().map((item) => item.id))} /> Vybrať všetky</label><button className="quiet compact danger" disabled={!selectedMeasurementIds.length} onClick={deleteSelectedMeasurements}>Odstrániť vybrané</button></div>
+                    <div className="selection-toolbar"><label><input type="checkbox" checked={filteredMeasurements().length > 0 && filteredMeasurements().every((item) => selectedMeasurementIds.includes(item.id))} onChange={() => setSelectedMeasurementIds(filteredMeasurements().every((item) => selectedMeasurementIds.includes(item.id)) ? [] : filteredMeasurements().map((item) => item.id))} /> Vybrať všetky</label>{user.role === "superadmin" && <button className="quiet compact danger" disabled={!selectedMeasurementIds.length} onClick={deleteSelectedMeasurements}>Odstrániť vybrané</button>}</div>
                     <div className="measurement-list">{filteredMeasurements().map((measurement) => <button className={selectedMeasurementId === measurement.id ? "measurement-item selected" : "measurement-item"} key={measurement.id} onClick={() => setSelectedMeasurementId(measurement.id)}><input type="checkbox" checked={selectedMeasurementIds.includes(measurement.id)} onChange={(event) => { event.stopPropagation(); toggleMeasurementSelection(measurement.id); }} onClick={(event) => event.stopPropagation()} /><span className="measurement-main"><strong>{participantCodeFor(measurement.participant_id)}</strong><span>{new Date(measurement.started_at).toLocaleDateString("sk-SK")} · {measurement.test_type} · {measurement.source_file_name ?? "raw"}</span></span><span className="measurement-status">{measurement.raw_sha256 ? "Archivované" : "Bez raw dát"}</span></button>)}</div>
                     {filteredMeasurements().length === 0 && <p className="muted empty-list">Filteru nezodpovedajú žiadne archivované merania.</p>}
                   </section>
@@ -558,7 +583,7 @@ export function App() {
       )}
 
       {loginOpen && <div className="backdrop" onMouseDown={() => setLoginOpen(false)}><form className="login" onSubmit={login} onMouseDown={(e) => e.stopPropagation()}><div className="eyebrow">CHRÁNENÝ PRÍSTUP</div><h2>Prihlásenie</h2><label>E-mail, Participant ID alebo username<input name="identifier" autoComplete="username" required autoFocus /></label><label>Heslo<input name="password" type="password" autoComplete="current-password" required /></label>{error && <p className="error">{error}</p>}<div className="actions"><button type="button" className="quiet" onClick={() => setLoginOpen(false)}>Zrušiť</button><button type="submit" className="primary">Prihlásiť</button></div></form></div>} 
-      {registerOpen && <div className="backdrop" onMouseDown={() => setRegisterOpen(false)}><form className="login register-form" onSubmit={register} onMouseDown={(e) => e.stopPropagation()}><div className="eyebrow">NOVÝ ÚČET</div><h2>Vytvoriť účet</h2><p className="muted">Účet dostane Participant ID a základnú rolu študenta. Oprávnenia môže zvýšiť iba superadmin.</p><div className="form-grid"><label>Meno<input name="first_name" required /></label><label>Priezvisko<input name="last_name" required /></label></div><label>E-mail<input name="email" type="email" autoComplete="email" required /></label><div className="form-grid"><label>Heslo<input name="password" type="password" minLength={10} autoComplete="new-password" required /></label><label>Zopakovať heslo<input name="password_confirmation" type="password" minLength={10} autoComplete="new-password" required /></label></div><label className="consent"><input name="research_consent" type="checkbox" required /> <span>Súhlasím s použitím pseudonymizovaných údajov na výskumné účely. <a href="#consent-research" onClick={(event) => { event.preventDefault(); event.stopPropagation(); setConsentDialog("research"); }}>Zobraziť text výskumného súhlasu</a></span></label><label className="consent"><input name="gdpr_consent" type="checkbox" required /> <span>Súhlasím so spracovaním osobných údajov pre vytvorenie a správu účtu. <a href="#consent-gdpr" onClick={(event) => { event.preventDefault(); event.stopPropagation(); setConsentDialog("gdpr"); }}>Zobraziť informácie a GDPR súhlas</a></span></label>{error && <p className="error">{error}</p>}<div className="actions"><button type="button" className="quiet" onClick={() => setRegisterOpen(false)}>Zrušiť</button><button type="submit" className="primary" disabled={!consentTexts}>Vytvoriť účet</button></div></form></div>}
+      {registerOpen && <div className="backdrop" onMouseDown={() => setRegisterOpen(false)}><form className="login register-form" onSubmit={register} onMouseDown={(e) => e.stopPropagation()}><div className="eyebrow">NOVÝ ÚČET</div><h2>Vytvoriť účet</h2><p className="muted">Účet dostane Participant ID a základnú rolu študenta. Oprávnenia môže zvýšiť iba superadmin.</p><div className="form-grid"><label>Meno<input name="first_name" required /></label><label>Priezvisko<input name="last_name" required /></label></div><label>E-mail<input name="email" type="email" autoComplete="email" required /></label><div className="form-grid"><label>Heslo<input name="password" type="password" minLength={10} autoComplete="new-password" required /></label><label>Zopakovať heslo<input name="password_confirmation" type="password" minLength={10} autoComplete="new-password" required /></label></div><section className="profile-questionnaire"><div className="eyebrow">PROFIL PILOTA · NEPOVINNÉ</div><p className="muted">Tieto údaje môžeš vynechať. Slúžia na štatistické vyhodnotenie skúseností s pilotovaním.</p><div className="form-grid"><label>Dátum narodenia<input name="birth_date" type="date" /></label><label>Skúsenosť s pilotovaním dronu<select name="pilot_experience" defaultValue=""><option value="">Nevyplnené</option><option value="none">Žiadna</option><option value="under_1_year">Menej ako 1 rok</option><option value="1_3_years">1–3 roky</option><option value="3_5_years">3–5 rokov</option><option value="over_5_years">Viac ako 5 rokov</option></select></label></div><div className="form-grid"><label>Odhadovaný počet letových hodín<select name="flight_hours_range" defaultValue=""><option value="">Nevyplnené</option><option value="0">0</option><option value="under_10">Menej ako 10</option><option value="10_50">10–50</option><option value="51_200">51–200</option><option value="201_500">201–500</option><option value="over_500">Viac ako 500</option></select></label><label>Osvedčenie / licencia<select name="pilot_certificate" defaultValue=""><option value="">Nevyplnené</option><option value="none">Žiadne</option><option value="a1_a3">A1/A3</option><option value="a2">A2</option><option value="sts">STS</option><option value="other">Iné</option></select></label></div><div className="form-grid"><label>Najčastejší typ UAV<select name="primary_uav_type" defaultValue=""><option value="">Nevyplnené</option><option value="multirotor">Multikoptéra</option><option value="fixed_wing">Pevné krídlo</option><option value="helicopter">Vrtuľník</option><option value="vtol">VTOL</option><option value="other">Iný / neviem</option></select></label><label>Skúsenosť s leteckým simulátorom<select name="simulator_experience" defaultValue=""><option value="">Nevyplnené</option><option value="none">Žiadna</option><option value="under_10">Menej ako 10 hodín</option><option value="10_50">10–50 hodín</option><option value="51_200">51–200 hodín</option><option value="over_200">Viac ako 200 hodín</option></select></label></div><label>Sebahodnotenie pilotných zručností (1 = začiatočník, 5 = veľmi skúsený)<select name="self_rated_skill" defaultValue=""><option value="">Nevyplnené</option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option></select></label></section><label className="consent"><input name="research_consent" type="checkbox" required /> <span>Súhlasím s použitím pseudonymizovaných údajov na výskumné účely. <a href="#consent-research" onClick={(event) => { event.preventDefault(); event.stopPropagation(); setConsentDialog("research"); }}>Zobraziť text výskumného súhlasu</a></span></label><label className="consent"><input name="gdpr_consent" type="checkbox" required /> <span>Súhlasím so spracovaním osobných údajov pre vytvorenie a správu účtu. <a href="#consent-gdpr" onClick={(event) => { event.preventDefault(); event.stopPropagation(); setConsentDialog("gdpr"); }}>Zobraziť informácie a GDPR súhlas</a></span></label>{error && <p className="error">{error}</p>}<div className="actions"><button type="button" className="quiet" onClick={() => setRegisterOpen(false)}>Zrušiť</button><button type="submit" className="primary" disabled={!consentTexts}>Vytvoriť účet</button></div></form></div>}
       {consentDialog && consentTexts && <ConsentTextDialog kind={consentDialog} document={activeConsentDocument || consentTexts[consentDialog]} onClose={() => { setConsentDialog(null); setActiveConsentDocument(null); }} />}
     </main>
   );
@@ -795,6 +820,7 @@ function Metric({ label, value }: { label: string; value: string | number }) {
 }
 
 function StudentPortal({ user, onLogout }: { user: User; onLogout: () => Promise<void> }) {
+  const [profile, setProfile] = useState<StudentProfile | null>(null);
   const [measurements, setMeasurements] = useState<StudentMeasurement[]>([]);
   const [comparison, setComparison] = useState<StudentComparison | null>(null);
   const [consents, setConsents] = useState<ConsentStatuses | null>(null);
@@ -825,7 +851,9 @@ function StudentPortal({ user, onLogout }: { user: User; onLogout: () => Promise
       request<StudentComparison>("/api/student/comparison"),
       request<ConsentStatuses>("/api/student/consents"),
       request<ConsentDocuments>("/api/public/consent-texts"),
-    ]).then(([own, group, status, documents]) => {
+      request<StudentProfile>("/api/student/profile"),
+    ]).then(([own, group, status, documents, studentProfile]) => {
+      setProfile(studentProfile);
       setMeasurements(own);
       setComparison(group);
       setConsents(status);
@@ -840,7 +868,7 @@ function StudentPortal({ user, onLogout }: { user: User; onLogout: () => Promise
       <h1>Ahoj, {user.first_name || user.username}.</h1>
       <p className="lead">Tvoje účastnícke ID: <strong>{user.participant_code || "—"}</strong></p>
       <div className="stats"><Metric label="Moje merania" value={measurements.length} /><Metric label="Skupina" value={comparison?.cohort_participant_count ?? "—"} /><Metric label="Porovnanie" value={comparison?.available ? "dostupné" : "čaká na limit"} /></div>
-      {error && <p className="error">{error}</p>}
+      {error && <p className="error">{error}</p>}<section className="panel"><div className="eyebrow">PROFIL PILOTA</div><h2>Údaje z registrácie</h2><p className="muted">Nepovinné údaje, ktoré si uviedol pri registrácii.</p><div className="detail-grid"><div><span>Dátum narodenia</span><strong>{profile?.birth_date || "Neuvedené"}</strong></div><div><span>Skúsenosť s pilotovaním</span><strong>{profileLabel(profile?.pilot_experience)}</strong></div><div><span>Letové hodiny</span><strong>{profileLabel(profile?.flight_hours_range)}</strong></div><div><span>Osvedčenie</span><strong>{profileLabel(profile?.pilot_certificate)}</strong></div><div><span>Typ UAV</span><strong>{profileLabel(profile?.primary_uav_type)}</strong></div><div><span>Simulátor</span><strong>{profileLabel(profile?.simulator_experience)}</strong></div><div><span>Sebahodnotenie zručností</span><strong>{profile?.self_rated_skill ?? "Neuvedené"}</strong></div></div></section>
       <section className="panel">
         <div className="eyebrow">VÝSLEDKY</div><h2>Moje merania</h2>
         {measurements.length ? <div className="table-wrap"><table><thead><tr><th>Test</th><th>Stav</th><th>Dátum</th></tr></thead><tbody>{measurements.map((m) => <tr key={m.id}><td>{m.test_type}</td><td>{m.status}</td><td>{new Date(m.started_at).toLocaleString("sk-SK")}</td></tr>)}</tbody></table></div> : <p className="muted">Zatiaľ nemáš uložené žiadne meranie.</p>}
@@ -871,5 +899,51 @@ function StudentPortal({ user, onLogout }: { user: User; onLogout: () => Promise
     </section>
     {consentDialog && consentTexts && <ConsentTextDialog kind={consentDialog} document={activeConsentDocument || consentTexts[consentDialog]} onClose={() => { setConsentDialog(null); setActiveConsentDocument(null); }} />}
   </main>;
+}
+function ParticipantProfileEditor({ participant, csrfToken, onSaved }: { participant: Participant; csrfToken: string; onSaved: (updated: Participant) => void }) {
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("");
+  async function save(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSaving(true);
+    setMessage("");
+    const form = new FormData(event.currentTarget);
+    try {
+      const updated = await request<Participant>("/api/admin/participants/" + participant.id, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken },
+        body: JSON.stringify({
+          is_active: form.get("is_active") === "on",
+          birth_date: form.get("birth_date") || null,
+          pilot_experience: form.get("pilot_experience") || null,
+          flight_hours_range: form.get("flight_hours_range") || null,
+          pilot_certificate: form.get("pilot_certificate") || null,
+          primary_uav_type: form.get("primary_uav_type") || null,
+          simulator_experience: form.get("simulator_experience") || null,
+          self_rated_skill: form.get("self_rated_skill") ? Number(form.get("self_rated_skill")) : null,
+        }),
+      });
+      onSaved(updated);
+      setMessage("Zmeny uložené.");
+    } catch (reason) {
+      setMessage(reason instanceof Error ? reason.message : "Profil sa nepodarilo uložiť.");
+    } finally {
+      setSaving(false);
+    }
+  }
+  return <form className="participant-profile-editor" onSubmit={save}>
+    <div><div className="eyebrow">PROFIL ÚČASTNÍKA</div><h3>Parametre a skúsenosti</h3><p className="muted">Editovať môžu admin a superadmin.</p></div>
+    <label className="checkbox-line"><input name="is_active" type="checkbox" defaultChecked={participant.is_active} /> Aktívny účastník</label>
+    <div className="form-grid"><label>Dátum narodenia<input name="birth_date" type="date" defaultValue={participant.birth_date ?? ""} /></label><label>Skúsenosť s pilotovaním<select name="pilot_experience" defaultValue={participant.pilot_experience ?? ""}><option value="">Nevyplnené</option><option value="none">Žiadna</option><option value="under_1_year">Menej ako 1 rok</option><option value="1_3_years">1–3 roky</option><option value="3_5_years">3–5 rokov</option><option value="over_5_years">Viac ako 5 rokov</option></select></label></div>
+    <div className="form-grid"><label>Letové hodiny<select name="flight_hours_range" defaultValue={participant.flight_hours_range ?? ""}><option value="">Nevyplnené</option><option value="0">0</option><option value="under_10">Menej ako 10</option><option value="10_50">10–50</option><option value="51_200">51–200</option><option value="201_500">201–500</option><option value="over_500">Viac ako 500</option></select></label><label>Osvedčenie<select name="pilot_certificate" defaultValue={participant.pilot_certificate ?? ""}><option value="">Nevyplnené</option><option value="none">Žiadne</option><option value="a1_a3">A1/A3</option><option value="a2">A2</option><option value="sts">STS</option><option value="other">Iné</option></select></label></div>
+    <div className="form-grid"><label>Typ UAV<select name="primary_uav_type" defaultValue={participant.primary_uav_type ?? ""}><option value="">Nevyplnené</option><option value="multirotor">Multikoptéra</option><option value="fixed_wing">Pevné krídlo</option><option value="helicopter">Vrtuľník</option><option value="vtol">VTOL</option><option value="other">Iný / neviem</option></select></label><label>Skúsenosť so simulátorom<select name="simulator_experience" defaultValue={participant.simulator_experience ?? ""}><option value="">Nevyplnené</option><option value="none">Žiadna</option><option value="under_10">Menej ako 10 hodín</option><option value="10_50">10–50 hodín</option><option value="51_200">51–200 hodín</option><option value="over_200">Viac ako 200 hodín</option></select></label></div>
+    <label>Sebahodnotenie zručností<select name="self_rated_skill" defaultValue={participant.self_rated_skill?.toString() ?? ""}><option value="">Nevyplnené</option>{[1, 2, 3, 4, 5].map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
+    <div className="actions"><span className="muted">{message}</span><button className="primary compact" disabled={saving}>{saving ? "Ukladám…" : "Uložiť profil"}</button></div>
+  </form>;
+}
+
+function profileLabel(value?: string | null) {
+  const labels: Record<string, string> = { none: "Žiadna", under_1_year: "Menej ako 1 rok", "1_3_years": "1–3 roky", "3_5_years": "3–5 rokov", over_5_years: "Viac ako 5 rokov", "0": "0", under_10: "Menej ako 10", "10_50": "10–50", "51_200": "51–200", "201_500": "201–500", over_500: "Viac ako 500", over_200: "Viac ako 200", a1_a3: "A1/A3", a2: "A2", sts: "STS", other: "Iné", multirotor: "Multikoptéra", fixed_wing: "Pevné krídlo", helicopter: "Vrtuľník", vtol: "VTOL" };
+  return value ? labels[value] ?? value : "Neuvedené";
 }
 function formatMetricMap(values: Record<string, number>) { return Object.entries(values).map(([key, value]) => `${key}: ${value.toFixed(2)}`).join(" · ") || "bez dostupných metrík"; }
