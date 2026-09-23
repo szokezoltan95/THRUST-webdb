@@ -15,6 +15,8 @@ class RegistrationRequest(BaseModel):
     first_name: str = Field(min_length=1, max_length=120)
     last_name: str = Field(min_length=1, max_length=120)
     research_consent: bool
+    gdpr_consent: bool
+    gdpr_consent_version: str = Field(default="gdpr-v1", min_length=1, max_length=30)
     consent_version: str = Field(default="research-v1", min_length=1, max_length=30)
 
     @field_validator("first_name", "last_name")
