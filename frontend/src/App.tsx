@@ -447,7 +447,7 @@ export function App() {
                       <div><span>E-mail / rola</span><strong>{linkedAccount ? `${linkedAccount.email || linkedAccount.username} · ${linkedAccount.effective_role}` : "—"}</strong></div>
                     </div>
                     {rows.length > 0 && <p className="muted">Súhrn: {new Set(rows.map((item) => item.test_type)).size} typov testov, {rows.filter((item) => item.status === "completed" || item.status === "recorded").length} dokončených alebo zaznamenaných meraní.</p>}
-                    {resultMeasurement?.analysis_data?.normalized_step_response && <ResponseMetrics data={resultMeasurement.analysis_data.normalized_step_response} />}
+                    {Boolean(resultMeasurement?.analysis_data?.normalized_step_response) && <ResponseMetrics data={resultMeasurement?.analysis_data?.normalized_step_response} />}
                   </section>;
                   return <section className="browser-detail detail-modal-open participant-detail-modal">
                     <div className="detail-header"><div><div className="eyebrow">MERANIA ÚČASTNÍKA</div><h2>{participant.participant_code}</h2></div><button className="quiet compact" onClick={() => setParticipantDialog(null)}>Zavrieť</button></div>
