@@ -141,8 +141,6 @@ async def register_researcher(
     expected_key = settings.researcher_registration_key
     if not expected_key:
         raise HTTPException(status_code=503, detail="Registrácia výskumníkov nie je na serveri nakonfigurovaná.")
-    if len(expected_key) < 32:
-        raise HTTPException(status_code=503, detail="Pozývací kľúč výskumníka musí mať aspoň 32 znakov.")
     if not hmac.compare_digest(payload.registration_key, expected_key):
         raise HTTPException(status_code=403, detail="Pozývací kľúč výskumníka nie je platný.")
 
