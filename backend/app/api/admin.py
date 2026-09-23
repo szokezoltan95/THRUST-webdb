@@ -168,6 +168,66 @@ async def anonymize_account(
     await db.commit()
 
 
+@router.delete("/participants/{participant_id}/purge", status_code=status.HTTP_204_NO_CONTENT)
+async def permanently_delete_participant(
+    participant_id: str,
+    auth: AuthContext = Depends(require_superadmin_csrf),
+    db: AsyncSession = Depends(get_db),
+) -> None:
+    participant = await db.get(Participant, participant_id)
+    if participant is None:
+        raise HTTPException(status_code=404, detail="Účastník neexistuje.")
+
+    linked_account = await db.scalar(select(AdminUser).where(AdminUser.participant_id == participant.id))
+    if linked_account is not None and (
+        linked_account.id == auth.user.id or effective_role(linked_account) == "superadmin"
+    ):
+        raise HTTPException(status_code=409, detail="Superadmin účet alebo jeho Participant ID nemožno úplne odstrániť.")
+
+    measurements = list(await db.scalars(
+        select(Measurement).where(Measurement.participant_id == participant.id)
+    ))
+    storage_root = Path(settings.measurement_storage_path).resolve()
+    raw_paths: list[Path] = []
+    for measurement in measurements:
+        if not measurement.raw_storage_path:
+            continue
+        raw_path = Path(measurement.raw_storage_path).resolve()
+        try:
+            raw_path.relative_to(storage_root)
+        except ValueError as exc:
+            raise HTTPException(status_code=500, detail="Raw súbor je mimo úložiska meraní; vymazanie bolo zastavené.") from exc
+        raw_paths.append(raw_path)
+
+    try:
+        for raw_path in raw_paths:
+            raw_path.unlink(missing_ok=True)
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail="Raw súbor merania sa nepodarilo odstrániť.") from exc
+
+    await db.execute(delete(Measurement).where(Measurement.participant_id == participant.id))
+    await db.execute(delete(AdminUser).where(AdminUser.participant_id == participant.id))
+    await db.delete(participant)
+    await db.commit()
+
+
+@router.delete("/users/{user_id}/purge", status_code=status.HTTP_204_NO_CONTENT)
+async def permanently_delete_account(
+    user_id: str,
+    auth: AuthContext = Depends(require_superadmin_csrf),
+    db: AsyncSession = Depends(get_db),
+) -> None:
+    target = await db.get(AdminUser, user_id)
+    if target is None:
+        raise HTTPException(status_code=404, detail="Používateľ neexistuje.")
+    if target.id == auth.user.id or effective_role(target) == "superadmin":
+        raise HTTPException(status_code=409, detail="Superadmin účet nemožno úplne odstrániť.")
+    if target.participant_id:
+        raise HTTPException(status_code=409, detail="Účet je prepojený s účastníkom; úplné vymazanie spusti z detailu účastníka.")
+    await db.delete(target)
+    await db.commit()
+
+
 @router.get("/students", response_model=list[RegisteredStudentResponse])
 async def list_registered_students(
     auth: AuthContext = Depends(require_admin),
