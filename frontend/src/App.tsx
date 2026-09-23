@@ -305,6 +305,24 @@ export function App() {
     setOverview(null);
   }
 
+  async function refreshAccounts() {
+    setAccountMessage("");
+    try {
+      const [accounts, students, participants] = await Promise.all([
+        request<AdminAccount[]>("/api/admin/users"),
+        request<RegisteredStudent[]>("/api/admin/students"),
+        request<Participant[]>("/api/admin/participants"),
+      ]);
+      setAdminAccounts(accounts);
+      setRegisteredStudents(students);
+      setParticipants(participants);
+      setAccountMessage(`Načítaných ${accounts.length} účtov a ${participants.length} účastníkov.`);
+    } catch (reason) {
+      setAccountMessage(reason instanceof Error ? reason.message : "Údaje sa nepodarilo obnoviť.");
+    }
+  }
+
+
   function participantCodeFor(participantId: string) {
     return participants.find((participant) => participant.id === participantId)?.participant_code ?? participantId.slice(0, 8);
   }
@@ -369,7 +387,7 @@ export function App() {
               </>}
               {activeSection === "users" && <>
                 <section className="browser-panel">
-                  <div className="browser-header"><div><div className="eyebrow">SPRÁVA ÚČTOV</div><h2>Používatelia a účastníci</h2><p className="muted">Prihlásenie funguje cez e-mail alebo pseudonymné Participant ID. Zmena rolí, reset hesla a anonymizácia sú dostupné iba superadminovi.</p></div></div>
+                  <div className="browser-header"><div><div className="eyebrow">SPRÁVA ÚČTOV</div><h2>Používatelia a účastníci</h2><p className="muted">Prihlásenie funguje cez e-mail alebo pseudonymné Participant ID. Zmena rolí, reset hesla a anonymizácia sú dostupné iba superadminovi.</p></div><button className="quiet compact" onClick={() => void refreshAccounts()}>Obnoviť zoznam</button></div>
                   {accountMessage && <p className="notice">{accountMessage}</p>}
                   <div className="account-list">{adminAccounts.map((account) => <article className="account-row" key={account.id}>
                     <div><strong>{[account.first_name, account.last_name].filter(Boolean).join(" ") || account.username}</strong><small>{account.email || account.username}</small></div>
