@@ -14,6 +14,7 @@ from app.core.config import settings
 from app.db.session import get_db
 from app.models import AdminUser, Measurement, Participant, ResearchConsent, TestDefinition
 from app.schemas.auth import StudentProfileResponse
+from app.schemas.participant import StudentProfileUpdate
 from app.schemas.measurement import MeasurementCreate, MeasurementResponse
 from app.schemas.test_definition import TestDefinitionResponse
 
@@ -26,21 +27,15 @@ def require_student(auth: AuthContext) -> AuthContext:
     return auth
 
 
-@router.get("/profile", response_model=StudentProfileResponse)
-async def profile(
-    auth: AuthContext = Depends(require_authenticated),
-) -> StudentProfileResponse:
-    student = require_student(auth).user
-    participant = student.participant
-    if participant is None or student.first_name is None or student.last_name is None:
-        raise HTTPException(status_code=409, detail="Student profile is incomplete.")
+
+def student_profile_response(student: AdminUser, participant: Participant) -> StudentProfileResponse:
     return StudentProfileResponse(
         username=student.username,
         email=student.email,
         role=student.role,
         participant_code=participant.participant_code,
-        first_name=student.first_name,
-        last_name=student.last_name,
+        first_name=student.first_name or "",
+        last_name=student.last_name or "",
         created_at=participant.created_at,
         birth_date=participant.birth_date,
         pilot_experience=participant.pilot_experience,
@@ -59,6 +54,58 @@ async def profile(
         game_controller_experience=participant.game_controller_experience,
         video_game_experience=participant.video_game_experience,
     )
+
+
+@router.get("/profile", response_model=StudentProfileResponse)
+async def profile(
+    auth: AuthContext = Depends(require_authenticated),
+) -> StudentProfileResponse:
+    student = require_student(auth).user
+    participant = student.participant
+    if participant is None or student.first_name is None or student.last_name is None:
+        raise HTTPException(status_code=409, detail="Student profile is incomplete.")
+    return student_profile_response(student, participant)
+
+
+@router.patch("/profile", response_model=StudentProfileResponse)
+async def update_profile(
+    payload: StudentProfileUpdate,
+    auth: AuthContext = Depends(require_user_csrf),
+    db: AsyncSession = Depends(get_db),
+) -> StudentProfileResponse:
+    student = require_student(auth).user
+    participant = await db.get(Participant, student.participant_id)
+    if participant is None:
+        raise HTTPException(status_code=404, detail="Profil účastníka neexistuje.")
+
+    updates = payload.model_dump(exclude_unset=True)
+    if any(updates.get(field) is None for field in ("first_name", "last_name", "email") if field in updates):
+        raise HTTPException(status_code=400, detail="Meno, priezvisko a e-mail nesmú byť prázdne.")
+
+    if "email" in updates:
+        email = str(payload.email).strip().lower()
+        existing = await db.scalar(
+            select(AdminUser.id).where(
+                ((AdminUser.email == email) | (AdminUser.username == email)),
+                AdminUser.id != student.id,
+            )
+        )
+        if existing:
+            raise HTTPException(status_code=409, detail="Účet s týmto e-mailom už existuje.")
+        student.email = email
+        student.username = email
+        updates.pop("email")
+
+    for field in ("first_name", "last_name"):
+        if field in updates:
+            setattr(student, field, updates.pop(field))
+    for field, value in updates.items():
+        setattr(participant, field, value)
+
+    await db.commit()
+    await db.refresh(student)
+    await db.refresh(participant)
+    return student_profile_response(student, participant)
 
 
 @router.get("/measurements", response_model=list[MeasurementResponse])
