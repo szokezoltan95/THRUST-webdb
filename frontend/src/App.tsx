@@ -71,7 +71,6 @@ export function App() {
   const [editingTestId, setEditingTestId] = useState<string | null>(null);
   const [selectedParticipant, setSelectedParticipant] = useState<ParticipantDetail | null>(null);
   const [participantDialog, setParticipantDialog] = useState<"detail" | "measurements" | null>(null);
-  const [selectedAccount, setSelectedAccount] = useState<AdminAccount | null>(null);
   const [measurements, setMeasurements] = useState<Measurement[]>([]);
   const [uploadMessage, setUploadMessage] = useState("");
   const [selectedMeasurementId, setSelectedMeasurementId] = useState<string | null>(null);
@@ -259,7 +258,6 @@ export function App() {
         body: JSON.stringify({ role }),
       });
       setAdminAccounts((items) => items.map((item) => item.id === updated.id ? updated : item));
-      setSelectedAccount((current) => current?.id === updated.id ? updated : current);
       if (updated.participant_id && updated.participant_code && !participants.some((item) => item.id === updated.participant_id)) {
         setParticipants((items) => [{ id: updated.participant_id!, participant_code: updated.participant_code!, is_active: updated.is_active, created_at: updated.created_at }, ...items]);
       }
@@ -288,7 +286,6 @@ export function App() {
       await request<void>(`/api/admin/users/${account.id}`, { method: "DELETE", headers: { "X-CSRF-Token": user.csrf_token } });
       await refreshAccounts();
       setAccountMessage("Účet bol deaktivovaný a osobné údaje odstránené; merania zostali zachované.");
-      setSelectedAccount(null);
     } catch (reason) { setAccountMessage(reason instanceof Error ? reason.message : "Účet sa nepodarilo anonymizovať."); }
   }
 
@@ -370,7 +367,13 @@ export function App() {
     if (user?.role !== "superadmin" || account.effective_role === "superadmin") {
       return <span className="role-label">{account.effective_role}</span>;
     }
-    return <button className="quiet compact" onClick={() => setSelectedAccount(account)}>Správa účtu</button>;
+    return <>
+      <select aria-label="Rola používateľa" value={account.role} onChange={(event) => void changeAccountRole(account, event.target.value)}>
+        <option value="student">Študent</option><option value="researcher">Researcher</option><option value="admin">Admin</option>
+      </select>
+      <button className="quiet compact" onClick={() => void resetAccountPassword(account)}>Reset hesla</button>
+      <button className="quiet compact danger" onClick={() => void anonymizeAccount(account)}>Anonymizovať</button>
+    </>;
   }
 
   if (user?.role === "student") return <StudentPortal user={user} onLogout={logout} />;
@@ -430,6 +433,7 @@ export function App() {
                   const linkedAccount = adminAccounts.find((item) => item.participant_id === participant.id) || null;
                   const rows = measurements.filter((item) => item.participant_id === participant.id);
                   const dates = rows.map((item) => item.started_at).sort();
+                  const resultMeasurement = [...rows].sort((left, right) => right.started_at.localeCompare(left.started_at)).find((item) => item.analysis_data?.normalized_step_response);
                   if (participantDialog === "detail") return <section className="browser-detail detail-modal-open participant-detail-modal">
                     <div className="detail-header"><div><div className="eyebrow">ZÁKLADNÉ ÚDAJE ÚČASTNÍKA</div><h2>{participant.participant_code}</h2></div><button className="quiet compact" onClick={() => setParticipantDialog(null)}>Zavrieť</button></div>
                     <div className="detail-grid">
@@ -443,6 +447,7 @@ export function App() {
                       <div><span>E-mail / rola</span><strong>{linkedAccount ? `${linkedAccount.email || linkedAccount.username} · ${linkedAccount.effective_role}` : "—"}</strong></div>
                     </div>
                     {rows.length > 0 && <p className="muted">Súhrn: {new Set(rows.map((item) => item.test_type)).size} typov testov, {rows.filter((item) => item.status === "completed" || item.status === "recorded").length} dokončených alebo zaznamenaných meraní.</p>}
+                    {resultMeasurement?.analysis_data?.normalized_step_response && <ResponseMetrics data={resultMeasurement.analysis_data.normalized_step_response} />}
                   </section>;
                   return <section className="browser-detail detail-modal-open participant-detail-modal">
                     <div className="detail-header"><div><div className="eyebrow">MERANIA ÚČASTNÍKA</div><h2>{participant.participant_code}</h2></div><button className="quiet compact" onClick={() => setParticipantDialog(null)}>Zavrieť</button></div>
@@ -452,14 +457,6 @@ export function App() {
                   </section>;
                 })()}
               </>}
-              {selectedAccount && <div className="backdrop" onMouseDown={() => setSelectedAccount(null)}><section className="login account-dialog" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
-                <div className="eyebrow">SUPERADMIN · SPRÁVA KONTA</div><h2>{[selectedAccount.first_name, selectedAccount.last_name].filter(Boolean).join(" ") || selectedAccount.username}</h2>
-                <p className="muted">{selectedAccount.email || selectedAccount.username}{selectedAccount.participant_code ? ` · ${selectedAccount.participant_code}` : ""}</p>
-                <label>Rola<select value={selectedAccount.role} disabled={selectedAccount.effective_role === "superadmin"} onChange={(event) => void changeAccountRole(selectedAccount, event.target.value)}><option value="student">Študent</option><option value="researcher">Researcher</option><option value="admin">Admin</option></select></label>
-                {selectedAccount.effective_role === "superadmin" && <p className="muted">Rola superadmin je chránená a nemožno ju meniť z tohto účtu.</p>}
-                {accountMessage && <p className="notice">{accountMessage}</p>}
-                <div className="account-dialog-actions"><button className="quiet" onClick={() => void resetAccountPassword(selectedAccount)}>Zmeniť / resetovať heslo</button><button className="quiet danger" onClick={() => void anonymizeAccount(selectedAccount)}>Zrušiť účet a anonymizovať údaje</button><button className="primary" onClick={() => setSelectedAccount(null)}>Hotovo</button></div>
-              </section></div>}
               {activeSection === "tests" && <>
                 <section className="browser-panel">
                   <div className="browser-header"><div><div className="eyebrow">KATALÓG TESTOV</div><h2>Testy a konfigurácie</h2><p className="muted">Každá verzia testu je samostatná, nemenná konfigurácia pre THRUST.</p></div></div>
