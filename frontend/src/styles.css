@@ -880,3 +880,23 @@ h1 { max-width: 880px; margin: 20px 0; font-size: clamp(42px, 7vw, 84px); line-h
   .simple-editor-intro { align-items: flex-start; flex-direction: column; }
   .test-code-cell { flex-wrap: wrap; }
 }
+
+
+/* SimPLE analysis panel */
+.simple-analysis-view { margin-top: 14px; padding: 16px; border: 1px solid var(--line); background: rgba(255,255,255,.025); }
+.simple-analysis-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.simple-analysis-heading h3 { margin: 3px 0 0; font-size: 1.05rem; }
+.simple-analysis-version { color: #8298ae; font-size: .72rem; }
+.simple-metric-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.simple-metric-card { min-width: 0; padding: 10px 12px; border: 1px solid var(--line); background: #091522; }
+.simple-metric-card span { display: block; color: #8da2b7; font-size: .69rem; }
+.simple-metric-card strong { display: block; margin-top: 5px; color: #eaf4ff; font-size: 1.05rem; font-variant-numeric: tabular-nums; }
+.simple-trace-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 12px; }
+.simple-trace { min-width: 0; padding: 9px; border: 1px solid var(--line); background: #081421; }
+.simple-trace-title { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: #8da2b7; font-size: .72rem; }
+.simple-trace-title strong { font-size: .75rem; letter-spacing: .04em; }
+.simple-trace svg { display: block; width: 100%; max-height: 240px; margin-top: 5px; }
+.simple-trace .plot-grid line { stroke: rgba(125,153,179,.2); stroke-width: 1; stroke-dasharray: 3 4; }
+.simple-trace .plot-axis-label { fill: #7e94aa; font-size: 10px; }
+.simple-trace .chart-zero { stroke: #738ba2; stroke-width: 1; stroke-dasharray: 5 4; }
+@media (max-width: 900px) { .simple-metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .simple-trace-grid { grid-template-columns: 1fr; } }
