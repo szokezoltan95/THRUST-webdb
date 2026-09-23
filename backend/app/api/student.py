@@ -59,9 +59,12 @@ def student_profile_response(student: AdminUser, participant: Participant) -> St
 @router.get("/profile", response_model=StudentProfileResponse)
 async def profile(
     auth: AuthContext = Depends(require_authenticated),
+    db: AsyncSession = Depends(get_db),
 ) -> StudentProfileResponse:
     student = require_student(auth).user
-    participant = student.participant
+    # The authenticated user is loaded without its optional participant relationship.
+    # Resolve it explicitly so async SQLAlchemy does not attempt unsupported lazy I/O.
+    participant = await db.get(Participant, student.participant_id)
     if participant is None or student.first_name is None or student.last_name is None:
         raise HTTPException(status_code=409, detail="Student profile is incomplete.")
     return student_profile_response(student, participant)
