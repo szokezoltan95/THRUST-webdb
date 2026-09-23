@@ -27,10 +27,7 @@ RESEARCH_CONSENT_TEXT = (
 )
 
 
-def response_for_user(user: AdminUser, csrf_token: str) -> UserResponse:
-    participant_code = None
-    if user.participant is not None:
-        participant_code = user.participant.participant_code
+def response_for_user(user: AdminUser, csrf_token: str, participant_code: str | None = None) -> UserResponse:
     return UserResponse(
         username=user.username,
         email=user.email,
@@ -48,6 +45,10 @@ async def create_session(user: AdminUser, response: Response, db: AsyncSession) 
     csrf = new_csrf_token()
     expires = datetime.now(timezone.utc) + timedelta(hours=settings.session_lifetime_hours)
     db.add(AdminSession(token_hash=session_token_hash(token), user_id=user.id, csrf_token=csrf, expires_at=expires))
+    participant_code = None
+    if user.participant_id:
+        participant = await db.get(Participant, user.participant_id)
+        participant_code = participant.participant_code if participant is not None else None
     await db.commit()
     response.set_cookie(
         "thrust_session",
@@ -58,7 +59,7 @@ async def create_session(user: AdminUser, response: Response, db: AsyncSession) 
         samesite="lax",
         path="/",
     )
-    return response_for_user(user, csrf)
+    return response_for_user(user, csrf, participant_code)
 
 
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
@@ -122,8 +123,15 @@ async def login(payload: LoginRequest, response: Response, db: AsyncSession = De
 
 
 @router.get("/me", response_model=UserResponse)
-async def me(auth: AuthContext = Depends(require_authenticated)) -> UserResponse:
-    return response_for_user(auth.user, auth.session.csrf_token)
+async def me(
+    auth: AuthContext = Depends(require_authenticated),
+    db: AsyncSession = Depends(get_db),
+) -> UserResponse:
+    participant_code = None
+    if auth.user.participant_id:
+        participant = await db.get(Participant, auth.user.participant_id)
+        participant_code = participant.participant_code if participant is not None else None
+    return response_for_user(auth.user, auth.session.csrf_token, participant_code)
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
