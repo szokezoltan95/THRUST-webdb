@@ -657,46 +657,70 @@ export function App() {
                   const dates = rows.map((item) => item.started_at).sort();
                   const resultMeasurement = [...rows].sort((left, right) => right.started_at.localeCompare(left.started_at)).find((item) => item.analysis_data?.normalized_step_response);
                   if (participantDialog === "detail") return <section className="browser-detail detail-modal-open participant-detail-modal">
-                    <div className="detail-header"><div><div className="eyebrow">ZÁKLADNÉ ÚDAJE ÚČASTNÍKA</div><h2>{participant.participant_code}</h2></div><button className="quiet compact" onClick={() => setParticipantDialog(null)}>Zavrieť</button></div>
-                    {accountMessage && <p className="notice">{accountMessage}</p>}
-                    <InfoTable rows={[
-                      ["Participant ID", participant.participant_code],
-                      ["Stav účastníka", participant.is_active ? "Aktívny" : "Neaktívny"],
-                      ["Vytvorený", formatDate(participant.created_at)],
-                      ["Počet meraní", rows.length],
-                      ["Prvé meranie", dates.length ? formatDate(dates[0]) : "Zatiaľ bez merania"],
-                      ["Posledné meranie", dates.length ? formatDate(dates[dates.length - 1]) : "Zatiaľ bez merania"],
-                      ["Prepojené konto", linkedAccount ? [linkedAccount.first_name, linkedAccount.last_name].filter(Boolean).join(" ") || linkedAccount.username : "Bez konta"],
-                      ["E-mail / rola", linkedAccount ? `${linkedAccount.email || linkedAccount.username} · ${linkedAccount.effective_role}` : "—"],
-                      ["Súhrn meraní", rows.length ? `${new Set(rows.map((item) => item.test_type)).size} typov testov, ${rows.filter((item) => item.status === "completed" || item.status === "recorded").length} dokončených alebo zaznamenaných` : "Bez meraní"],
-                      ["Dátum narodenia", participant.birth_date ? formatDate(participant.birth_date) : "Neuvedené"],
-                      ["Pohlavie", profileLabel(participant.sex)],
-                      ["Dominantná ruka", profileLabel(participant.dominant_hand)],
-                      ["Zraková korekcia", profileLabel(participant.vision_correction)],
-                      ["Dioptrie ľavé / pravé", `${participant.vision_diopters_left ?? "—"} / ${participant.vision_diopters_right ?? "—"} D`],
-                      ["Skúsenosť s pilotovaním", profileLabel(participant.pilot_experience)],
-                      ["Letové hodiny", profileLabel(participant.flight_hours_range)],
-                      ["Osvedčenie", profileLabel(participant.pilot_certificate)],
-                      ["Typ UAV", profileLabel(participant.primary_uav_type)],
-                      ["Simulátor", profileLabel(participant.simulator_experience)],
-                      ["RC ovládanie", profileLabel(participant.rc_experience)],
-                      ["FPV", profileLabel(participant.fpv_experience)],
-                      ["Herný ovládač", profileLabel(participant.game_controller_experience)],
-                      ["Video / počítačové hry", profileLabel(participant.video_game_experience)],
-                      ["Sebahodnotenie zručností", participant.self_rated_skill ?? "Neuvedené"],
-                    ]} />{(user?.role === "admin" || user?.role === "superadmin") && <ParticipantProfileEditor participant={participant} csrfToken={user.csrf_token} onSaved={(updated) => { setParticipants((items) => items.map((item) => item.id === updated.id ? updated : item)); setSelectedParticipant((current) => current ? { ...current, participant: updated } : current); setAccountMessage("Profil účastníka bol uložený."); }} />}
-                    {user?.role === "superadmin" && linkedAccount && linkedAccount.effective_role !== "superadmin" && <section className="account-management-panel">
-                      <div><div className="eyebrow">SPRÁVA KONTA</div><strong>{linkedAccount.email || linkedAccount.username}</strong><small>Rola, prístup a údaje konta</small></div>
-                      <div className="account-management-controls">
-                        <label>Rola<select value={linkedAccount.role} onChange={(event) => void changeAccountRole(linkedAccount, event.target.value)}><option value="student">Študent</option><option value="researcher">Researcher</option><option value="admin">Admin</option></select></label>
-                        <button className="quiet compact" onClick={() => void resetAccountPassword(linkedAccount)}>Resetovať heslo</button>
-                        <button className="quiet compact danger" onClick={() => void anonymizeAccount(linkedAccount)}>Deaktivovať a anonymizovať konto</button>
-                      </div>
-                    </section>}
-                    {user?.role === "superadmin" && (!linkedAccount || linkedAccount.effective_role !== "superadmin") && <div className="participant-purge-row"><p className="muted">Úplné vymazanie odstráni konto, súhlasy, účastníka, merania aj archivované raw súbory.</p><button className="quiet compact danger" onClick={() => void permanentlyDeleteParticipant(participant, linkedAccount)}>Trvalo vymazať všetko</button></div>}
-                    {Boolean(resultMeasurement?.analysis_data?.normalized_step_response) && <ResponseMetrics data={resultMeasurement?.analysis_data?.normalized_step_response} />}
-                  </section>;
-                  return <section className="browser-detail detail-modal-open participant-detail-modal">
+                     <div className="detail-header"><div><div className="eyebrow">DETAIL ÚČASTNÍKA</div><h2>{participant.participant_code}</h2></div><button className="quiet compact" onClick={() => setParticipantDialog(null)}>Zavrieť</button></div>
+                     {accountMessage && <p className="notice">{accountMessage}</p>}
+
+                     <section className="participant-detail-section">
+                       <div className="participant-section-heading"><div><div className="eyebrow">SÚHRN VÝSLEDKOV</div><h3>Štatistiky všetkých meraní</h3></div></div>
+                       <AllMeasurementStats measurements={rows} />
+                     </section>
+
+                     <section className="participant-detail-section">
+                       <div className="participant-section-heading"><div><div className="eyebrow">HISTÓRIA</div><h3>Posledných 5 meraní</h3></div><span className="muted">{rows.length} spolu</span></div>
+                       {selectedParticipant.measurements.length ? <div className="data-table participant-history-table">
+                         <div className="data-table-head"><span>Test</span><span>Dátum</span><span>Stav</span><span>Výsledok</span></div>
+                         {[...selectedParticipant.measurements].sort((left, right) => right.started_at.localeCompare(left.started_at)).slice(0, 5).map((measurement) => {
+                           const hasResult = rows.some((item) => item.id === measurement.id);
+                           return <div className="data-table-row" key={measurement.id}><strong>{measurement.test_type}</strong><span>{formatDate(measurement.started_at)}</span><span>{measurement.status}</span><span className="row-actions"><button className="quiet compact" disabled={!hasResult} onClick={() => { setSelectedMeasurementId(measurement.id); setParticipantDialog(null); setActiveSection("measurements"); }}>{hasResult ? "Otvoriť" : "Bez výsledkov"}</button></span></div>;
+                         })}
+                       </div> : <div className="participant-empty-state">Účastník zatiaľ nemá zaznamenané žiadne merania.</div>}
+                     </section>
+
+                     <section className="participant-detail-section">
+                       <div className="participant-section-heading"><div><div className="eyebrow">PROFIL</div><h3>Údaje účastníka</h3></div></div>
+                       <div className="participant-profile-columns">
+                         <InfoTable rows={[
+                           ["Participant ID", participant.participant_code],
+                           ["Stav účastníka", participant.is_active ? "Aktívny" : "Neaktívny"],
+                           ["Vytvorený", formatDate(participant.created_at)],
+                           ["Počet meraní", rows.length],
+                           ["Prvé meranie", dates.length ? formatDate(dates[0]) : "—"],
+                           ["Posledné meranie", dates.length ? formatDate(dates[dates.length - 1]) : "—"],
+                           ["Prepojené konto", linkedAccount ? [linkedAccount.first_name, linkedAccount.last_name].filter(Boolean).join(" ") || linkedAccount.username : "Bez konta"],
+                           ["E-mail / rola", linkedAccount ? `${linkedAccount.email || linkedAccount.username} · ${linkedAccount.effective_role}` : "—"],
+                         ]} />
+                         <InfoTable rows={[
+                           ["Dátum narodenia", participant.birth_date ? formatDate(participant.birth_date) : "Neuvedené"],
+                           ["Pohlavie", profileLabel(participant.sex)],
+                           ["Dominantná ruka", profileLabel(participant.dominant_hand)],
+                           ["Zraková korekcia", profileLabel(participant.vision_correction)],
+                           ["Dioptrie ľavé / pravé", `${participant.vision_diopters_left ?? "—"} / ${participant.vision_diopters_right ?? "—"} D`],
+                           ["Skúsenosť s pilotovaním", profileLabel(participant.pilot_experience)],
+                           ["Letové hodiny", profileLabel(participant.flight_hours_range)],
+                           ["Osvedčenie", profileLabel(participant.pilot_certificate)],
+                           ["Typ UAV", profileLabel(participant.primary_uav_type)],
+                           ["Simulátor", profileLabel(participant.simulator_experience)],
+                           ["RC ovládanie", profileLabel(participant.rc_experience)],
+                           ["FPV", profileLabel(participant.fpv_experience)],
+                           ["Herný ovládač", profileLabel(participant.game_controller_experience)],
+                           ["Video / počítačové hry", profileLabel(participant.video_game_experience)],
+                           ["Sebahodnotenie zručností", participant.self_rated_skill ?? "Neuvedené"],
+                         ]} />
+                       </div>
+                     </section>
+
+                     {user?.role === "superadmin" && linkedAccount && linkedAccount.effective_role !== "superadmin" && <section className="account-management-panel">
+                       <div><div className="eyebrow">SPRÁVA KONTA</div><strong>{linkedAccount.email || linkedAccount.username}</strong><small>Rola, prístup a údaje konta</small></div>
+                       <div className="account-management-controls">
+                         <label>Rola<select value={linkedAccount.role} onChange={(event) => void changeAccountRole(linkedAccount, event.target.value)}><option value="student">Študent</option><option value="researcher">Researcher</option><option value="admin">Admin</option></select></label>
+                         <button className="quiet compact" onClick={() => void resetAccountPassword(linkedAccount)}>Resetovať heslo</button>
+                         <button className="quiet compact danger" onClick={() => void anonymizeAccount(linkedAccount)}>Deaktivovať a anonymizovať konto</button>
+                       </div>
+                     </section>}
+                     {user?.role === "superadmin" && (!linkedAccount || linkedAccount.effective_role !== "superadmin") && <div className="participant-purge-row"><p className="muted">Úplné vymazanie odstráni konto, súhlasy, účastníka, merania aj archivované raw súbory.</p><button className="quiet compact danger" onClick={() => void permanentlyDeleteParticipant(participant, linkedAccount)}>Trvalo vymazať všetko</button></div>}
+                     {(user?.role === "admin" || user?.role === "superadmin") && <section className="participant-detail-section participant-edit-section"><div className="participant-section-heading"><div><div className="eyebrow">EDITÁCIA</div><h3>Upraviť údaje účastníka</h3></div></div><ParticipantProfileEditor participant={participant} csrfToken={user.csrf_token} onSaved={(updated) => { setParticipants((items) => items.map((item) => item.id === updated.id ? updated : item)); setSelectedParticipant((current) => current ? { ...current, participant: updated } : current); setAccountMessage("Profil účastníka bol uložený."); }} /></section>}
+                   </section>;
+                   return <section className="browser-detail detail-modal-open participant-detail-modal">
                     <div className="detail-header"><div><div className="eyebrow">MERANIA ÚČASTNÍKA</div><h2>{participant.participant_code}</h2></div><button className="quiet compact" onClick={() => setParticipantDialog(null)}>Zavrieť</button></div>
                     <p className="muted">História synchronizovaných meraní účastníka.</p>
                     <div className="data-table participant-history-table"><div className="data-table-head"><span>Test</span><span>Dátum</span><span>Stav</span><span>Akcia</span></div>{selectedParticipant.measurements.filter((measurement) => measurement.raw_data_available).map((measurement) => <div className="data-table-row" key={measurement.id}><strong>{measurement.test_type}</strong><span>{formatDate(measurement.started_at)}</span><span>{measurement.status}</span><button className="quiet compact row-actions" onClick={() => { setSelectedMeasurementId(measurement.id); setParticipantDialog(null); setActiveSection("measurements"); }}>Otvoriť výsledok</button></div>)}</div>
@@ -884,6 +908,44 @@ function metricsFor(channel: NormalizedChannel | undefined, time: number[]): Ste
   return calculateStepMetrics(channel, time);
 }
 
+
+function AllMeasurementStats({ measurements }: { measurements: Measurement[] }) {
+  const completed = measurements.filter((item) => item.status === "completed" || item.status === "recorded").length;
+  const testTypes = new Set(measurements.map((item) => item.test_type)).size;
+  const analyzed = measurements.filter((item) => Boolean(item.analysis_data?.normalized_step_response)).length;
+  const durations = measurements.map((item) => item.analysis_data?.duration_s).filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+  const averageDuration = durations.length ? durations.reduce((sum, value) => sum + value, 0) / durations.length : null;
+  const aggregate = RESPONSE_CHANNELS.map((axis) => {
+    const values = measurements.flatMap((item) => {
+      const response = item.analysis_data?.normalized_step_response as NormalizedResponse | undefined;
+      const channel = response?.channels?.[axis];
+      return channel ? [metricsFor(channel, response.time_s ?? [])] : [];
+    });
+    const average = (key: keyof StepMetrics) => {
+      const numbers = values.map((value) => value[key]).filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+      return numbers.length ? numbers.reduce((sum, value) => sum + value, 0) / numbers.length : null;
+    };
+    return { axis, count: values.length, reaction: average("reaction_s"), rise: average("rise_s"), overshoot: average("overshoot_pct"), settling: average("settling_s"), error: average("steady_state_error_pct"), rmse: average("rmse"), std: average("mean_std") };
+  }).filter((item) => item.count > 0);
+
+  return <div className="participant-statistics">
+    <div className="participant-stat-grid">
+      <article><span>Merania spolu</span><strong>{measurements.length}</strong></article>
+      <article><span>Dokončené / zaznamenané</span><strong>{completed}</strong></article>
+      <article><span>Typy testov</span><strong>{testTypes}</strong></article>
+      <article><span>S vyhodnotením odozvy</span><strong>{analyzed}</strong></article>
+      <article><span>Priemerné trvanie</span><strong>{averageDuration === null ? "—" : `${averageDuration.toFixed(2)} s`}</strong></article>
+    </div>
+    {measurements.length === 0
+      ? <div className="participant-empty-state">Štatistiky sa zobrazia po prvom meraní.</div>
+      : aggregate.length === 0
+        ? <div className="participant-empty-state">Merania sú uložené, ale neobsahujú vyhodnotenie normalizovanej odozvy.</div>
+        : <div className="participant-aggregate-table">
+          <div className="metrics-head"><span>Osa</span><span>Meraní</span><span>Oneskorenie</span><span>Náběh 10–90 %</span><span>Overshoot</span><span>Ustálenie</span><span>Chyba</span><span>RMSE</span><span>Priem. SD</span></div>
+          {aggregate.map((item) => <div className="metrics-row" key={item.axis}><strong style={{ color: RESPONSE_COLORS[item.axis] }}>{item.axis}</strong><span>{item.count}</span><span>{formatMetric(item.reaction, " s")}</span><span>{formatMetric(item.rise, " s")}</span><span>{formatMetric(item.overshoot, " %")}</span><span>{formatMetric(item.settling, " s")}</span><span>{formatMetric(item.error, " %")}</span><span>{formatMetric(item.rmse)}</span><span>{formatMetric(item.std)}</span></div>)}
+        </div>}
+  </div>;
+}
 
 function ResponseMetrics({ data }: { data: unknown }) {
   const response = data as NormalizedResponse | null;
