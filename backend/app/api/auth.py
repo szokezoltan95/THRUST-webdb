@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import AuthContext, effective_role, require_authenticated, require_user_csrf
 from app.core.config import settings
+from app.core.consents import GDPR_CONSENT_VERSION, RESEARCH_CONSENT_TEXT, RESEARCH_CONSENT_VERSION, gdpr_consent_text
 from app.core.security import (
     hash_password,
     new_csrf_token,
@@ -19,13 +20,6 @@ from app.models import AdminSession, AdminUser, Participant, ResearchConsent
 from app.schemas.auth import LoginRequest, RegistrationRequest, UserResponse
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
-
-RESEARCH_CONSENT_TEXT = (
-    "Súhlasím so spracovaním mojich osobných údajov a údajov z meraní "
-    "na účely vedeckého výskumu výkonu pilotov UAV podľa aktuálne platnej "
-    "informačnej povinnosti a verzie súhlasu."
-)
-
 
 def response_for_user(user: AdminUser, csrf_token: str, participant_code: str | None = None) -> UserResponse:
     return UserResponse(
@@ -68,8 +62,8 @@ async def register(
     response: Response,
     db: AsyncSession = Depends(get_db),
 ) -> UserResponse:
-    if not payload.research_consent:
-        raise HTTPException(status_code=400, detail="Pre registráciu je potrebný súhlas s výskumným spracovaním údajov.")
+    if not payload.research_consent or not payload.gdpr_consent:
+        raise HTTPException(status_code=400, detail="Na registráciu sú potrebné oba samostatné súhlasy.")
 
     email = str(payload.email).strip().lower()
     if await db.scalar(select(AdminUser.id).where(AdminUser.email == email)):
@@ -98,14 +92,20 @@ async def register(
     )
     db.add(user)
     await db.flush()
-    db.add(
+    db.add_all([
         ResearchConsent(
             user_id=user.id,
             consent_type="research",
-            version=payload.consent_version,
+            version=payload.consent_version or RESEARCH_CONSENT_VERSION,
             text_snapshot=RESEARCH_CONSENT_TEXT,
-        )
-    )
+        ),
+        ResearchConsent(
+            user_id=user.id,
+            consent_type="gdpr",
+            version=payload.gdpr_consent_version or GDPR_CONSENT_VERSION,
+            text_snapshot=gdpr_consent_text(),
+        ),
+    ])
     await db.commit()
     return await create_session(user, response, db)
 
