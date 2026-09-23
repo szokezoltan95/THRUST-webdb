@@ -415,3 +415,12 @@ h1 { max-width: 880px; margin: 20px 0; font-size: clamp(42px, 7vw, 84px); line-h
   grid-template-columns: minmax(95px, .75fr) minmax(190px, 1.5fr) minmax(110px, .9fr) minmax(110px, .9fr) 70px minmax(150px, 1.2fr);
 }
 .student-email { display: block; color: #8199b2; font-size: .74rem; margin-top: 2px; }
+
+
+.account-list { display: grid; gap: 10px; margin-top: 18px; }
+.account-row { display: grid; grid-template-columns: minmax(180px, 1fr) minmax(110px, .6fr) minmax(250px, 1.5fr); gap: 16px; align-items: center; padding: 14px; border: 1px solid var(--line); border-radius: 6px; background: rgba(10,23,38,.7); }
+.account-row small { display: block; color: #8199b2; margin-top: 4px; overflow-wrap: anywhere; }
+.account-actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
+.account-actions select { background: #07121f; border: 1px solid var(--line); color: #eef5ff; padding: 8px; }
+.danger { border-color: #874c54; color: #ff9ba4; }
+@media (max-width: 850px) { .account-row { grid-template-columns: 1fr; } .account-actions { justify-content: flex-start; } }
