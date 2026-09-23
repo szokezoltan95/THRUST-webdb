@@ -1,6 +1,7 @@
 import base64
 import hashlib
 from collections import defaultdict
+from datetime import datetime, timezone
 from pathlib import Path
 from statistics import mean
 
@@ -8,10 +9,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import AuthContext, require_authenticated
+from app.api.dependencies import AuthContext, require_authenticated, require_user_csrf
 from app.core.config import settings
 from app.db.session import get_db
-from app.models import Measurement, Participant, TestDefinition
+from app.models import Measurement, Participant, ResearchConsent, TestDefinition
 from app.schemas.auth import StudentProfileResponse
 from app.schemas.measurement import MeasurementCreate, MeasurementResponse
 from app.schemas.test_definition import TestDefinitionResponse
@@ -175,3 +176,19 @@ async def create_measurement(
     await db.commit()
     await db.refresh(measurement)
     return measurement
+
+
+@router.post("/consent/revoke", status_code=204)
+async def revoke_consent(
+    auth: AuthContext = Depends(require_user_csrf),
+    db: AsyncSession = Depends(get_db),
+) -> None:
+    student = require_student(auth).user
+    consent = await db.scalar(
+        select(ResearchConsent)
+        .where(ResearchConsent.user_id == student.id, ResearchConsent.revoked_at.is_(None))
+        .order_by(ResearchConsent.accepted_at.desc())
+    )
+    if consent is not None:
+        consent.revoked_at = datetime.now(timezone.utc)
+        await db.commit()
