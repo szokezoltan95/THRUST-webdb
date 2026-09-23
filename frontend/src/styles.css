@@ -567,3 +567,74 @@ h1 { max-width: 880px; margin: 20px 0; font-size: clamp(42px, 7vw, 84px); line-h
   .registration-form .form-grid { grid-template-columns: 1fr; }
   .registration-actions { align-items: stretch; flex-direction: column; }
 }
+
+/* Keep registration fields in their own grid cells and prevent label overlap. */
+.registration-form label {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+  color: #9db0c4;
+  font-size: .9rem;
+  line-height: 1.35;
+}
+.registration-form input:not([type="checkbox"]),
+.registration-form select {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid #29465e;
+  border-radius: 7px;
+  color: #eef5ff;
+  background: #071321;
+  font: inherit;
+}
+.registration-form input:focus,
+.registration-form select:focus { outline: 2px solid #45d5ff66; border-color: #45d5ff; }
+.registration-form .consent { display: flex; flex-direction: row; align-items: flex-start; gap: 9px; }
+.registration-form .consent input { width: auto; min-height: 0; margin-top: 4px; }
+.registration-form .consent span { min-width: 0; }
+.registration-form .form-grid { width: 100%; }
+.registration-account-fields > .form-grid,
+.registration-form .profile-questionnaire > .form-grid { align-items: start; }
+
+/* Tables scroll as a unit on narrow screens and keep each row aligned to its header. */
+.participant-table,
+.test-table,
+.participant-history-table { width: 100%; overflow-x: auto; scrollbar-width: thin; }
+.participant-table .data-table-head,
+.participant-table .data-table-row {
+  width: 100%;
+  min-width: 1030px;
+  grid-template-columns: minmax(100px, .75fr) minmax(190px, 1.3fr) minmax(120px, .8fr) minmax(120px, .8fr) 64px minmax(270px, 1.8fr);
+  gap: 10px;
+}
+.test-table .data-table-head,
+.test-table .data-table-row {
+  width: 100%;
+  min-width: 880px;
+  grid-template-columns: minmax(100px, .75fr) minmax(180px, 1.4fr) minmax(75px, .6fr) minmax(170px, 1.2fr) minmax(290px, 2fr);
+  gap: 10px;
+}
+.participant-history-table .data-table-head,
+.participant-history-table .data-table-row {
+  width: 100%;
+  min-width: 650px;
+  grid-template-columns: minmax(180px, 1.4fr) minmax(140px, 1fr) minmax(100px, .7fr) minmax(150px, 1fr);
+  gap: 10px;
+}
+.participant-table .data-table-head > *,
+.participant-table .data-table-row > *,
+.test-table .data-table-head > *,
+.test-table .data-table-row > *,
+.participant-history-table .data-table-head > *,
+.participant-history-table .data-table-row > * { min-width: 0; }
+.participant-table .data-table-row,
+.test-table .data-table-row,
+.participant-history-table .data-table-row { min-height: 56px; }
+.participant-table .row-actions,
+.test-table .row-actions { justify-content: flex-start; align-items: center; flex-wrap: wrap; }
