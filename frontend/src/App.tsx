@@ -3,7 +3,7 @@ import { ChangeEvent, FormEvent, useEffect, useRef, useState } from "react";
 type ConsentDocument = { version: string; text: string; configured?: boolean };
 type ConsentDocuments = { research: ConsentDocument; gdpr: ConsentDocument };
 type ConsentKind = "research" | "gdpr";
-type ConsentStatus = { accepted: boolean; accepted_at: string | null; revoked_at: string | null; version: string | null };
+type ConsentStatus = { accepted: boolean; accepted_at: string | null; revoked_at: string | null; version: string | null; text: string | null };
 type ConsentStatuses = Record<ConsentKind, ConsentStatus>;
 
 type PublicMetrics = {
@@ -86,6 +86,7 @@ export function App() {
   const [registerOpen, setRegisterOpen] = useState(false);
   const [consentTexts, setConsentTexts] = useState<ConsentDocuments | null>(null);
   const [consentDialog, setConsentDialog] = useState<ConsentKind | null>(null);
+  const [activeConsentDocument, setActiveConsentDocument] = useState<ConsentDocument | null>(null);
   const [error, setError] = useState("");
   const [activeSection, setActiveSection] = useState<AdminSection>("overview");
 
@@ -483,7 +484,7 @@ export function App() {
 
       {loginOpen && <div className="backdrop" onMouseDown={() => setLoginOpen(false)}><form className="login" onSubmit={login} onMouseDown={(e) => e.stopPropagation()}><div className="eyebrow">CHRÁNENÝ PRÍSTUP</div><h2>Prihlásenie</h2><label>E-mail, Participant ID alebo username<input name="identifier" autoComplete="username" required autoFocus /></label><label>Heslo<input name="password" type="password" autoComplete="current-password" required /></label>{error && <p className="error">{error}</p>}<div className="actions"><button type="button" className="quiet" onClick={() => setLoginOpen(false)}>Zrušiť</button><button type="submit" className="primary">Prihlásiť</button></div></form></div>} 
       {registerOpen && <div className="backdrop" onMouseDown={() => setRegisterOpen(false)}><form className="login register-form" onSubmit={register} onMouseDown={(e) => e.stopPropagation()}><div className="eyebrow">NOVÝ ÚČET</div><h2>Vytvoriť účet</h2><p className="muted">Účet dostane Participant ID a základnú rolu študenta. Oprávnenia môže zvýšiť iba superadmin.</p><div className="form-grid"><label>Meno<input name="first_name" required /></label><label>Priezvisko<input name="last_name" required /></label></div><label>E-mail<input name="email" type="email" autoComplete="email" required /></label><div className="form-grid"><label>Heslo<input name="password" type="password" minLength={10} autoComplete="new-password" required /></label><label>Zopakovať heslo<input name="password_confirmation" type="password" minLength={10} autoComplete="new-password" required /></label></div><label className="consent"><input name="research_consent" type="checkbox" required /> <span>Súhlasím s použitím pseudonymizovaných údajov na výskumné účely. <a href="#consent-research" onClick={(event) => { event.preventDefault(); event.stopPropagation(); setConsentDialog("research"); }}>Zobraziť text výskumného súhlasu</a></span></label><label className="consent"><input name="gdpr_consent" type="checkbox" required /> <span>Súhlasím so spracovaním osobných údajov pre vytvorenie a správu účtu. <a href="#consent-gdpr" onClick={(event) => { event.preventDefault(); event.stopPropagation(); setConsentDialog("gdpr"); }}>Zobraziť informácie a GDPR súhlas</a></span></label>{error && <p className="error">{error}</p>}<div className="actions"><button type="button" className="quiet" onClick={() => setRegisterOpen(false)}>Zrušiť</button><button type="submit" className="primary" disabled={!consentTexts}>Vytvoriť účet</button></div></form></div>
-      {consentDialog && consentTexts && <ConsentTextDialog kind={consentDialog} document={consentTexts[consentDialog]} onClose={() => setConsentDialog(null)} />}}
+      {consentDialog && consentTexts && <ConsentTextDialog kind={consentDialog} document={activeConsentDocument || consentTexts[consentDialog]} onClose={() => { setConsentDialog(null); setActiveConsentDocument(null); }} />}}
     </main>
   );
 }
@@ -784,7 +785,7 @@ function StudentPortal({ user, onLogout }: { user: User; onLogout: () => Promise
               <strong>{title}</strong>
               <p className={status?.accepted ? "consent-active" : "muted"}>{status?.accepted ? "Súhlas udelený" : status?.revoked_at ? "Súhlas odvolaný" : "Záznam súhlasu sa nenašiel"}</p>
               {status?.accepted_at && <small>Udelený: {new Date(status.accepted_at).toLocaleString("sk-SK")} · {status.version}</small>}
-              {doc && <a href={`#consent-${kind}`} onClick={(event) => { event.preventDefault(); setConsentDialog(kind); }}>Zobraziť text súhlasu</a>}
+              {doc && <a href={`#consent-${kind}`} onClick={(event) => { event.preventDefault(); setActiveConsentDocument({ version: status?.version || doc.version, text: status?.text || doc.text, configured: doc.configured }); setConsentDialog(kind); }}>Zobraziť text súhlasu</a>}
               {status?.accepted && <button className="quiet compact" onClick={() => void revokeConsent(kind)}>Odvolať tento súhlas</button>}
             </article>;
           })}
