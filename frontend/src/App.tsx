@@ -725,6 +725,7 @@ function StudentPortal({ user, onLogout }: { user: User; onLogout: () => Promise
   const [consents, setConsents] = useState<ConsentStatuses | null>(null);
   const [consentTexts, setConsentTexts] = useState<ConsentDocuments | null>(null);
   const [consentDialog, setConsentDialog] = useState<ConsentKind | null>(null);
+  const [activeConsentDocument, setActiveConsentDocument] = useState<ConsentDocument | null>(null);
   const [error, setError] = useState("");
   const [consentMessage, setConsentMessage] = useState("");
 
@@ -793,7 +794,7 @@ function StudentPortal({ user, onLogout }: { user: User; onLogout: () => Promise
         {consentMessage && <p className="notice">{consentMessage}</p>}
       </section>
     </section>
-    {consentDialog && consentTexts && <ConsentTextDialog kind={consentDialog} document={consentTexts[consentDialog]} onClose={() => setConsentDialog(null)} />}
+    {consentDialog && consentTexts && <ConsentTextDialog kind={consentDialog} document={activeConsentDocument || consentTexts[consentDialog]} onClose={() => { setConsentDialog(null); setActiveConsentDocument(null); }} />}
   </main>;
 }
 function formatMetricMap(values: Record<string, number>) { return Object.entries(values).map(([key, value]) => `${key}: ${value.toFixed(2)}`).join(" · ") || "bez dostupných metrík"; }
