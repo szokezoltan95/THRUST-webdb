@@ -8,11 +8,11 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import AuthContext, effective_role, require_admin, require_superadmin_csrf
+from app.api.dependencies import AuthContext, effective_role, require_admin, require_csrf, require_researcher, require_superadmin_csrf
 from app.core.config import settings
 from app.db.session import get_db
 from app.models import AdminSession, AdminUser, Measurement, Participant, TestDefinition
-from app.schemas.participant import ParticipantCreate, ParticipantResponse, RegisteredStudentResponse
+from app.schemas.participant import ParticipantCreate, ParticipantResponse, ParticipantUpdate, RegisteredStudentResponse
 from app.schemas.user_admin import AccountPasswordReset, AccountRoleUpdate, AdminAccountResponse
 from app.core.security import hash_password
 from app.schemas.measurement import MeasurementCreate, MeasurementResponse
@@ -49,7 +49,7 @@ def normalize_test_configuration(source: dict) -> dict:
 
 @router.get("/participants", response_model=list[ParticipantResponse])
 async def list_participants(
-    auth: AuthContext = Depends(require_admin),
+    auth: AuthContext = Depends(require_researcher),
     db: AsyncSession = Depends(get_db),
 ) -> list[Participant]:
     result = await db.scalars(select(Participant).order_by(Participant.created_at.desc()))
@@ -269,6 +269,23 @@ async def create_participant(
     return participant
 
 
+@router.patch("/participants/{participant_id}", response_model=ParticipantResponse)
+async def update_participant(
+    participant_id: str,
+    payload: ParticipantUpdate,
+    auth: AuthContext = Depends(require_csrf),
+    db: AsyncSession = Depends(get_db),
+) -> Participant:
+    participant = await db.get(Participant, participant_id)
+    if participant is None:
+        raise HTTPException(status_code=404, detail="Účastník neexistuje.")
+    for field, value in payload.model_dump(exclude_unset=True).items():
+        setattr(participant, field, value)
+    await db.commit()
+    await db.refresh(participant)
+    return participant
+
+
 @router.get("/participants/generate-code")
 async def generate_code(
     auth: AuthContext = Depends(require_admin),
@@ -284,7 +301,7 @@ async def generate_code(
 
 @router.get("/tests", response_model=list[TestDefinitionResponse])
 async def list_tests(
-    auth: AuthContext = Depends(require_admin),
+    auth: AuthContext = Depends(require_researcher),
     db: AsyncSession = Depends(get_db),
 ) -> list[TestDefinition]:
     result = await db.scalars(select(TestDefinition).order_by(TestDefinition.test_code, TestDefinition.version))
@@ -294,7 +311,7 @@ async def list_tests(
 @router.get("/tests/{test_id}/configuration")
 async def test_configuration(
     test_id: str,
-    auth: AuthContext = Depends(require_admin),
+    auth: AuthContext = Depends(require_researcher),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """Return a version-pinned test manifest for local THRUST/SCoPE clients."""
@@ -310,7 +327,7 @@ async def test_configuration(
 @router.post("/tests", response_model=TestDefinitionResponse, status_code=status.HTTP_201_CREATED)
 async def create_test(
     payload: TestDefinitionCreate,
-    auth: AuthContext = Depends(require_admin),
+    auth: AuthContext = Depends(require_researcher),
     db: AsyncSession = Depends(get_db),
 ) -> TestDefinition:
     existing = await db.scalar(
@@ -334,7 +351,7 @@ async def create_test(
 async def update_test(
     test_id: str,
     payload: TestDefinitionUpdate,
-    auth: AuthContext = Depends(require_admin),
+    auth: AuthContext = Depends(require_researcher),
     db: AsyncSession = Depends(get_db),
 ) -> TestDefinition:
     test = await db.get(TestDefinition, test_id)
@@ -353,10 +370,31 @@ async def update_test(
     return test
 
 
+@router.delete("/tests/{test_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_test_definition(
+    test_id: str,
+    auth: AuthContext = Depends(require_superadmin_csrf),
+    db: AsyncSession = Depends(get_db),
+) -> None:
+    test = await db.get(TestDefinition, test_id)
+    if test is None:
+        raise HTTPException(status_code=404, detail="Verzia testu neexistuje.")
+    has_measurements = await db.scalar(
+        select(Measurement.id).where(Measurement.test_definition_id == test_id).limit(1)
+    )
+    if has_measurements:
+        raise HTTPException(
+            status_code=409,
+            detail="K tejto verzii testu sú priradené merania. Najprv ich musí superadmin úplne odstrániť.",
+        )
+    await db.delete(test)
+    await db.commit()
+
+
 @router.get("/participants/{participant_id}")
 async def participant_detail(
     participant_id: str,
-    auth: AuthContext = Depends(require_admin),
+    auth: AuthContext = Depends(require_researcher),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     participant = await db.get(Participant, participant_id)
@@ -384,7 +422,7 @@ async def participant_detail(
 @router.post("/measurements", response_model=MeasurementResponse, status_code=status.HTTP_201_CREATED)
 async def create_measurement(
     payload: MeasurementCreate,
-    auth: AuthContext = Depends(require_admin),
+    auth: AuthContext = Depends(require_researcher),
     db: AsyncSession = Depends(get_db),
 ) -> Measurement:
     participant = await db.get(Participant, payload.participant_id)
@@ -437,7 +475,7 @@ async def create_measurement(
 
 @router.get("/measurements", response_model=list[MeasurementResponse])
 async def list_measurements(
-    auth: AuthContext = Depends(require_admin),
+    auth: AuthContext = Depends(require_researcher),
     db: AsyncSession = Depends(get_db),
 ) -> list[Measurement]:
     """List measurements synchronized by THRUST or uploaded manually."""
@@ -448,7 +486,7 @@ async def list_measurements(
 @router.get("/measurements/{measurement_id}", response_model=MeasurementResponse)
 async def measurement_detail(
     measurement_id: str,
-    auth: AuthContext = Depends(require_admin),
+    auth: AuthContext = Depends(require_researcher),
     db: AsyncSession = Depends(get_db),
 ) -> Measurement:
     measurement = await db.get(Measurement, measurement_id)
@@ -460,7 +498,7 @@ async def measurement_detail(
 @router.delete("/measurements/{measurement_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_measurement(
     measurement_id: str,
-    auth: AuthContext = Depends(require_admin),
+    auth: AuthContext = Depends(require_superadmin_csrf),
     db: AsyncSession = Depends(get_db),
 ) -> None:
     measurement = await db.get(Measurement, measurement_id)
@@ -477,7 +515,7 @@ async def delete_measurement(
 
 @router.get("/overview")
 async def overview(
-    auth: AuthContext = Depends(require_admin),
+    auth: AuthContext = Depends(require_researcher),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     participants = await db.scalar(select(func.count()).select_from(Participant)) or 0
