@@ -49,6 +49,15 @@ async def profile(
         primary_uav_type=participant.primary_uav_type,
         simulator_experience=participant.simulator_experience,
         self_rated_skill=participant.self_rated_skill,
+        sex=participant.sex,
+        dominant_hand=participant.dominant_hand,
+        vision_correction=participant.vision_correction,
+        vision_diopters_left=participant.vision_diopters_left,
+        vision_diopters_right=participant.vision_diopters_right,
+        rc_experience=participant.rc_experience,
+        fpv_experience=participant.fpv_experience,
+        game_controller_experience=participant.game_controller_experience,
+        video_game_experience=participant.video_game_experience,
     )
 
 
