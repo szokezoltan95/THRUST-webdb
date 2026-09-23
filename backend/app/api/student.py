@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.dependencies import AuthContext, require_authenticated, require_user_csrf
 from app.core.config import settings
 from app.db.session import get_db
-from app.models import Measurement, Participant, ResearchConsent, TestDefinition
+from app.models import AdminUser, Measurement, Participant, ResearchConsent, TestDefinition
 from app.schemas.auth import StudentProfileResponse
 from app.schemas.measurement import MeasurementCreate, MeasurementResponse
 from app.schemas.test_definition import TestDefinitionResponse
@@ -82,8 +82,19 @@ async def comparison(
         .order_by(Measurement.started_at.desc())
     )
     own = list(own_result)
+    revoked_participant_ids = set(
+        await db.scalars(
+            select(AdminUser.participant_id)
+            .join(ResearchConsent, ResearchConsent.user_id == AdminUser.id)
+            .where(
+                AdminUser.participant_id.is_not(None),
+                ResearchConsent.consent_type == "research",
+                ResearchConsent.revoked_at.is_not(None),
+            )
+        )
+    )
     cohort_result = await db.scalars(select(Measurement).where(Measurement.status.in_(["completed", "recorded"])))
-    cohort = list(cohort_result)
+    cohort = [item for item in cohort_result if item.participant_id not in revoked_participant_ids]
     eligible = len({item.participant_id for item in cohort}) >= settings.public_min_group_size
     own_values: dict[str, list[float]] = defaultdict(list)
     cohort_values: dict[str, list[float]] = defaultdict(list)
@@ -178,17 +189,63 @@ async def create_measurement(
     return measurement
 
 
-@router.post("/consent/revoke", status_code=204)
-async def revoke_consent(
-    auth: AuthContext = Depends(require_user_csrf),
+@router.get("/consents")
+async def consent_status(
+    auth: AuthContext = Depends(require_authenticated),
     db: AsyncSession = Depends(get_db),
-) -> None:
+) -> dict[str, dict]:
     student = require_student(auth).user
+    result = await db.scalars(
+        select(ResearchConsent)
+        .where(ResearchConsent.user_id == student.id)
+        .order_by(ResearchConsent.accepted_at.desc())
+    )
+    status_by_type: dict[str, dict] = {
+        "research": {"accepted": False, "accepted_at": None, "revoked_at": None, "version": None},
+        "gdpr": {"accepted": False, "accepted_at": None, "revoked_at": None, "version": None},
+    }
+    for consent in result:
+        if consent.consent_type not in status_by_type or status_by_type[consent.consent_type]["version"] is not None:
+            continue
+        status_by_type[consent.consent_type] = {
+            "accepted": consent.revoked_at is None,
+            "accepted_at": consent.accepted_at,
+            "revoked_at": consent.revoked_at,
+            "version": consent.version,
+        }
+    return status_by_type
+
+
+async def _revoke_consent(auth: AuthContext, db: AsyncSession, consent_type: str) -> None:
+    student = require_student(auth).user
+    if consent_type not in {"research", "gdpr"}:
+        raise HTTPException(status_code=404, detail="Neznámy typ súhlasu.")
     consent = await db.scalar(
         select(ResearchConsent)
-        .where(ResearchConsent.user_id == student.id, ResearchConsent.revoked_at.is_(None))
+        .where(
+            ResearchConsent.user_id == student.id,
+            ResearchConsent.consent_type == consent_type,
+            ResearchConsent.revoked_at.is_(None),
+        )
         .order_by(ResearchConsent.accepted_at.desc())
     )
     if consent is not None:
         consent.revoked_at = datetime.now(timezone.utc)
         await db.commit()
+
+
+@router.post("/consent/{consent_type}/revoke", status_code=204)
+async def revoke_consent_type(
+    consent_type: str,
+    auth: AuthContext = Depends(require_user_csrf),
+    db: AsyncSession = Depends(get_db),
+) -> None:
+    await _revoke_consent(auth, db, consent_type)
+
+
+@router.post("/consent/revoke", status_code=204)
+async def revoke_research_consent(
+    auth: AuthContext = Depends(require_user_csrf),
+    db: AsyncSession = Depends(get_db),
+) -> None:
+    await _revoke_consent(auth, db, "research")
