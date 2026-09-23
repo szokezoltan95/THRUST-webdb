@@ -72,6 +72,9 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
   if (!response.ok) {
     const body = await response.json().catch(() => null) as { detail?: unknown } | null;
     if (response.status === 401) throw new Error("Nesprávne prihlasovacie údaje.");
+    if (response.status === 503 && typeof body?.detail === "string") {
+      throw new Error(body.detail);
+    }
     if (response.status >= 500) {
       throw new Error(`Server vrátil chybu HTTP ${response.status}. Pri registrácii účastníka skontroluj, či je databázová migrácia spustená; podrobnosti sú v logu backendu.`);
     }
