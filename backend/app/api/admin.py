@@ -64,6 +64,7 @@ async def list_accounts(
     result = await db.execute(
         select(AdminUser, Participant)
         .outerjoin(Participant, Participant.id == AdminUser.participant_id)
+        .where(AdminUser.is_active.is_(True))
         .order_by(AdminUser.created_at.desc())
     )
     return [
@@ -175,7 +176,7 @@ async def list_registered_students(
     result = await db.execute(
         select(AdminUser, Participant)
         .join(Participant, Participant.id == AdminUser.participant_id)
-        .where(AdminUser.role == "student")
+        .where(AdminUser.role == "student", AdminUser.is_active.is_(True))
         .order_by(Participant.created_at.desc())
     )
     return [
