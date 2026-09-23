@@ -25,6 +25,7 @@ services:
       PUBLIC_MIN_GROUP_SIZE: ${PUBLIC_MIN_GROUP_SIZE:-10}
       MEASUREMENT_STORAGE_PATH: ${MEASUREMENT_STORAGE_PATH:-/var/lib/thrust-webdb/measurements}
       MAX_RAW_UPLOAD_BYTES: ${MAX_RAW_UPLOAD_BYTES:-50000000}
+      SUPERADMIN_IDENTIFIERS: ${SUPERADMIN_IDENTIFIERS:-}
     volumes:
       - measurement_data:/var/lib/thrust-webdb/measurements
     depends_on:
