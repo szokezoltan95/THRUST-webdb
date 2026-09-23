@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     measurement_storage_path: str = "/var/lib/thrust-webdb/measurements"
     max_raw_upload_bytes: int = 50_000_000
     superadmin_identifiers: str = ""
+    researcher_registration_key: str = ""
     data_controller_name: str = ""
     data_controller_address: str = ""
     data_controller_email: str = ""
