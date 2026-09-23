@@ -379,14 +379,28 @@ async def delete_test_definition(
     test = await db.get(TestDefinition, test_id)
     if test is None:
         raise HTTPException(status_code=404, detail="Verzia testu neexistuje.")
-    has_measurements = await db.scalar(
-        select(Measurement.id).where(Measurement.test_definition_id == test_id).limit(1)
-    )
-    if has_measurements:
-        raise HTTPException(
-            status_code=409,
-            detail="K tejto verzii testu sú priradené merania. Najprv ich musí superadmin úplne odstrániť.",
-        )
+    measurements = list(await db.scalars(
+        select(Measurement).where(Measurement.test_definition_id == test_id)
+    ))
+    storage_root = Path(settings.measurement_storage_path).resolve()
+    raw_paths: list[Path] = []
+    for measurement in measurements:
+        if not measurement.raw_storage_path:
+            continue
+        raw_path = Path(measurement.raw_storage_path).resolve()
+        try:
+            raw_path.relative_to(storage_root)
+        except ValueError as exc:
+            raise HTTPException(status_code=500, detail="Raw súbor je mimo úložiska meraní; vymazanie bolo zastavené.") from exc
+        raw_paths.append(raw_path)
+
+    try:
+        for raw_path in raw_paths:
+            raw_path.unlink(missing_ok=True)
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail="Raw súbor merania sa nepodarilo odstrániť.") from exc
+
+    await db.execute(delete(Measurement).where(Measurement.test_definition_id == test_id))
     await db.delete(test)
     await db.commit()
 
