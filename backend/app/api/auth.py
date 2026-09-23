@@ -117,16 +117,15 @@ async def login(payload: LoginRequest, response: Response, db: AsyncSession = De
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Login identifier is required")
     identifier = raw_identifier.lower()
     participant_code = raw_identifier.upper()
-    result = await db.execute(
-        select(AdminUser)
-        .outerjoin(Participant, Participant.id == AdminUser.participant_id)
-        .where(
-            (AdminUser.username == identifier)
-            | (AdminUser.email == identifier)
-            | (Participant.participant_code == participant_code)
-        )
+    user = await db.scalar(
+        select(AdminUser).where((AdminUser.username == identifier) | (AdminUser.email == identifier))
     )
-    user = result.scalar_one_or_none()
+    if user is None:
+        user = await db.scalar(
+            select(AdminUser)
+            .join(Participant, Participant.id == AdminUser.participant_id)
+            .where(Participant.participant_code == participant_code)
+        )
     if user is None or not user.is_active or not verify_password(payload.password, user.password_hash):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
     return await create_session(user, response, db)
