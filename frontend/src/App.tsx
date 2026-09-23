@@ -702,6 +702,18 @@ function TestEditor({ test, onClose, onSaved }: { test: TestDefinition; onClose:
   </div><footer className="editor-footer"><button type="button" className="quiet" onClick={onClose}>Zrušiť</button><button className="primary" onClick={save}>Uložiť nastavenia</button>{message && <span className="notice">{message}</span>}</footer></section></div>;
 }
 
+function ConsentTextDialog({ kind, document, onClose }: { kind: ConsentKind; document: ConsentDocument; onClose: () => void }) {
+  const title = kind === "research" ? "Súhlas s výskumným použitím údajov" : "Informácie o spracúvaní osobných údajov (GDPR)";
+  return <div className="backdrop" onMouseDown={onClose}>
+    <section className="login consent-dialog" role="dialog" aria-modal="true" aria-labelledby="consent-dialog-title" onMouseDown={(event) => event.stopPropagation()}>
+      <div className="eyebrow">VERZIA {document.version}</div><h2 id="consent-dialog-title">{title}</h2>
+      {kind === "gdpr" && document.configured === false && <p className="notice">Text obsahuje konfiguračné údaje prevádzkovateľa, ktoré musí správca doplniť v serverovom .env pred produkčnou registráciou.</p>}
+      <p className="consent-copy">{document.text}</p>
+      <div className="actions"><button className="primary" onClick={onClose}>Zavrieť</button></div>
+    </section>
+  </div>;
+}
+
 function Metric({ label, value }: { label: string; value: string | number }) {
   return <article className="metric"><span>{label}</span><strong>{value}</strong></article>;
 }
@@ -709,18 +721,78 @@ function Metric({ label, value }: { label: string; value: string | number }) {
 function StudentPortal({ user, onLogout }: { user: User; onLogout: () => Promise<void> }) {
   const [measurements, setMeasurements] = useState<StudentMeasurement[]>([]);
   const [comparison, setComparison] = useState<StudentComparison | null>(null);
+  const [consents, setConsents] = useState<ConsentStatuses | null>(null);
+  const [consentTexts, setConsentTexts] = useState<ConsentDocuments | null>(null);
+  const [consentDialog, setConsentDialog] = useState<ConsentKind | null>(null);
   const [error, setError] = useState("");
   const [consentMessage, setConsentMessage] = useState("");
-  async function revokeConsent() {
-    if (!window.confirm("Naozaj chceš odvolať súhlas? Existujúce merania zostanú uložené podľa pravidiel projektu.")) return;
-    await request<void>("/api/student/consent/revoke", { method: "POST", headers: { "X-CSRF-Token": user.csrf_token } });
-    setConsentMessage("Súhlas bol odvolaný. Pre ďalšie výskumné spracovanie bude potrebné nové potvrdenie.");
+
+  async function revokeConsent(kind: ConsentKind) {
+    const name = kind === "research" ? "výskumný súhlas" : "súhlas so spracovaním osobných údajov";
+    if (!window.confirm(`Naozaj chceš odvolať: ${name}?`)) return;
+    try {
+      await request<void>(`/api/student/consent/${kind}/revoke`, {
+        method: "POST",
+        headers: { "X-CSRF-Token": user.csrf_token },
+      });
+      setConsents(await request<ConsentStatuses>("/api/student/consents"));
+      setConsentMessage(`Súhlas „${name}“ bol odvolaný.`);
+    } catch (reason) {
+      setConsentMessage(reason instanceof Error ? reason.message : "Súhlas sa nepodarilo odvolať.");
+    }
   }
+
   useEffect(() => {
-    Promise.all([request<StudentMeasurement[]>("/api/student/measurements"), request<StudentComparison>("/api/student/comparison")])
-      .then(([own, group]) => { setMeasurements(own); setComparison(group); })
-      .catch((reason) => setError(reason instanceof Error ? reason.message : "Výsledky sa nepodarilo načítať."));
+    Promise.all([
+      request<StudentMeasurement[]>("/api/student/measurements"),
+      request<StudentComparison>("/api/student/comparison"),
+      request<ConsentStatuses>("/api/student/consents"),
+      request<ConsentDocuments>("/api/public/consent-texts"),
+    ]).then(([own, group, status, documents]) => {
+      setMeasurements(own);
+      setComparison(group);
+      setConsents(status);
+      setConsentTexts(documents);
+    }).catch((reason) => setError(reason instanceof Error ? reason.message : "Údaje sa nepodarilo načítať."));
   }, []);
-  return <main className="student-shell"><header><div className="brand"><span className="mark">T</span><div><strong>THRUST</strong><small>Študentský portál</small></div></div><button className="quiet" onClick={onLogout}>Odhlásiť</button></header><section className="public student-content"><div className="eyebrow">OSOBNÝ PROFIL</div><h1>Ahoj, {user.first_name || user.username}.</h1><p className="lead">Tvoje účastnícke ID: <strong>{user.participant_code || "—"}</strong></p><div className="stats"><Metric label="Moje merania" value={measurements.length} /><Metric label="Skupina" value={comparison?.cohort_participant_count ?? "—"} /><Metric label="Porovnanie" value={comparison?.available ? "dostupné" : "čaká na limit"} /></div>{error && <p className="error">{error}</p>}<section className="panel"><div className="eyebrow">VÝSLEDKY</div><h2>Moje merania</h2>{measurements.length ? <div className="table-wrap"><table><thead><tr><th>Test</th><th>Stav</th><th>Dátum</th></tr></thead><tbody>{measurements.map((m) => <tr key={m.id}><td>{m.test_type}</td><td>{m.status}</td><td>{new Date(m.started_at).toLocaleString("sk-SK")}</td></tr>)}</tbody></table></div> : <p className="muted">Zatiaľ nemáš uložené žiadne meranie.</p>}</section><section className="panel"><div className="eyebrow">ANONYMIZOVANÉ POROVNANIE</div>{comparison?.available ? <><p>Tvoje priemery: {formatMetricMap(comparison.own_average)}</p><p>Skupinové priemery: {formatMetricMap(comparison.cohort_average)}</p></> : <p className="muted">Porovnanie sa zobrazí po nazbieraní dostatočne veľkej skupiny.</p>}</section><section className="panel"><div className="eyebrow">SÚHLAS</div><p className="muted">Súhlas môžeš kedykoľvek odvolať. Tým sa zastaví budúce výskumné spracovanie; existujúce dáta sa riešia podľa pravidiel projektu.</p><button className="quiet" onClick={revokeConsent}>Odvolať súhlas</button>{consentMessage && <p className="notice">{consentMessage}</p>}</section></section></main>;
+
+  return <main className="student-shell">
+    <header><div className="brand"><span className="mark">T</span><div><strong>THRUST</strong><small>Študentský portál</small></div></div><button className="quiet" onClick={onLogout}>Odhlásiť</button></header>
+    <section className="public student-content">
+      <div className="eyebrow">OSOBNÝ PROFIL</div>
+      <h1>Ahoj, {user.first_name || user.username}.</h1>
+      <p className="lead">Tvoje účastnícke ID: <strong>{user.participant_code || "—"}</strong></p>
+      <div className="stats"><Metric label="Moje merania" value={measurements.length} /><Metric label="Skupina" value={comparison?.cohort_participant_count ?? "—"} /><Metric label="Porovnanie" value={comparison?.available ? "dostupné" : "čaká na limit"} /></div>
+      {error && <p className="error">{error}</p>}
+      <section className="panel">
+        <div className="eyebrow">VÝSLEDKY</div><h2>Moje merania</h2>
+        {measurements.length ? <div className="table-wrap"><table><thead><tr><th>Test</th><th>Stav</th><th>Dátum</th></tr></thead><tbody>{measurements.map((m) => <tr key={m.id}><td>{m.test_type}</td><td>{m.status}</td><td>{new Date(m.started_at).toLocaleString("sk-SK")}</td></tr>)}</tbody></table></div> : <p className="muted">Zatiaľ nemáš uložené žiadne meranie.</p>}
+      </section>
+      <section className="panel">
+        <div className="eyebrow">ANONYMIZOVANÉ POROVNANIE</div>
+        {comparison?.available ? <><p>Tvoje priemery: {formatMetricMap(comparison.own_average)}</p><p>Skupinové priemery: {formatMetricMap(comparison.cohort_average)}</p></> : <p className="muted">Porovnanie sa zobrazí po nazbieraní dostatočne veľkej skupiny.</p>}
+      </section>
+      <section className="panel">
+        <div className="eyebrow">TVOJE SÚHLASY</div><h2>Informácie o spracúvaní údajov</h2>
+        <p className="muted">Výskumný súhlas a spracovanie údajov účtu sú oddelené. Každý si môžeš prezrieť a odvolať samostatne.</p>
+        <div className="consent-status-grid">
+          {(["research", "gdpr"] as const).map((kind) => {
+            const status = consents?.[kind];
+            const doc = consentTexts?.[kind];
+            const title = kind === "research" ? "Výskumné použitie meraní" : "Osobné údaje a účet";
+            return <article className="consent-status-card" key={kind}>
+              <strong>{title}</strong>
+              <p className={status?.accepted ? "consent-active" : "muted"}>{status?.accepted ? "Súhlas udelený" : status?.revoked_at ? "Súhlas odvolaný" : "Záznam súhlasu sa nenašiel"}</p>
+              {status?.accepted_at && <small>Udelený: {new Date(status.accepted_at).toLocaleString("sk-SK")} · {status.version}</small>}
+              {doc && <a href={`#consent-${kind}`} onClick={(event) => { event.preventDefault(); setConsentDialog(kind); }}>Zobraziť text súhlasu</a>}
+              {status?.accepted && <button className="quiet compact" onClick={() => void revokeConsent(kind)}>Odvolať tento súhlas</button>}
+            </article>;
+          })}
+        </div>
+        {consentMessage && <p className="notice">{consentMessage}</p>}
+      </section>
+    </section>
+    {consentDialog && consentTexts && <ConsentTextDialog kind={consentDialog} document={consentTexts[consentDialog]} onClose={() => setConsentDialog(null)} />}
+  </main>;
 }
 function formatMetricMap(values: Record<string, number>) { return Object.entries(values).map(([key, value]) => `${key}: ${value.toFixed(2)}`).join(" · ") || "bez dostupných metrík"; }
