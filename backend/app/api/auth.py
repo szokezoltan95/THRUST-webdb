@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+import hmac
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import delete, select
@@ -17,7 +18,7 @@ from app.core.security import (
 )
 from app.db.session import get_db
 from app.models import AdminSession, AdminUser, Participant, ResearchConsent
-from app.schemas.auth import LoginRequest, RegistrationRequest, UserResponse
+from app.schemas.auth import LoginRequest, RegistrationRequest, ResearcherRegistrationRequest, UserResponse
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
 
@@ -124,6 +125,53 @@ async def register(
             text_snapshot=gdpr_consent_text(),
         ),
     ])
+    await db.commit()
+    return await create_session(user, response, db)
+
+
+@router.post("/register/researcher", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+async def register_researcher(
+    payload: ResearcherRegistrationRequest,
+    response: Response,
+    db: AsyncSession = Depends(get_db),
+) -> UserResponse:
+    if not payload.gdpr_consent:
+        raise HTTPException(status_code=400, detail="Na registráciu výskumníka je potrebný súhlas so spracovaním údajov.")
+
+    expected_key = settings.researcher_registration_key
+    if not expected_key:
+        raise HTTPException(status_code=503, detail="Registrácia výskumníkov nie je na serveri nakonfigurovaná.")
+    if len(expected_key) < 32:
+        raise HTTPException(status_code=503, detail="Pozývací kľúč výskumníka musí mať aspoň 32 znakov.")
+    if not hmac.compare_digest(payload.registration_key, expected_key):
+        raise HTTPException(status_code=403, detail="Pozývací kľúč výskumníka nie je platný.")
+
+    email = str(payload.email).strip().lower()
+    superadmin_identifiers = {
+        item.strip().lower() for item in settings.superadmin_identifiers.split(",") if item.strip()
+    }
+    if email in superadmin_identifiers:
+        raise HTTPException(status_code=409, detail="Tento e-mail je vyhradený pre superadmin účet.")
+    if await db.scalar(select(AdminUser.id).where((AdminUser.email == email) | (AdminUser.username == email))):
+        raise HTTPException(status_code=409, detail="Účet s týmto e-mailom už existuje.")
+
+    user = AdminUser(
+        username=email,
+        email=email,
+        password_hash=hash_password(payload.password),
+        role="researcher",
+        first_name=payload.first_name,
+        last_name=payload.last_name,
+        participant_id=None,
+    )
+    db.add(user)
+    await db.flush()
+    db.add(ResearchConsent(
+        user_id=user.id,
+        consent_type="gdpr",
+        version=payload.gdpr_consent_version or GDPR_CONSENT_VERSION,
+        text_snapshot=gdpr_consent_text(),
+    ))
     await db.commit()
     return await create_session(user, response, db)
 
