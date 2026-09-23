@@ -96,6 +96,19 @@ async def update_account_role(
         raise HTTPException(status_code=404, detail="Používateľ neexistuje.")
     if target.id == auth.user.id or effective_role(target) == "superadmin":
         raise HTTPException(status_code=409, detail="Rolu superadmin účtu nemožno meniť cez toto rozhranie.")
+    if payload.role == "student" and not target.participant_id:
+        participant_code = None
+        for _ in range(30):
+            candidate = generate_participant_code()
+            if await db.scalar(select(Participant.id).where(Participant.participant_code == candidate)) is None:
+                participant_code = candidate
+                break
+        if participant_code is None:
+            raise HTTPException(status_code=503, detail="Participant ID sa nepodarilo vygenerovať.")
+        participant = Participant(participant_code=participant_code)
+        db.add(participant)
+        await db.flush()
+        target.participant_id = participant.id
     target.role = payload.role
     await db.commit()
     participant = await db.get(Participant, target.participant_id) if target.participant_id else None
