@@ -16,7 +16,7 @@ class AuthContext:
     session: AdminSession
 
 
-async def require_admin(
+async def require_session(
     thrust_session: str | None = Cookie(default=None),
     db: AsyncSession = Depends(get_db),
 ) -> AuthContext:
@@ -35,6 +35,16 @@ async def require_admin(
     if not user.is_active or session_record.expires_at <= datetime.now(timezone.utc):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
     return AuthContext(user=user, session=session_record)
+
+
+async def require_authenticated(auth: AuthContext = Depends(require_session)) -> AuthContext:
+    return auth
+
+
+async def require_admin(auth: AuthContext = Depends(require_session)) -> AuthContext:
+    if auth.user.role not in {"admin", "researcher"}:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+    return auth
 
 
 async def require_csrf(
