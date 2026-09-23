@@ -50,8 +50,14 @@ async def require_authenticated(auth: AuthContext = Depends(require_session)) ->
     return auth
 
 
+async def require_researcher(auth: AuthContext = Depends(require_session)) -> AuthContext:
+    if effective_role(auth.user) not in {"researcher", "admin", "superadmin"}:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Researcher access required")
+    return auth
+
+
 async def require_admin(auth: AuthContext = Depends(require_session)) -> AuthContext:
-    if effective_role(auth.user) not in {"admin", "researcher", "superadmin"}:
+    if effective_role(auth.user) not in {"admin", "superadmin"}:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
     return auth
 
