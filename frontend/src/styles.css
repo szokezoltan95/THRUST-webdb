@@ -408,3 +408,10 @@ h1 { max-width: 880px; margin: 20px 0; font-size: clamp(42px, 7vw, 84px); line-h
 .student-content table { width: 100%; border-collapse: collapse; }
 .student-content th, .student-content td { padding: 10px 12px; border-bottom: 1px solid var(--line, #d8dee5); text-align: left; }
 @media (max-width: 680px) { .form-grid { grid-template-columns: 1fr; } }
+
+
+.participant-table .data-table-head,
+.participant-table .data-table-row {
+  grid-template-columns: minmax(95px, .75fr) minmax(190px, 1.5fr) minmax(110px, .9fr) minmax(110px, .9fr) 70px minmax(150px, 1.2fr);
+}
+.student-email { display: block; color: #8199b2; font-size: .74rem; margin-top: 2px; }
