@@ -1,6 +1,6 @@
 from datetime import date, datetime
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 
 class ParticipantCreate(BaseModel):
@@ -39,6 +39,46 @@ class ParticipantUpdate(BaseModel):
     def birth_date_not_future(cls, value: date | None) -> date | None:
         if value is not None and value > date.today():
             raise ValueError("Dátum narodenia nemôže byť v budúcnosti.")
+        return value
+
+
+
+class StudentProfileUpdate(BaseModel):
+    first_name: str | None = Field(default=None, min_length=1, max_length=120)
+    last_name: str | None = Field(default=None, min_length=1, max_length=120)
+    email: EmailStr | None = None
+    birth_date: date | None = None
+    pilot_experience: str | None = Field(default=None, pattern="^(none|under_1_year|1_3_years|3_5_years|over_5_years)$")
+    flight_hours_range: str | None = Field(default=None, pattern="^(0|under_10|10_50|51_200|201_500|over_500)$")
+    pilot_certificate: str | None = Field(default=None, pattern="^(none|a1_a3|a2|sts|other)$")
+    primary_uav_type: str | None = Field(default=None, pattern="^(multirotor|fixed_wing|helicopter|vtol|other)$")
+    simulator_experience: str | None = Field(default=None, pattern="^(none|under_10|10_50|51_200|over_200)$")
+    self_rated_skill: int | None = Field(default=None, ge=1, le=5)
+    sex: str | None = Field(default=None, pattern="^(female|male|intersex|other|prefer_not_to_say)$")
+    dominant_hand: str | None = Field(default=None, pattern="^(right|left|both|prefer_not_to_say)$")
+    vision_correction: str | None = Field(default=None, pattern="^(none|glasses|contact_lenses|both|other|prefer_not_to_say)$")
+    vision_diopters_left: float | None = Field(default=None, ge=-30, le=30)
+    vision_diopters_right: float | None = Field(default=None, ge=-30, le=30)
+    rc_experience: str | None = Field(default=None, pattern="^(none|under_1_year|1_3_years|3_5_years|over_5_years)$")
+    fpv_experience: str | None = Field(default=None, pattern="^(none|under_1_year|1_3_years|3_5_years|over_5_years)$")
+    game_controller_experience: str | None = Field(default=None, pattern="^(none|under_1_year|1_3_years|3_5_years|over_5_years)$")
+    video_game_experience: str | None = Field(default=None, pattern="^(none|under_2|2_5|6_10|over_10)$")
+
+    @field_validator("birth_date")
+    @classmethod
+    def birth_date_not_future(cls, value: date | None) -> date | None:
+        if value is not None and value > date.today():
+            raise ValueError("Dátum narodenia nemôže byť v budúcnosti.")
+        return value
+
+    @field_validator("first_name", "last_name")
+    @classmethod
+    def trim_name(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        value = value.strip()
+        if not value:
+            raise ValueError("Meno nesmie byť prázdne.")
         return value
 
 
