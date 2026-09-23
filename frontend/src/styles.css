@@ -689,3 +689,55 @@ h1 { max-width: 880px; margin: 20px 0; font-size: clamp(42px, 7vw, 84px); line-h
   text-align: right;
   justify-self: end;
 }
+
+
+/* Compact tabular profile details and consistent profile editing panels. */
+.profile-info-wrap { margin: 12px 0; overflow-x: auto; }
+.profile-info-table { width: 100%; border-collapse: collapse; font-size: .86rem; }
+.profile-info-table th,
+.profile-info-table td { padding: 8px 10px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+.profile-info-table th { width: 32%; color: #8ea5bc; font-weight: 550; }
+.profile-info-table td { color: #dcecff; }
+.profile-info-table tr:last-child th,
+.profile-info-table tr:last-child td { border-bottom: 0; }
+.profile-panel-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.profile-panel-heading h2 { margin: 6px 0; font-size: 1.25rem; }
+.profile-panel-heading p { margin: 0; font-size: .88rem; }
+.participant-profile-editor {
+  margin: 14px 0 0;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 0;
+  background: rgba(255,255,255,.035);
+}
+.participant-profile-editor > div:first-child h3 { margin: 5px 0 0; font-size: 1.05rem; }
+.participant-profile-editor .form-grid { gap: 10px 12px; }
+.participant-profile-editor label {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  color: #9db0c4;
+  font-size: .82rem;
+}
+.participant-profile-editor input:not([type="checkbox"]),
+.participant-profile-editor select {
+  width: 100%;
+  min-width: 0;
+  min-height: 38px;
+  padding: 8px 10px;
+  border: 1px solid #29465e;
+  border-radius: 4px;
+  color: #eef5ff;
+  background: #071321;
+  font: inherit;
+}
+.participant-profile-editor .checkbox-line { display: flex; grid-template-columns: auto 1fr; align-items: center; gap: 9px; }
+.participant-profile-editor .checkbox-line input { width: auto; }
+.profile-email-field { grid-column: 1 / -1; }
+.profile-editor-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 4px; }
+@media (max-width: 680px) {
+  .profile-panel-heading { align-items: flex-start; flex-direction: column; }
+  .participant-profile-editor .form-grid { grid-template-columns: 1fr; }
+  .profile-email-field { grid-column: auto; }
+  .profile-editor-actions { align-items: flex-start; flex-direction: column; }
+}
