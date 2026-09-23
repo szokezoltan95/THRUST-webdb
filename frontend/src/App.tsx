@@ -655,7 +655,6 @@ export function App() {
                   const linkedAccount = adminAccounts.find((item) => item.participant_id === participant.id) || null;
                   const rows = measurements.filter((item) => item.participant_id === participant.id);
                   const dates = rows.map((item) => item.started_at).sort();
-                  const resultMeasurement = [...rows].sort((left, right) => right.started_at.localeCompare(left.started_at)).find((item) => item.analysis_data?.normalized_step_response);
                   if (participantDialog === "detail") return <section className="browser-detail detail-modal-open participant-detail-modal">
                      <div className="detail-header"><div><div className="eyebrow">DETAIL ÚČASTNÍKA</div><h2>{participant.participant_code}</h2></div><button className="quiet compact" onClick={() => setParticipantDialog(null)}>Zavrieť</button></div>
                      {accountMessage && <p className="notice">{accountMessage}</p>}
