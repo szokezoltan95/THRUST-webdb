@@ -494,3 +494,76 @@ h1 { max-width: 880px; margin: 20px 0; font-size: clamp(42px, 7vw, 84px); line-h
   .participant-profile-editor .form-grid,
   .profile-questionnaire .form-grid { grid-template-columns: 1fr; }
 }
+
+/* Dedicated registration page */
+.registration-page {
+  min-height: 100vh;
+  color: #eef5ff;
+  background: radial-gradient(circle at 82% 0%, #102b49 0, transparent 38%), #07101c;
+}
+.registration-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  max-width: 1280px;
+  height: auto;
+  min-height: 82px;
+  margin: 0 auto;
+  padding: 16px 32px;
+  border-bottom: 1px solid rgba(143, 177, 193, .13);
+}
+.registration-header .actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.registration-content { width: min(1120px, calc(100% - 48px)); margin: 0 auto; padding: 54px 0 72px; }
+.registration-heading { max-width: 760px; margin: 0 auto 30px; }
+.registration-heading h1 { margin: 10px 0; font-size: clamp(2rem, 4vw, 3rem); }
+.registration-heading .lead { margin: 0; max-width: 700px; }
+.registration-form {
+  display: grid;
+  grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr);
+  align-items: start;
+  gap: 18px;
+}
+.registration-card {
+  min-width: 0;
+  padding: 26px;
+  border: 1px solid rgba(143, 177, 193, .2);
+  border-radius: 16px;
+  background: rgba(9, 21, 30, .74);
+  box-shadow: 0 14px 44px rgba(0, 0, 0, .16);
+}
+.registration-card h2 { margin: 6px 0 8px; }
+.registration-account-fields { display: grid; align-content: start; gap: 16px; }
+.registration-account-fields > p { margin: 0; }
+.registration-form .profile-questionnaire { gap: 17px; margin: 0; }
+.registration-form .profile-questionnaire > div:first-child p { margin: 8px 0 0; }
+.registration-form .form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.registration-form select {
+  min-height: 44px;
+  width: 100%;
+  padding: 0 12px;
+  color: #eef5ff;
+  border: 1px solid #29465e;
+  border-radius: 7px;
+  background: #071321;
+}
+.registration-form select option { color: #eef5ff; background: #071321; }
+.registration-consents { grid-column: 1 / -1; display: grid; gap: 16px; }
+.registration-consents .consent { margin: 0; }
+.registration-actions { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-top: 4px; }
+.registration-actions .muted { max-width: 620px; }
+.registration-actions button { flex: 0 0 auto; }
+@media (max-width: 820px) {
+  .registration-content { width: min(680px, calc(100% - 32px)); padding-top: 32px; }
+  .registration-form { grid-template-columns: 1fr; }
+  .registration-consents { grid-column: auto; }
+}
+@media (max-width: 560px) {
+  .registration-header { align-items: flex-start; flex-direction: column; padding: 16px; }
+  .registration-header .actions { width: 100%; }
+  .registration-header .actions button { flex: 1; }
+  .registration-content { width: calc(100% - 24px); padding: 26px 0 48px; }
+  .registration-card { padding: 18px; }
+  .registration-form .form-grid { grid-template-columns: 1fr; }
+  .registration-actions { align-items: stretch; flex-direction: column; }
+}
