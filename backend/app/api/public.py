@@ -3,6 +3,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.core.consents import consent_texts
 from app.db.session import get_db
 from app.models import Measurement, Participant
 
@@ -21,3 +22,8 @@ async def public_metrics(db: AsyncSession = Depends(get_db)) -> dict:
         "publishable": publishable,
     }
 
+
+
+@router.get("/consent-texts")
+async def public_consent_texts() -> dict[str, object]:
+    return consent_texts()
