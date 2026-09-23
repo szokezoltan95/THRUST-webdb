@@ -1037,11 +1037,14 @@ function ResearcherRegistrationPage({ onSubmit, onBack, onStudentRegister, onLog
           <div className="eyebrow">ÚDAJE ÚČTU</div><h2>Prístup pre výskumníka</h2>
           <div className="form-grid"><label>Meno<input name="first_name" autoComplete="given-name" required /></label><label>Priezvisko<input name="last_name" autoComplete="family-name" required /></label></div>
           <label>E-mail<input name="email" type="email" autoComplete="email" required /></label>
-          <label>Pozývací kľúč<input name="registration_key" type="password" autoComplete="off" required /></label>
           <div className="form-grid"><label>Heslo<input name="password" type="password" minLength={10} autoComplete="new-password" required /></label><label>Zopakovať heslo<input name="password_confirmation" type="password" minLength={10} autoComplete="new-password" required /></label></div>
+        </section>
+        <section className="registration-card researcher-key-card">
+          <div><div className="eyebrow">OVERENIE PRÍSTUPU</div><h2>Pozývací kľúč</h2><p className="muted">Zadaj kľúč, ktorý ti poskytol správca. Overuje sa na serveri a určuje rolu výskumníka.</p></div>
+          <label>Pozývací kľúč<input name="registration_key" type="password" autoComplete="off" required /></label>
           <label className="consent"><input name="gdpr_consent" type="checkbox" required /> <span>Súhlasím so spracovaním osobných údajov pre vytvorenie a správu účtu. <a href="#consent-gdpr" onClick={(event) => { event.preventDefault(); onOpenConsent("gdpr"); }}>Zobraziť informácie a GDPR súhlas</a></span></label>
           {error && <p className="error">{error}</p>}
-          <div className="registration-actions"><span className="muted">Pozývací kľúč sa overuje na serveri. Výskumný súhlas účastníka merania sa na tento účet nevzťahuje.</span><button className="primary" type="submit" disabled={!consentTexts}>Vytvoriť účet výskumníka</button></div>
+          <div className="registration-actions"><span className="muted">Výskumný súhlas účastníka merania sa na tento účet nevzťahuje.</span><button className="primary" type="submit" disabled={!consentTexts}>Vytvoriť účet výskumníka</button></div>
         </section>
       </form>
     </section>
