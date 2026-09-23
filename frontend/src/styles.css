@@ -397,3 +397,14 @@ h1 { max-width: 880px; margin: 20px 0; font-size: clamp(42px, 7vw, 84px); line-h
 @media (max-width: 560px) { .toggle-grid { grid-template-columns: 1fr; } }
 
 .config-note { margin: -4px 0 14px; color: #8e9aa5; font-size: .88rem; line-height: 1.45; }
+
+
+.form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.consent { display: flex; flex-direction: row; align-items: flex-start; gap: 8px; line-height: 1.4; }
+.consent input { width: auto; margin-top: 4px; }
+.student-shell { min-height: 100vh; }
+.student-content { max-width: 1040px; margin: 0 auto; }
+.student-content .panel { margin-top: 18px; }
+.student-content table { width: 100%; border-collapse: collapse; }
+.student-content th, .student-content td { padding: 10px 12px; border-bottom: 1px solid var(--line, #d8dee5); text-align: left; }
+@media (max-width: 680px) { .form-grid { grid-template-columns: 1fr; } }
