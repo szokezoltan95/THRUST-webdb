@@ -51,7 +51,7 @@ def normalize_test_configuration(source: dict, analysis_profile: str = "SCOPE_ST
             configuration["auto_open_graph"] = False
     elif profile.startswith("SIMPLE"):
         # Each image is kept in the persistent measurement volume, never as a server path in JSON.
-        for key in ("visual", "gui_gimbal_size", "gui_stick_size", "target_zone_radius_px"):
+        for key in ("visual", "gui_gimbal_size", "gui_stick_size", "target_zone_radius_px", "sampling_hz", "zoom_px_per_m"):
             configuration.pop(key, None)
         image_id = configuration.get("background_image_id")
         if image_id not in (None, ""):
