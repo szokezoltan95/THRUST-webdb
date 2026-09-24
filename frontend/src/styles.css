@@ -926,3 +926,18 @@ h1 { max-width: 880px; margin: 20px 0; font-size: clamp(42px, 7vw, 84px); line-h
 
 .detail-header-actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 10px; }
 @media (max-width: 600px) { .detail-header-actions { width: 100%; justify-content: flex-start; } .detail-window-bar { flex-wrap: wrap; } }
+
+.participant-mode-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.participant-mode-stats > section { min-width: 0; padding: 14px; border: 1px solid var(--line); border-radius: 12px; background: rgba(255,255,255,.025); }
+.participant-mode-stats > section > .eyebrow { margin-bottom: 10px; }
+.simple-scene-preview { position: relative; width: 100%; overflow: hidden; aspect-ratio: 2 / 1; min-height: 180px; border: 1px solid #31536a; border-radius: 10px; background: #0b1e30; isolation: isolate; }
+.simple-scene-preview > img, .simple-scene-preview > .simple-scene-default { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.simple-scene-default { background: linear-gradient(180deg, #5d8fb1 0%, #9dbdca 65%, #8c9b85 66%, #526451 100%); }
+.simple-scene-preview > svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.simple-scene-preview .scene-ground { fill: rgba(16,35,31,.38); }
+.simple-scene-preview .scene-ground-line { stroke: rgba(239,248,242,.78); stroke-width: 2; stroke-dasharray: 8 7; }
+.simple-scene-preview .scene-target-ring { fill: rgba(255,55,66,.09); stroke: #ff3948; stroke-width: 4; }
+.simple-scene-preview .scene-drone-ball { fill: #1e2cff; stroke: #ffffff; stroke-width: 1.5; }
+.simple-scene-preview .scene-drone-arrow, .simple-scene-preview .scene-drone-arrow-head { stroke: #ffffff; fill: #ffffff; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; }
+.scene-preview-caption { position: absolute; right: 9px; bottom: 8px; z-index: 2; padding: 5px 8px; border-radius: 6px; background: rgba(4,12,20,.72); color: #e6f2fa; font-size: .72rem; }
+@media (max-width: 760px) { .participant-mode-stats { grid-template-columns: 1fr; } }
