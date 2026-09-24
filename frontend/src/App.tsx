@@ -72,6 +72,27 @@ function formatBytes(value: number | null | undefined): string {
   return `${size.toFixed(size < 10 ? 1 : 0)} ${units[unit]}`;
 }
 
+function measurementMetrics(analysis: Record<string, unknown> | null): Record<string, number> {
+  if (!analysis) return {};
+  const result: Record<string, number> = {};
+  const addNumbers = (prefix: string, value: unknown) => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return;
+    for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
+      if (typeof item === "number" && Number.isFinite(item)) result[prefix + key] = item;
+    }
+  };
+  addNumbers("", analysis.metrics);
+  const response = analysis.normalized_step_response as Record<string, unknown> | undefined;
+  const channels = response?.channels;
+  if (channels && typeof channels === "object") {
+    for (const [axis, channel] of Object.entries(channels as Record<string, unknown>)) {
+      if (channel && typeof channel === "object") addNumbers(`${axis}.`, (channel as Record<string, unknown>).metrics);
+    }
+  }
+  addNumbers("", analysis.parameters);
+  return result;
+}
+
 function parseFormattedDate(value: string): string | null {
   const trimmed = value.trim();
   const isoMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(trimmed);
@@ -872,9 +893,9 @@ export function App() {
                 {(selectedGroupId || statsParticipantId) && (() => {
                   const group = groups.find((item) => item.id === selectedGroupId);
                   const memberSet = new Set(group?.participant_ids ?? (statsParticipantId ? [statsParticipantId] : []));
-                  const metricOptions = Array.from(new Set(measurements.filter((item) => memberSet.has(item.participant_id)).flatMap((item) => { const data = item.analysis_data ?? {}; const source = (data.metrics && typeof data.metrics === "object" ? data.metrics : data) as Record<string, unknown>; return Object.entries(source).filter(([, value]) => typeof value === "number" && Number.isFinite(value)).map(([key]) => key); }))).sort();
+                  const metricOptions = Array.from(new Set(measurements.filter((item) => memberSet.has(item.participant_id)).flatMap((item) => Object.keys(measurementMetrics(item.analysis_data))))).sort();
                   const metric = metricOptions.includes(groupMetric) ? groupMetric : metricOptions[0] ?? "";
-                  const points = measurements.filter((item) => memberSet.has(item.participant_id)).map((item) => { const data = item.analysis_data ?? {}; const source = (data.metrics && typeof data.metrics === "object" ? data.metrics : data) as Record<string, unknown>; const value = source[metric]; return metric && typeof value === "number" && Number.isFinite(value) ? { date: item.started_at, test: item.test_type, value, participant: item.participant_id } : null; }).filter((item): item is { date: string; test: string; value: number; participant: string } => item !== null).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+                  const points = measurements.filter((item) => memberSet.has(item.participant_id)).map((item) => { const value = measurementMetrics(item.analysis_data)[metric]; return metric && typeof value === "number" ? { date: item.started_at, test: item.test_type, value, participant: item.participant_id } : null; }).filter((item): item is { date: string; test: string; value: number; participant: string } => item !== null).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
                   const buckets = new Map<string, { sum: number; n: number; date: string; label: string }>();
                   for (const point of points) { const label = groupXAxis === "date" ? formatDate(point.date) : point.test; const key = groupXAxis === "date" ? point.date.slice(0, 10) : point.test; const current = buckets.get(key) ?? { sum: 0, n: 0, date: point.date, label }; current.sum += point.value; current.n += 1; buckets.set(key, current); }
                   const series = Array.from(buckets.values()).sort((a, b) => groupXAxis === "date" ? a.date.localeCompare(b.date) : a.label.localeCompare(b.label));
