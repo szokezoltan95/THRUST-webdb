@@ -50,9 +50,18 @@ def normalize_test_configuration(source: dict, analysis_profile: str = "SCOPE_ST
         if not configuration.get("save_graph_pdf", False):
             configuration["auto_open_graph"] = False
     elif profile.startswith("SIMPLE"):
-        # SimPLE has its own world/physics parameters and versioned analysis format.
-        for key in ("visual", "gui_gimbal_size", "gui_stick_size"):
+        # Each image is kept in the persistent measurement volume, never as a server path in JSON.
+        for key in ("visual", "gui_gimbal_size", "gui_stick_size", "target_zone_radius_px"):
             configuration.pop(key, None)
+        image_id = configuration.get("background_image_id")
+        if image_id not in (None, ""):
+            from app.api.backgrounds import background_metadata
+            try:
+                background_metadata(str(image_id))
+            except HTTPException as exc:
+                raise HTTPException(status_code=422, detail="Vybraný obrázok pozadia neexistuje.") from exc
+        else:
+            configuration.pop("background_image_id", None)
     return configuration
 
 
