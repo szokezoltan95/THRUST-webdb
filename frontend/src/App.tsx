@@ -22,7 +22,8 @@ type AdminAccount = { id: string; username: string; email: string | null; first_
 type TestDefinition = { id: string; test_code: string; name: string; version: string; status: string; analysis_profile: string; configuration: Record<string, unknown>; is_active: boolean };
 type Measurement = { id: string; participant_id: string; test_definition_id: string | null; test_type: string; status: string; started_at: string; source_file_name: string | null; raw_sha256: string | null; raw_size_bytes: number | null; analysis_data: Record<string, unknown> | null };
 type ParticipantDetail = { participant: Participant; measurements: { id: string; test_type: string; status: string; started_at: string; raw_data_available?: boolean; raw_size_bytes?: number | null }[] };
-type AdminSection = "overview" | "participants" | "tests" | "measurements";
+type AdminSection = "overview" | "participants" | "groups" | "tests" | "measurements";
+type ParticipantGroup = { id: string; name: string; description: string | null; created_at: string; participant_ids: string[]; participant_codes: string[] };
 type StudentMeasurement = { id: string; test_type: string; status: string; started_at: string; raw_size_bytes: number | null; analysis_data: Record<string, unknown> | null };
 type StudentProfile = { username: string; email: string | null; role: string; participant_code: string; first_name: string; last_name: string; created_at: string; birth_date: string | null; pilot_experience: string | null; flight_hours_range: string | null; pilot_certificate: string | null; primary_uav_type: string | null; simulator_experience: string | null; self_rated_skill: number | null; sex?: string | null; dominant_hand?: string | null; vision_correction?: string | null; vision_diopters_left?: number | null; vision_diopters_right?: number | null; rc_experience?: string | null; fpv_experience?: string | null; game_controller_experience?: string | null; video_game_experience?: string | null; }
 type StudentComparison = { available: boolean; minimum_group_size: number; cohort_participant_count: number; own_measurement_count: number; own_average: Record<string, number>; cohort_average: Record<string, number> };
@@ -173,6 +174,15 @@ export function App() {
   const [participantDialog, setParticipantDialog] = useState<"detail" | "measurements" | null>(null);
   const [selectedAccount, setSelectedAccount] = useState<AdminAccount | null>(null);
   const [measurements, setMeasurements] = useState<Measurement[]>([]);
+  const [groups, setGroups] = useState<ParticipantGroup[]>([]);
+  const [selectedGroupId, setSelectedGroupId] = useState("");
+  const [statsParticipantId, setStatsParticipantId] = useState("");
+  const [groupName, setGroupName] = useState("");
+  const [groupDescription, setGroupDescription] = useState("");
+  const [groupMemberIds, setGroupMemberIds] = useState<string[]>([]);
+  const [groupMetric, setGroupMetric] = useState("");
+  const [groupXAxis, setGroupXAxis] = useState<"date" | "test">("date");
+  const [groupMessage, setGroupMessage] = useState("");
   const [uploadMessage, setUploadMessage] = useState("");
   const [selectedMeasurementId, setSelectedMeasurementId] = useState<string | null>(null);
   const [selectedMeasurementIds, setSelectedMeasurementIds] = useState<string[]>([]);
@@ -238,6 +248,7 @@ export function App() {
       else setAdminAccounts([]);
       request<TestDefinition[]>("/api/admin/tests").then(setTests).catch(() => setTests([]));
       request<Measurement[]>("/api/admin/measurements").then(setMeasurements).catch(() => setMeasurements([]));
+      request<ParticipantGroup[]>("/api/admin/groups").then(setGroups).catch(() => setGroups([]));
     }
   }, [user]);
 
@@ -359,6 +370,34 @@ export function App() {
 
   function toggleMeasurementSelection(id: string) {
     setSelectedMeasurementIds((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
+  }
+
+  async function saveParticipantGroup(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!user) return;
+    try {
+      const body = { name: groupName, description: groupDescription || null, participant_ids: groupMemberIds };
+      const url = selectedGroupId ? `/api/admin/groups/${selectedGroupId}` : "/api/admin/groups";
+      const saved = await request<ParticipantGroup>(url, { method: selectedGroupId ? "PATCH" : "POST", headers: { "Content-Type": "application/json", "X-CSRF-Token": user.csrf_token }, body: JSON.stringify(body) });
+      setGroups((current) => [...current.filter((item) => item.id !== saved.id), saved].sort((a, b) => a.name.localeCompare(b.name)));
+      setSelectedGroupId(saved.id); setGroupName(saved.name); setGroupDescription(saved.description ?? ""); setGroupMemberIds(saved.participant_ids);
+      setGroupMessage(t("Skupina bola uložená."));
+    } catch (reason) { setGroupMessage(reason instanceof Error ? reason.message : t("Skupinu sa nepodarilo uložiť.")); }
+  }
+
+  function groupSeries(): { label: string; date: string; value: number; n: number }[] {
+    const group = groups.find((item) => item.id === selectedGroupId);
+    if (!group || !groupMetric) return [];
+    const memberSet = new Set(group.participant_ids);
+    const rows = measurements.filter((item) => memberSet.has(item.participant_id) && item.status !== "failed").map((item) => {
+      const data = item.analysis_data ?? {};
+      const metrics = (data.metrics && typeof data.metrics === "object" ? data.metrics : data) as Record<string, unknown>;
+      const value = metrics[groupMetric];
+      return typeof value === "number" && Number.isFinite(value) ? { label: item.test_type, date: item.started_at, value, participant: item.participant_id } : null;
+    }).filter((item): item is { label: string; date: string; value: number; participant: string } => item !== null)
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    if (groupXAxis === "test") return rows.map((item) => ({ label: item.label, date: item.date, value: item.value, n: 1 }));
+    return rows.map((item) => ({ label: formatDate(item.date), date: item.date, value: item.value, n: 1 }));
   }
 
   async function deleteTestVersion(test: TestDefinition) {
@@ -693,13 +732,14 @@ export function App() {
             <nav className="side-nav" aria-label={t("Administrácia")}>
               <button className={activeSection === "overview" ? "nav-item active" : "nav-item"} onClick={() => setActiveSection("overview")}><span>⌂</span>{t("Prehľad")}</button>
               <button className={activeSection === "participants" ? "nav-item active" : "nav-item"} onClick={() => setActiveSection("participants")}><span>◎</span>{t("Účastníci a účty")}</button>
+              <button className={activeSection === "groups" ? "nav-item active" : "nav-item"} onClick={() => setActiveSection("groups")}><span>◉</span>{t("Skupiny a trendy")}</button>
               <button className={activeSection === "tests" ? "nav-item active" : "nav-item"} onClick={() => setActiveSection("tests")}><span>▣</span>{t("Testy a konfigurácie")}</button>
               <button className={activeSection === "measurements" ? "nav-item active" : "nav-item"} onClick={() => setActiveSection("measurements")}><span>↗</span>{t("Merania a výsledky")}</button>
             </nav>
             <div className="sidebar-footer"><span>{user.username} · {user.role}</span><button className="quiet" onClick={logout}>{t("Odhlásiť")}</button></div>
           </aside>
           <div className="app-main">
-            <header className="topbar"><div><div className="eyebrow">{t("ADMINISTRÁCIA ·")} {user.role.toUpperCase()}</div><h1>{activeSection === "overview" ? t("Prehľad meraní") : activeSection === "participants" ? t("Účastníci a účty") : activeSection === "tests" ? t("Testy a konfigurácie") : t("Merania a výsledky")}</h1></div><div className="header-actions"><LanguageSwitcher /><span className="status-dot">{t("Systém online")}</span></div></header>
+            <header className="topbar"><div><div className="eyebrow">{t("ADMINISTRÁCIA ·")} {user.role.toUpperCase()}</div><h1>{activeSection === "overview" ? t("Prehľad meraní") : activeSection === "participants" ? t("Účastníci a účty") : activeSection === "groups" ? t("Skupiny a trendy") : activeSection === "tests" ? t("Testy a konfigurácie") : t("Merania a výsledky")}</h1></div><div className="header-actions"><LanguageSwitcher /><span className="status-dot">{t("Systém online")}</span></div></header>
             <section className="workspace">
               {activeSection === "overview" && <>
                 <div className="stats"><Metric label={t("Účastníci")} value={overview?.participant_count ?? "—"} /><Metric label={t("Merania")} value={overview?.measurement_count ?? "—"} /><Metric label={t("Čakajúce synchronizácie")} value="0" /></div>
@@ -822,6 +862,27 @@ export function App() {
                   <div className="account-dialog-actions"><button className="quiet" onClick={() => void resetAccountPassword(selectedAccount)}>{t("Resetovať heslo")}</button><button className="quiet danger" onClick={() => void anonymizeAccount(selectedAccount)}>{t("Deaktivovať a anonymizovať")}</button><button className="quiet danger" onClick={() => void permanentlyDeleteStandaloneAccount(selectedAccount)}>{t("Trvalo vymazať konto")}</button><button className="primary" onClick={() => setSelectedAccount(null)}>{t("Zavrieť")}</button></div>
                 </> : <div className="account-dialog-actions"><span className="role-label">{selectedAccount.effective_role}</span><button className="primary" onClick={() => setSelectedAccount(null)}>{t("Zavrieť")}</button></div>}
               </section></div>}
+              {activeSection === "groups" && <>
+                <section className="browser-panel">
+                  <div className="browser-header"><div><div className="eyebrow">{t("DLHODOBÉ ŠTATISTIKY")}</div><h2>{t("Skupiny účastníkov")}</h2><p className="muted">{t("Vytváraj výskumné skupiny z pseudonymných ID a sleduj zmeny uložených metrík v čase alebo podľa testov.")}</p></div></div>
+                  {groupMessage && <p className="notice">{groupMessage}</p>}
+                  <div className="filters"><select value={selectedGroupId} onChange={(event) => { const id = event.target.value; setSelectedGroupId(id); setStatsParticipantId(""); const found = groups.find((item) => item.id === id); if (found) { setGroupName(found.name); setGroupDescription(found.description ?? ""); setGroupMemberIds(found.participant_ids); } else { setGroupName(""); setGroupDescription(""); setGroupMemberIds([]); } }}><option value="">{t("Nová skupina / vyber existujúcu")}</option>{groups.map((group) => <option key={group.id} value={group.id}>{group.name} · {group.participant_ids.length}</option>)}</select><select value={statsParticipantId} onChange={(event) => { setStatsParticipantId(event.target.value); setSelectedGroupId(""); }}><option value="">{t("Alebo vyber jednotlivca")}</option>{participants.map((participant) => <option key={participant.id} value={participant.id}>{participant.participant_code}</option>)}</select><select value={groupXAxis} onChange={(event) => setGroupXAxis(event.target.value as "date" | "test")}><option value="date">{t("Os X: dátum merania")}</option><option value="test">{t("Os X: typ testu")}</option></select></div>
+                  <form className="measurement-form" onSubmit={saveParticipantGroup}><label>{t("Názov skupiny")}<input required maxLength={120} value={groupName} onChange={(event) => setGroupName(event.target.value)} /></label><label>{t("Popis")}<input maxLength={500} value={groupDescription} onChange={(event) => setGroupDescription(event.target.value)} /></label><div className="group-members"><strong>{t("Členovia · Participant ID")}</strong>{participants.filter((item) => item.is_active).map((participant) => <label key={participant.id}><input type="checkbox" checked={groupMemberIds.includes(participant.id)} onChange={(event) => setGroupMemberIds((ids) => event.target.checked ? [...ids, participant.id] : ids.filter((id) => id !== participant.id))} /> {participant.participant_code}</label>)}</div><div className="actions"><button type="button" className="quiet" onClick={() => { setSelectedGroupId(""); setGroupName(""); setGroupDescription(""); setGroupMemberIds([]); }}>{t("Nová skupina")}</button><button className="primary" type="submit">{selectedGroupId ? t("Uložiť skupinu") : t("Vytvoriť skupinu")}</button></div></form>
+                </section>
+                {(selectedGroupId || statsParticipantId) && (() => {
+                  const group = groups.find((item) => item.id === selectedGroupId);
+                  const memberSet = new Set(group?.participant_ids ?? (statsParticipantId ? [statsParticipantId] : []));
+                  const metricOptions = Array.from(new Set(measurements.filter((item) => memberSet.has(item.participant_id)).flatMap((item) => { const data = item.analysis_data ?? {}; const source = (data.metrics && typeof data.metrics === "object" ? data.metrics : data) as Record<string, unknown>; return Object.entries(source).filter(([, value]) => typeof value === "number" && Number.isFinite(value)).map(([key]) => key); }))).sort();
+                  const metric = metricOptions.includes(groupMetric) ? groupMetric : metricOptions[0] ?? "";
+                  const points = measurements.filter((item) => memberSet.has(item.participant_id)).map((item) => { const data = item.analysis_data ?? {}; const source = (data.metrics && typeof data.metrics === "object" ? data.metrics : data) as Record<string, unknown>; const value = source[metric]; return metric && typeof value === "number" && Number.isFinite(value) ? { date: item.started_at, test: item.test_type, value, participant: item.participant_id } : null; }).filter((item): item is { date: string; test: string; value: number; participant: string } => item !== null).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+                  const buckets = new Map<string, { sum: number; n: number; date: string; label: string }>();
+                  for (const point of points) { const label = groupXAxis === "date" ? formatDate(point.date) : point.test; const key = groupXAxis === "date" ? point.date.slice(0, 10) : point.test; const current = buckets.get(key) ?? { sum: 0, n: 0, date: point.date, label }; current.sum += point.value; current.n += 1; buckets.set(key, current); }
+                  const series = Array.from(buckets.values()).sort((a, b) => groupXAxis === "date" ? a.date.localeCompare(b.date) : a.label.localeCompare(b.label));
+                  const vals = series.map((item) => item.sum / item.n); const min = Math.min(...vals, 0); const max = Math.max(...vals, 1); const path = vals.map((value, index) => `${index ? "L" : "M"} ${40 + index * (560 / Math.max(1, vals.length - 1))} ${220 - ((value - min) / (max - min || 1)) * 180}`).join(" ");
+                  const subject = group?.name ?? participants.find((item) => item.id === statsParticipantId)?.participant_code ?? "";
+                  return <section className="browser-panel"><div className="browser-header"><div><div className="eyebrow">{t("TREND ·")}{subject}</div><h2>{t("Dlhodobý vývoj parametra")}</h2></div><select value={metric} onChange={(event) => setGroupMetric(event.target.value)}>{metricOptions.map((key) => <option key={key} value={key}>{key}</option>)}</select></div>{series.length ? <><div className="trend-chart"><svg viewBox="0 0 620 250" role="img" aria-label={t("Graf vývoja parametra")}>{[0, 1, 2, 3].map((i) => <line key={i} x1="40" x2="600" y1={40 + i * 60} y2={40 + i * 60} />)}<path d={path} />{vals.map((value, index) => <circle key={index} cx={40 + index * (560 / Math.max(1, vals.length - 1))} cy={220 - ((value - min) / (max - min || 1)) * 180} r="4" />)}</svg><div className="trend-axis-labels"><span>{series[0].label}</span><span>{series[series.length - 1].label}</span></div></div><div className="data-table trend-data-table"><div className="data-table-head"><span>{groupXAxis === "date" ? t("Dátum") : t("Test")}</span><span>{t("Priemer")}</span><span>{t("Počet meraní")}</span></div>{series.map((item) => <div className="data-table-row" key={`${item.label}-${item.date}`}><strong>{item.label}</strong><span>{(item.sum / item.n).toPrecision(5)}</span><span>{item.n}</span></div>)}</div></> : <p className="muted">{t("Pre členov tejto skupiny zatiaľ nie sú uložené číselné metriky.")}</p>}</section>;
+                })()}
+              </>}
               {activeSection === "tests" && <>
                 <section className="browser-panel">
                   <div className="browser-header"><div><div className="eyebrow">{t("KATALÓG TESTOV")}</div><h2>{t("Testy a konfigurácie")}</h2><p className="muted">{t("Každá verzia testu je samostatná, nemenná konfigurácia pre THRUST.")}</p></div></div>

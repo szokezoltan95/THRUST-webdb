@@ -959,4 +959,16 @@ header > .actions, .registration-header > .actions { margin-top: 0; align-items:
 .measurement-context-window { width: min(1500px, 100%); max-height: calc(100vh - 44px); overflow: auto; padding: 22px; border: 1px solid #31506e; background: #0a1726; box-shadow: 0 24px 100px rgba(0,0,0,.72); }
 .measurement-context-window .results-layout { grid-template-columns: minmax(0,1fr); }
 .measurement-context-window .results-chart-column { min-width: 0; }
+.group-members { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 10px 18px; padding: 14px; border: 1px solid var(--line); }
+.group-members > strong { flex-basis: 100%; color: #dcecff; }
+.group-members label { display: flex; align-items: center; gap: 6px; }
+.group-members input { width: auto; }
+.measurement-form .actions { grid-column: 1 / -1; justify-content: flex-end; }
+.trend-chart { width: 100%; max-width: 900px; margin: 10px auto 24px; }
+.trend-chart svg { display: block; width: 100%; overflow: visible; }
+.trend-chart line { stroke: #29445d; stroke-width: 1; }
+.trend-chart path { fill: none; stroke: #51c5a5; stroke-width: 3; }
+.trend-chart circle { fill: #78e0c0; stroke: #07121f; stroke-width: 2; }
+.trend-axis-labels { display: flex; justify-content: space-between; color: #8ea5bc; font-size: .75rem; }
+.trend-data-table .data-table-head, .trend-data-table .data-table-row { grid-template-columns: 1fr 1fr 1fr; }
 @media (max-width: 900px) { .simple-editor-layout { grid-template-columns: 1fr; } .simple-scene-preview { min-height: 220px; } }

@@ -4,14 +4,16 @@ import string
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import FileResponse
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import AuthContext, effective_role, require_admin, require_csrf, require_researcher, require_superadmin_csrf
+from app.api.dependencies import AuthContext, effective_role, require_admin, require_csrf, require_researcher, require_researcher_csrf, require_superadmin_csrf
 from app.core.config import settings
 from app.core.raw_logs import RawUploadInvalid, RawUploadTooLarge, decode_raw_upload
 from app.db.session import get_db
-from app.models import AdminSession, AdminUser, Measurement, Participant, TestDefinition
+from app.models import AdminSession, AdminUser, Measurement, Participant, TestDefinition, ParticipantGroup
+from app.schemas.participant_group import ParticipantGroupCreate, ParticipantGroupUpdate
 from app.schemas.participant import ParticipantCreate, ParticipantResponse, ParticipantUpdate, RegisteredStudentResponse
 from app.schemas.user_admin import AccountPasswordReset, AccountRoleUpdate, AdminAccountResponse
 from app.core.security import hash_password
@@ -19,6 +21,73 @@ from app.schemas.measurement import MeasurementCreate, MeasurementResponse
 from app.schemas.test_definition import TestDefinitionCreate, TestDefinitionResponse, TestDefinitionUpdate
 
 router = APIRouter(prefix="/admin", tags=["administration"])
+
+
+def _group_response(group: ParticipantGroup) -> dict:
+    members = sorted(group.members, key=lambda item: item.participant_code)
+    return {"id": group.id, "name": group.name, "description": group.description,
+            "created_at": group.created_at, "participant_ids": [item.id for item in members],
+            "participant_codes": [item.participant_code for item in members]}
+
+
+@router.get("/groups")
+async def list_participant_groups(auth: AuthContext = Depends(require_researcher), db: AsyncSession = Depends(get_db)) -> list[dict]:
+    groups = await db.scalars(select(ParticipantGroup).order_by(ParticipantGroup.name))
+    return [_group_response(group) for group in groups]
+
+
+@router.post("/groups", status_code=status.HTTP_201_CREATED)
+async def create_participant_group(payload: ParticipantGroupCreate, auth: AuthContext = Depends(require_researcher_csrf), db: AsyncSession = Depends(get_db)) -> dict:
+    name = payload.name.strip()
+    if not name:
+        raise HTTPException(status_code=422, detail="Názov skupiny nesmie byť prázdny.")
+    if await db.scalar(select(ParticipantGroup.id).where(func.lower(ParticipantGroup.name) == name.lower())):
+        raise HTTPException(status_code=409, detail="Skupina s týmto názvom už existuje.")
+    ids = list(dict.fromkeys(payload.participant_ids))
+    members = list(await db.scalars(select(Participant).where(Participant.id.in_(ids), Participant.is_active.is_(True)))) if ids else []
+    if len(members) != len(ids):
+        raise HTTPException(status_code=422, detail="Jeden alebo viac účastníkov neexistuje alebo je neaktívnych.")
+    group = ParticipantGroup(name=name, description=payload.description, members=members)
+    db.add(group)
+    await db.commit()
+    await db.refresh(group)
+    return _group_response(group)
+
+
+@router.patch("/groups/{group_id}")
+async def update_participant_group(group_id: str, payload: ParticipantGroupUpdate, auth: AuthContext = Depends(require_researcher_csrf), db: AsyncSession = Depends(get_db)) -> dict:
+    group = await db.get(ParticipantGroup, group_id)
+    if group is None:
+        raise HTTPException(status_code=404, detail="Skupina neexistuje.")
+    data = payload.model_dump(exclude_unset=True)
+    if "name" in data:
+        name = (data["name"] or "").strip()
+        if not name:
+            raise HTTPException(status_code=422, detail="Názov skupiny nesmie byť prázdny.")
+        duplicate = await db.scalar(select(ParticipantGroup.id).where(func.lower(ParticipantGroup.name) == name.lower(), ParticipantGroup.id != group.id))
+        if duplicate:
+            raise HTTPException(status_code=409, detail="Skupina s týmto názvom už existuje.")
+        group.name = name
+    if "description" in data:
+        group.description = data["description"]
+    if "participant_ids" in data and data["participant_ids"] is not None:
+        ids = list(dict.fromkeys(data["participant_ids"]))
+        members = list(await db.scalars(select(Participant).where(Participant.id.in_(ids), Participant.is_active.is_(True)))) if ids else []
+        if len(members) != len(ids):
+            raise HTTPException(status_code=422, detail="Jeden alebo viac účastníkov neexistuje alebo je neaktívnych.")
+        group.members = members
+    await db.commit()
+    await db.refresh(group)
+    return _group_response(group)
+
+
+@router.delete("/groups/{group_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_participant_group(group_id: str, auth: AuthContext = Depends(require_researcher_csrf), db: AsyncSession = Depends(get_db)) -> None:
+    group = await db.get(ParticipantGroup, group_id)
+    if group is None:
+        raise HTTPException(status_code=404, detail="Skupina neexistuje.")
+    await db.delete(group)
+    await db.commit()
 
 CODE_ALPHABET = string.ascii_uppercase + string.digits
 
@@ -530,6 +599,25 @@ async def measurement_detail(
     if measurement is None:
         raise HTTPException(status_code=404, detail="Meranie neexistuje.")
     return measurement
+
+
+@router.get("/measurements/{measurement_id}/raw")
+async def download_measurement_raw(measurement_id: str, auth: AuthContext = Depends(require_researcher), db: AsyncSession = Depends(get_db)) -> FileResponse:
+    measurement = await db.get(Measurement, measurement_id)
+    if measurement is None:
+        raise HTTPException(status_code=404, detail="Meranie neexistuje.")
+    if not measurement.raw_storage_path:
+        raise HTTPException(status_code=404, detail="Raw súbor nie je archivovaný.")
+    storage_root = Path(settings.measurement_storage_path).resolve()
+    raw_path = Path(measurement.raw_storage_path).resolve()
+    try:
+        raw_path.relative_to(storage_root)
+    except ValueError as exc:
+        raise HTTPException(status_code=500, detail="Raw súbor je mimo úložiska meraní.") from exc
+    if not raw_path.is_file():
+        raise HTTPException(status_code=404, detail="Archivovaný raw súbor sa nenašiel.")
+    return FileResponse(raw_path, filename=measurement.source_file_name or f"{measurement.id}.tsv.gz",
+                        media_type=measurement.raw_content_type or "application/octet-stream")
 
 
 @router.delete("/measurements/{measurement_id}", status_code=status.HTTP_204_NO_CONTENT)
