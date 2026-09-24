@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import AuthContext, require_authenticated, require_user_csrf
 from app.core.config import settings
+from app.core.raw_logs import RawUploadInvalid, RawUploadTooLarge, decode_raw_upload
 from app.db.session import get_db
 from app.models import AdminUser, Measurement, Participant, ResearchConsent, TestDefinition
 from app.schemas.auth import StudentProfileResponse
@@ -239,18 +240,18 @@ async def create_measurement(
     test = await db.get(TestDefinition, payload.test_definition_id)
     if participant is None or not participant.is_active or test is None or not test.is_active:
         raise HTTPException(status_code=404, detail="Aktívny účastník alebo test neexistuje.")
-    raw_bytes = None
-    raw_sha256 = None
-    if payload.raw_log_base64:
-        try:
-            raw_bytes = base64.b64decode(payload.raw_log_base64, validate=True)
-        except (ValueError, TypeError) as exc:
-            raise HTTPException(status_code=400, detail="Raw log nie je platný Base64 súbor.") from exc
-        if not raw_bytes:
-            raise HTTPException(status_code=400, detail="Raw log je prázdny.")
-        if len(raw_bytes) > settings.max_raw_upload_bytes:
-            raise HTTPException(status_code=413, detail="Raw log prekračuje povolenú veľkosť.")
-        raw_sha256 = hashlib.sha256(raw_bytes).hexdigest()
+    try:
+        raw_bytes = decode_raw_upload(
+            payload.raw_log_base64,
+            file_name=payload.source_file_name,
+            content_type=payload.raw_content_type,
+            max_upload_bytes=settings.max_raw_upload_bytes,
+        )
+    except RawUploadTooLarge as exc:
+        raise HTTPException(status_code=413, detail=str(exc)) from exc
+    except RawUploadInvalid as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    raw_sha256 = hashlib.sha256(raw_bytes).hexdigest() if raw_bytes is not None else None
     measurement = Measurement(
         participant_id=participant.id, test_definition_id=test.id,
         test_type=f"{test.test_code} v{test.version}", status=payload.status,
@@ -264,10 +265,15 @@ async def create_measurement(
     if raw_bytes is not None:
         storage_root = Path(settings.measurement_storage_path).resolve()
         storage_root.mkdir(parents=True, exist_ok=True)
-        target = storage_root / f"{measurement.id}.raw"
+        extension = ".tsv.gz" if payload.raw_content_type == "application/gzip" else ".raw"
+        target = storage_root / f"{measurement.id}{extension}"
         target.write_bytes(raw_bytes)
         measurement.raw_storage_path = str(target)
-        measurement.raw_data = {"storage": "filesystem", "sha256": raw_sha256}
+        measurement.raw_data = {
+            "storage": "filesystem",
+            "sha256": raw_sha256,
+            "compression": "gzip" if payload.raw_content_type == "application/gzip" else None,
+        }
     await db.commit()
     await db.refresh(measurement)
     return measurement
