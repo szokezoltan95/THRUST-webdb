@@ -230,6 +230,7 @@ export function App() {
 
   async function openParticipant(participant: Participant, view: "detail" | "measurements") {
     const detail = await request<ParticipantDetail>(`/api/admin/participants/${participant.id}`);
+    setSelectedMeasurementId(null);
     setSelectedParticipant(detail);
     setParticipantDialog(view);
   }
@@ -695,17 +696,16 @@ export function App() {
                 {selectedParticipant && participantDialog && (() => {
                   const participant = selectedParticipant.participant;
                   const linkedAccount = adminAccounts.find((item) => item.participant_id === participant.id) || null;
-                  const rows = measurements.filter((item) => item.participant_id === participant.id && item.raw_sha256);
-                  const scopeRows = rows.filter((item) => getMeasurementMode(item, tests) === "SCOPE");
-                  const simpleRows = rows.filter((item) => getMeasurementMode(item, tests) === "SIMPLE");
-                  const dates = rows.map((item) => item.started_at).sort();
+                  const allRows = measurements.filter((item) => item.participant_id === participant.id && item.raw_sha256);
+                  const rows = allRows.filter((item) => getMeasurementMode(item, tests) === resultMode);
+                  const dates = allRows.map((item) => item.started_at).sort();
                   if (participantDialog === "detail") return <section className="browser-detail detail-modal-open participant-detail-modal">
-                     <div className="detail-header"><div><div className="eyebrow">DETAIL ÚČASTNÍKA</div><h2>{participant.participant_code}</h2></div><div className="detail-header-actions"><button className="quiet compact" onClick={() => setParticipantDialog(null)}>Zavrieť</button></div></div>
+                     <div className="detail-header"><div><div className="eyebrow">DETAIL ÚČASTNÍKA</div><h2>{participant.participant_code}</h2></div><div className="detail-header-actions"><ModeSwitch value={resultMode} onChange={changeResultMode} /><button className="quiet compact" onClick={() => { setParticipantDialog(null); setSelectedMeasurementId(null); }}>Zavrieť</button></div></div>
                      {accountMessage && <p className="notice">{accountMessage}</p>}
 
                      <section className="participant-detail-section">
-                       <div className="participant-section-heading"><div><div className="eyebrow">SÚHRN VÝSLEDKOV</div><h3>Štatistiky podľa režimu</h3></div></div>
-                       <div className="participant-mode-stats"><section><div className="eyebrow">SCoPE</div><AllMeasurementStats measurements={scopeRows} mode="SCOPE" /></section><section><div className="eyebrow">SimPLE</div><AllMeasurementStats measurements={simpleRows} mode="SIMPLE" /></section></div>
+                       <div className="participant-section-heading"><div><div className="eyebrow">SÚHRN VÝSLEDKOV</div><h3>{resultMode === "SCOPE" ? "SCoPE" : "SimPLE"}</h3></div></div>
+                       <AllMeasurementStats measurements={rows} mode={resultMode} />
                      </section>
 
                      <section className="participant-detail-section">
@@ -714,7 +714,7 @@ export function App() {
                          <div className="data-table-head"><span>Test</span><span>Dátum</span><span>Stav</span><span>Výsledok</span></div>
                          {[...rows].sort((left, right) => right.started_at.localeCompare(left.started_at)).slice(0, 5).map((measurement) => {
                            const hasResult = rows.some((item) => item.id === measurement.id);
-                           return <div className="data-table-row" key={measurement.id}><strong>{measurement.test_type}</strong><span>{formatDate(measurement.started_at)}</span><span>{measurement.status}</span><span className="row-actions"><button className="quiet compact" disabled={!hasResult} onClick={() => { setSelectedMeasurementId(measurement.id); setParticipantDialog(null); setActiveSection("measurements"); }}>{hasResult ? "Otvoriť" : "Bez výsledkov"}</button></span></div>;
+                           return <div className="data-table-row" key={measurement.id}><strong>{measurement.test_type}</strong><span>{formatDate(measurement.started_at)}</span><span>{measurement.status}</span><span className="row-actions"><button className="quiet compact" disabled={!hasResult} onClick={() => { setSelectedMeasurementId(measurement.id); }}>{hasResult ? "Otvoriť" : "Bez výsledkov"}</button></span></div>;
                          })}
                        </div> : <div className="participant-empty-state">Účastník zatiaľ nemá zaznamenané žiadne merania.</div>}
                      </section>
@@ -764,12 +764,13 @@ export function App() {
                      {(user?.role === "admin" || user?.role === "superadmin") && <section className="participant-detail-section participant-edit-section"><div className="participant-section-heading"><div><div className="eyebrow">EDITÁCIA</div><h3>Upraviť údaje účastníka</h3></div></div><ParticipantProfileEditor participant={participant} csrfToken={user.csrf_token} onSaved={(updated) => { setParticipants((items) => items.map((item) => item.id === updated.id ? updated : item)); setSelectedParticipant((current) => current ? { ...current, participant: updated } : current); setAccountMessage("Profil účastníka bol uložený."); }} /></section>}
                    </section>;
                    return <section className="browser-detail detail-modal-open participant-detail-modal">
-                    <div className="detail-header"><div><div className="eyebrow">MERANIA ÚČASTNÍKA</div><h2>{participant.participant_code}</h2></div><div className="detail-header-actions"><button className="quiet compact" onClick={() => setParticipantDialog(null)}>Zavrieť</button></div></div>
-                    <p className="muted">História synchronizovaných meraní účastníka.</p>
-                    <div className="data-table participant-history-table"><div className="data-table-head"><span>Test</span><span>Dátum</span><span>Stav</span><span>Akcia</span></div>{rows.filter((measurement) => measurement.raw_sha256).map((measurement) => <div className="data-table-row" key={measurement.id}><strong>{measurement.test_type}</strong><span>{formatDate(measurement.started_at)}</span><span>{measurement.status}</span><button className="quiet compact row-actions" onClick={() => { setSelectedMeasurementId(measurement.id); setParticipantDialog(null); setActiveSection("measurements"); }}>Otvoriť výsledok</button></div>)}</div>
-                    {rows.filter((measurement) => measurement.raw_sha256).length === 0 && <p className="muted">Pre tohto účastníka zatiaľ nie sú synchronizované merania.</p>}
+                    <div className="detail-header"><div><div className="eyebrow">MERANIA ÚČASTNÍKA</div><h2>{participant.participant_code}</h2></div><div className="detail-header-actions"><ModeSwitch value={resultMode} onChange={changeResultMode} /><button className="quiet compact" onClick={() => { setParticipantDialog(null); setSelectedMeasurementId(null); }}>Zavrieť</button></div></div>
+                    <p className="muted">História {resultMode === "SCOPE" ? "SCoPE" : "SimPLE"} meraní účastníka.</p>
+                    <div className="data-table participant-history-table"><div className="data-table-head"><span>Test</span><span>Dátum</span><span>Stav</span><span>Akcia</span></div>{rows.map((measurement) => <div className="data-table-row" key={measurement.id}><strong>{measurement.test_type}</strong><span>{formatDate(measurement.started_at)}</span><span>{measurement.status}</span><button className="quiet compact row-actions" onClick={() => setSelectedMeasurementId(measurement.id)}>Otvoriť výsledok</button></div>)}</div>
+                    {rows.length === 0 && <p className="muted">Pre tento režim zatiaľ nie sú synchronizované merania.</p>}
                   </section>;
                 })()}
+                {selectedParticipant && participantDialog && selectedMeasurementId && (() => { const selected = measurements.find((item) => item.id === selectedMeasurementId); return selected ? <div className="measurement-context-backdrop"><section className="measurement-context-window"><MeasurementDetailBody measurement={selected} tests={tests} onClose={() => setSelectedMeasurementId(null)} /></section></div> : null; })()}
               </>}
               {selectedAccount && <div className="backdrop" onMouseDown={() => setSelectedAccount(null)}><section className="login account-dialog" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
                 <div className="eyebrow">DETAIL KONTA</div><h2>{[selectedAccount.first_name, selectedAccount.last_name].filter(Boolean).join(" ") || selectedAccount.username}</h2>
@@ -808,8 +809,7 @@ export function App() {
                     {filteredMeasurements().length === 0 && <p className="muted empty-list">Filteru nezodpovedajú žiadne archivované merania.</p>}
                   </section>
                   <section className={selectedMeasurementId ? "panel workbench-detail detail-modal-open" : "panel workbench-detail detail-modal-closed"}>
-                    <div className="detail-window-bar"><div className="eyebrow">PRACOVNÝ PANEL</div><div className="detail-header-actions"><button className="quiet compact" onClick={() => setSelectedMeasurementId(null)}>Zavrieť</button></div></div>
-                    {(() => { const selected = measurements.find((item) => item.id === selectedMeasurementId); if (!selected) return <div className="empty-list"><h2>Vyber meranie</h2><p className="muted">V ľavom paneli vyber meranie, ktoré chceš preskúmať.</p></div>; const isSimple = getMeasurementMode(selected, tests) === "SIMPLE"; return <><h2>{selected.test_type}</h2><p className="muted">{selected.source_file_name} · {formatDate(selected.started_at)}</p><div className="detail-grid"><div><span>Vzorky</span><strong>{String(selected.analysis_data?.sample_count ?? selected.analysis_data?.simple_sample_count ?? "—")}</strong></div><div><span>Trvanie</span><strong>{selected.analysis_data?.duration_s ? String(Number(selected.analysis_data.duration_s).toFixed(2)) + " s" : "—"}</strong></div><div><span>Raw dáta</span><strong>{selected.raw_sha256 ? "Archivované" : "Nie sú dostupné"}</strong></div><div><span>Merací režim</span><strong>{isSimple ? "SimPLE · 2D let" : "SCoPE · odozva osí"}</strong></div></div>{isSimple ? <SimpleAnalysisView analysis={selected.analysis_data ?? {}} /> : <div className="results-layout"><div className="results-chart-column"><ResponseChart data={selected.analysis_data?.normalized_step_response} /></div><ResponseMetrics data={selected.analysis_data?.normalized_step_response} /></div>}</>; })()}
+                    {(() => { const selected = measurements.find((item) => item.id === selectedMeasurementId); return selected ? <MeasurementDetailBody measurement={selected} tests={tests} onClose={() => setSelectedMeasurementId(null)} /> : <div className="empty-list"><h2>Vyber meranie</h2><p className="muted">V ľavom paneli vyber meranie, ktoré chceš preskúmať.</p></div>; })()}
                   </section>
                 </div>
                 {manualUploadOpen && <div className="backdrop" onMouseDown={() => setManualUploadOpen(false)}><section className="login upload-dialog" onMouseDown={(event) => event.stopPropagation()}><div className="eyebrow">NÚDZOVÁ SYNCHRONIZÁCIA</div><h2>Manuálne nahrať dátový súbor</h2><p className="muted">Použi iba vtedy, ak upload počas sessionu zlyhal.</p><form className="measurement-form modal-form" onSubmit={async (event) => { await uploadMeasurement(event); setManualUploadOpen(false); }}><label>Účastník<select name="participant_id" required><option value="">Vyber účastníka</option>{participants.map((participant) => <option key={participant.id} value={participant.id}>{participant.participant_code}</option>)}</select></label><label>Test<select name="test_definition_id" required><option value="">Vyber test</option>{tests.filter((test) => test.is_active && test.analysis_profile.toUpperCase().startsWith(resultMode)).map((test) => <option key={test.id} value={test.id}>{test.name} · v{test.version}</option>)}</select></label><label>Dátum a čas<input name="started_at" type="datetime-local" step="60" required /></label><label>Raw log · SCoPE alebo SimPLE<input name="raw_file" type="file" accept=".txt,.tsv,text/plain" required /></label><label>Analýza merania · JSON (nepovinné)<input name="analysis_file" type="file" accept=".json,application/json" /></label><div className="actions"><button type="button" className="quiet" onClick={() => setManualUploadOpen(false)}>Zrušiť</button><button className="primary" type="submit">Nahrať dáta</button></div></form>{uploadMessage && <p className="notice">{uploadMessage}</p>}</section></div>}
@@ -1118,6 +1118,16 @@ const initialScopeConfiguration: ScopeConfiguration = {
   grid_color: "#ffffff", label_color: "#ffffff", prompt_color: "#ff0000"
 };
 
+function MeasurementDetailBody({ measurement, tests, onClose }: { measurement: Measurement; tests: TestDefinition[]; onClose: () => void }) {
+  const isSimple = getMeasurementMode(measurement, tests) === "SIMPLE";
+  return <>
+    <div className="detail-window-bar"><div className="eyebrow">DETAIL MERANIA · {isSimple ? "SimPLE" : "SCoPE"}</div><div className="detail-header-actions"><button className="quiet compact" onClick={onClose}>Zavrieť</button></div></div>
+    <h2>{measurement.test_type}</h2><p className="muted">{measurement.source_file_name} · {formatDate(measurement.started_at)}</p>
+    <div className="detail-grid"><div><span>Vzorky</span><strong>{String(measurement.analysis_data?.sample_count ?? measurement.analysis_data?.simple_sample_count ?? "—")}</strong></div><div><span>Trvanie</span><strong>{measurement.analysis_data?.duration_s ? `${Number(measurement.analysis_data.duration_s).toFixed(2)} s` : "—"}</strong></div><div><span>Raw dáta</span><strong>{measurement.raw_sha256 ? "Archivované" : "Nie sú dostupné"}</strong></div><div><span>Merací režim</span><strong>{isSimple ? "SimPLE · 2D let" : "SCoPE · odozva osí"}</strong></div></div>
+    {isSimple ? <SimpleAnalysisView analysis={measurement.analysis_data ?? {}} /> : <div className="results-layout"><div className="results-chart-column"><ResponseChart data={measurement.analysis_data?.normalized_step_response} /></div><ResponseMetrics data={measurement.analysis_data?.normalized_step_response} /></div>}
+  </>;
+}
+
 function makeScopeConfiguration(value: Record<string, unknown>): ScopeConfiguration {
   const normalized = { ...value };
   delete normalized.user;
@@ -1128,20 +1138,13 @@ function makeScopeConfiguration(value: Record<string, unknown>): ScopeConfigurat
   return { ...initialScopeConfiguration, ...normalized, difficulty: String(value.difficulty ?? "hard").toLowerCase() } as ScopeConfiguration;
 }
 
-const initialSimpleConfiguration: Record<string, number> = {
-  sampling_hz: 100,
-  action_timeout_s: 5,
-  hold_time_s: 1,
-  countdown_s: 3,
-  zoom_px_per_m: 500,
-  completion_radius_m: 0.1,
-  target_x_limit_m: 1.5,
-  target_y_max_m: 2,
-  field_width_px: 1500,
-  field_height_px: 1000,
-  mass_kg: 0.8,
-  max_thrust_n: 16,
-  drag_coefficient: 0.3,
+const initialSimpleConfiguration: Record<string, number | string> = {
+  action_timeout_s: 5, hold_time_s: 1, countdown_s: 3,
+  completion_radius_m: 0.1, target_x_limit_m: 1.5, target_y_max_m: 2,
+  field_width_px: 1920, field_height_px: 1080, world_width_m: 4.5,
+  zone_idle_fill: "#ff3948", zone_idle_outline: "#ff3948",
+  zone_ok_fill: "#00cc66", zone_ok_outline: "#00ff80",
+  mass_kg: 0.8, max_thrust_n: 16, drag_coefficient: 0.3,
 };
 
 function ProgramWordmark({ mode, compact = false }: { mode: "SCOPE" | "SIMPLE"; compact?: boolean }) {
@@ -1194,27 +1197,37 @@ function TestCreator({ onCreated }: { onCreated: (test: TestDefinition) => void 
 }
 
 type BackgroundImage = { id: string; filename: string; width: number; height: number; created_at: string };
-function SimpleScenePreview({ imageId, radius, xLimit, yLimit }: { imageId: string; radius: number; xLimit: number; yLimit: number }) {
-  const ringRadius = Math.max(5, Math.min(38, (radius / Math.max(0.1, Math.max(xLimit, yLimit))) * 150));
-  return <div className="simple-scene-preview" aria-label="Náhľad SimPLE scény">
+function SimpleScenePreview({ imageId, radius, xLimit, yLimit, worldWidth, widthPx, heightPx, fill, outline }: { imageId: string; radius: number; xLimit: number; yLimit: number; worldWidth: number; widthPx: number; heightPx: number; fill: string; outline: string }) {
+  const sceneHeight = 720 * heightPx / widthPx;
+  const horizon = sceneHeight * .82;
+  const groundY = sceneHeight - Math.max(50, sceneHeight * .14);
+  const scale = Math.min(640 / worldWidth, (groundY - 30) / (worldWidth * heightPx / widthPx));
+  const zoneRadius = Math.max(1, radius * scale);
+  const targetX = 530;
+  const targetY = Math.max(zoneRadius + 12, horizon - Math.min(yLimit, 1.2) * scale);
+  const droneX = Math.max(80, Math.min(300, 360 - Math.min(xLimit, 1) * scale));
+  const droneY = Math.max(40, horizon - Math.min(yLimit * .5, .8) * scale);
+  return <div className="simple-scene-preview" style={{ aspectRatio: `${widthPx} / ${heightPx}` }} aria-label="Náhľad SimPLE scény">
     {imageId ? <img src={`/api/backgrounds/${imageId}`} alt="Zvolené pozadie SimPLE" /> : <div className="simple-scene-default" />}
-    <svg viewBox="0 0 720 360" preserveAspectRatio="xMidYMid slice" role="img" aria-label="Modrý dron a cieľová zóna">
-      <rect x="0" y="300" width="720" height="60" className="scene-ground" />
-      <line x1="0" y1="300" x2="720" y2="300" className="scene-ground-line" />
-      <circle cx="530" cy="116" r={ringRadius} className="scene-target-ring" />
-      <circle cx="245" cy="228" r="24" className="scene-drone-ball" />
-      <line x1="245" y1="228" x2="245" y2="194" className="scene-drone-arrow" />
-      <path d="M245 187 L237 201 L253 201 Z" className="scene-drone-arrow-head" />
+    <svg viewBox={`0 0 720 ${sceneHeight}`} preserveAspectRatio="none" role="img" aria-label="Modrý dron a cieľová zóna">
+      <rect x="0" y={horizon} width="720" height={sceneHeight - horizon} className="scene-ground" />
+      <line x1="0" y1={horizon} x2="720" y2={horizon} className="scene-ground-line" />
+      <circle cx={targetX} cy={targetY} r={zoneRadius} fill={fill} stroke={outline} strokeWidth="2.5" className="scene-target-zone" />
+      <circle cx={droneX} cy={droneY} r="24" className="scene-drone-ball" />
+      <line x1={droneX} y1={droneY} x2={droneX} y2={droneY - 34} className="scene-drone-arrow" />
+      <path d={`M${droneX} ${droneY - 41} L${droneX - 8} ${droneY - 27} L${droneX + 8} ${droneY - 27} Z`} className="scene-drone-arrow-head" />
     </svg>
-    <span className="scene-preview-caption">Náhľad letovej scény · modrý dron s orientačnou šípkou</span>
+    <span className="scene-preview-caption">Náhľad letovej scény · mierka zachováva pomer strán</span>
   </div>;
 }
 
 function SimpleTestEditor({ test, csrfToken, onClose, onSaved }: { test: TestDefinition; csrfToken: string; onClose: () => void; onSaved: (test: TestDefinition) => void }) {
-  const [configuration, setConfiguration] = useState<Record<string, number>>(() => {
-    const values: Record<string, number> = { ...initialSimpleConfiguration };
-    for (const [key, value] of Object.entries(test.configuration)) {
-      if (typeof value === "number" && Number.isFinite(value)) values[key] = value;
+  const [configuration, setConfiguration] = useState<Record<string, number | string>>(() => {
+    const values = { ...initialSimpleConfiguration };
+    for (const key of Object.keys(values)) {
+      const value = test.configuration[key];
+      if (typeof values[key] === "number" && typeof value === "number" && Number.isFinite(value)) values[key] = value;
+      if (typeof values[key] === "string" && typeof value === "string" && /^#[0-9a-fA-F]{6}$/.test(value)) values[key] = value;
     }
     return values;
   });
@@ -1229,65 +1242,60 @@ function SimpleTestEditor({ test, csrfToken, onClose, onSaved }: { test: TestDef
   }, []);
   async function uploadBackground(file: File | undefined) {
     if (!file) return;
-    if (file.size > 5_000_000 || !["image/png", "image/jpeg"].includes(file.type)) {
-      setMessage("Vyber PNG alebo JPEG s veľkosťou najviac 5 MB.");
-      return;
-    }
-    setUploading(true);
-    setMessage("");
+    if (file.size > 5_000_000 || !["image/png", "image/jpeg"].includes(file.type)) { setMessage("Vyber PNG alebo JPEG s veľkosťou najviac 5 MB."); return; }
+    setUploading(true); setMessage("");
     try {
       const imageBase64 = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(String(reader.result).split(",")[1] ?? "");
-        reader.onerror = () => reject(new Error("Obrázok sa nepodarilo načítať."));
-        reader.readAsDataURL(file);
+        const reader = new FileReader(); reader.onload = () => resolve(String(reader.result).split(",")[1] ?? "");
+        reader.onerror = () => reject(new Error("Obrázok sa nepodarilo načítať.")); reader.readAsDataURL(file);
       });
       const uploaded = await request<BackgroundImage>("/api/backgrounds", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken },
+        method: "POST", headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken },
         body: JSON.stringify({ filename: file.name, image_base64: imageBase64 }),
       });
-      setBackgrounds((items) => [uploaded, ...items]);
-      setBackgroundImageId(uploaded.id);
+      setBackgrounds((items) => [uploaded, ...items]); setBackgroundImageId(uploaded.id);
       setMessage("Pozadie bolo nahrané. Ulož nastavenia testu, aby sa použilo.");
-    } catch (reason) {
-      setMessage(reason instanceof Error ? reason.message : "Pozadie sa nepodarilo nahrať.");
-    } finally {
-      setUploading(false);
-    }
+    } catch (reason) { setMessage(reason instanceof Error ? reason.message : "Pozadie sa nepodarilo nahrať."); }
+    finally { setUploading(false); }
   }
-  const fields: [keyof typeof initialSimpleConfiguration, string, number, number, number][] = [
-    ["sampling_hz", "Vzorkovacia frekvencia [Hz]", 20, 500, 1],
-    ["action_timeout_s", "Limit času na cieľ [s]", 0.1, 60, 0.1],
-    ["hold_time_s", "Výdrž v cieľovej zóne [s]", 0.1, 30, 0.1],
+  const numericFields: [keyof typeof initialSimpleConfiguration, string, number, number, number][] = [
+    ["action_timeout_s", "Limit času na cieľ [s]", .1, 60, .1],
+    ["hold_time_s", "Výdrž v cieľovej zóne [s]", .1, 30, .1],
     ["countdown_s", "Odpočítavanie [s]", 0, 60, 1],
-    ["zoom_px_per_m", "Mierka sveta [px/m]", 50, 2000, 10],
-    ["completion_radius_m", "Tolerancia zásahu [m]", 0.01, 2, 0.01],
-    ["target_x_limit_m", "Limit cieľa v osi X [m]", 0.1, 20, 0.1],
-    ["target_y_max_m", "Maximálna výška cieľa [m]", 0.1, 20, 0.1],
-    ["field_width_px", "Šírka sveta [px]", 600, 4000, 50],
-    ["field_height_px", "Výška sveta [px]", 400, 3000, 50],
-    ["mass_kg", "Hmotnosť modelu [kg]", 0.1, 10, 0.1],
-    ["max_thrust_n", "Maximálny ťah [N]", 1, 100, 0.5],
-    ["drag_coefficient", "Koeficient odporu", 0, 5, 0.05],
+    ["completion_radius_m", "Polomer cieľovej zóny [m]", .01, 2, .01],
+    ["target_x_limit_m", "Limit cieľa v osi X [m]", .1, 20, .1],
+    ["target_y_max_m", "Maximálna výška cieľa [m]", .1, 20, .1],
+    ["world_width_m", "Šírka ihriska [m]", .5, 50, .1],
+    ["mass_kg", "Hmotnosť modelu [kg]", .1, 10, .1],
+    ["max_thrust_n", "Maximálny ťah [N]", 1, 100, .5],
+    ["drag_coefficient", "Koeficient odporu", 0, 5, .05],
   ];
+  const resolutions = [[1920,1080,"1920 × 1080 · 16:9"],[2560,1440,"2560 × 1440 · 16:9"],[1280,720,"1280 × 720 · 16:9"],[1920,1200,"1920 × 1200 · 16:10"],[1280,800,"1280 × 800 · 16:10"],[1280,1024,"1280 × 1024 · 5:4"],[1024,768,"1024 × 768 · 4:3"]] as const;
+  const fieldWidth = Number(configuration.field_width_px ?? 1920);
+  const fieldHeight = Number(configuration.field_height_px ?? 1080);
+  const worldHeight = Number(configuration.world_width_m) * fieldHeight / fieldWidth;
   async function save() {
     setMessage("");
+    const cleanConfiguration: Record<string, unknown> = { ...configuration, field_width_px: fieldWidth, field_height_px: fieldHeight };
+    delete cleanConfiguration.sampling_hz; delete cleanConfiguration.zoom_px_per_m;
+    if (backgroundImageId) cleanConfiguration.background_image_id = backgroundImageId;
+    else delete cleanConfiguration.background_image_id;
     try {
-      const saved = await request<TestDefinition>(`/api/admin/tests/${test.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ configuration: { ...configuration, ...(backgroundImageId ? { background_image_id: backgroundImageId } : {}) } }),
-      });
+      const saved = await request<TestDefinition>(`/api/admin/tests/${test.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ configuration: cleanConfiguration }) });
       onSaved(saved);
-    } catch (reason) {
-      setMessage(reason instanceof Error ? reason.message : "Nastavenia SimPLE sa nepodarilo uložiť.");
-    }
+    } catch (reason) { setMessage(reason instanceof Error ? reason.message : "Nastavenia SimPLE sa nepodarilo uložiť."); }
   }
   return <div className="editor-backdrop"><section className="test-editor-window simple-editor-window">
     <header className="editor-header"><div><div className="eyebrow">SIMPLE · NASTAVENIE TESTU</div><h2>{test.name}</h2><p className="muted">{test.test_code} · v{test.version}</p></div><button type="button" className="quiet compact" onClick={onClose}>Zavrieť</button></header>
     <div className="simple-editor-intro"><ProgramWordmark mode="SIMPLE" /><p>Určuje sa tu letová úloha, mierka 2D sveta a fyzikálne parametre modelu. Joystick a break/reset zostávajú lokálnymi nastaveniami THRUSTu.</p></div>
-    <div className="simple-editor-layout"><div><div className="simple-config-grid">{fields.map(([key, label, min, max, step]) => <label key={key}>{label}<input type="number" min={min} max={max} step={step} value={configuration[key] ?? initialSimpleConfiguration[key]} onChange={(event) => setConfiguration((current) => ({ ...current, [key]: Number(event.target.value) }))} /></label>)}</div><p className="muted">Vykreslená cieľová zóna má presne polomer tolerancie zásahu; jej veľkosť sa vypočíta z mierky sveta.</p></div><div className="simple-background-panel"><div className="eyebrow">POZADIE A VIZUÁLNY NÁHĽAD</div><label>Vybrané pozadie<select value={backgroundImageId} onChange={(event) => setBackgroundImageId(event.target.value)}><option value="">Predvolené pozadie SimPLE</option>{backgrounds.map((item) => <option key={item.id} value={item.id}>{item.filename} · {item.width}×{item.height}</option>)}</select></label><label>Nahrať vlastné PNG / JPEG<input type="file" accept="image/png,image/jpeg" disabled={uploading} onChange={(event) => { void uploadBackground(event.target.files?.[0]); event.currentTarget.value = ""; }} /></label><SimpleScenePreview imageId={backgroundImageId} radius={configuration.completion_radius_m ?? initialSimpleConfiguration.completion_radius_m} xLimit={configuration.target_x_limit_m ?? initialSimpleConfiguration.target_x_limit_m} yLimit={configuration.target_y_max_m ?? initialSimpleConfiguration.target_y_max_m} />{uploading && <p className="muted">Nahrávam obrázok…</p>}</div></div>
+    <div className="simple-editor-layout"><div>
+      <div className="simple-config-grid"><label>Rozlíšenie / pomer strán<select value={`${fieldWidth}x${fieldHeight}`} onChange={(event) => { const [w,h] = event.target.value.split("x").map(Number); setConfiguration((current) => ({ ...current, field_width_px: w, field_height_px: h })); }}>{resolutions.map(([w,h,label]) => <option key={`${w}x${h}`} value={`${w}x${h}`}>{label}</option>)}</select></label>
+      {numericFields.map(([key,label,min,max,step]) => <label key={key}>{label}<input type="number" min={min} max={max} step={step} value={Number(configuration[key] ?? initialSimpleConfiguration[key])} onChange={(event) => setConfiguration((current) => ({ ...current, [key]: Number(event.target.value) }))} />{key === "world_width_m" && <small>Odvodená výška: {worldHeight.toFixed(2)} m</small>}</label>)}</div>
+      <p className="muted">Obrazovka určuje iba pomer strán. Výška ihriska sa počíta z nastavenej šírky a pomeru strán.</p>
+    </div><div className="simple-background-panel"><div className="eyebrow">POZADIE A NÁHĽAD</div><label>Vybrané pozadie<select value={backgroundImageId} onChange={(event) => setBackgroundImageId(event.target.value)}><option value="">Predvolené vektorové pozadie SimPLE</option>{backgrounds.map((item) => <option key={item.id} value={item.id}>{item.filename} · {item.width}×{item.height}</option>)}</select></label><label>Nahrať vlastné PNG / JPEG<input type="file" accept="image/png,image/jpeg" disabled={uploading} onChange={(event) => { void uploadBackground(event.target.files?.[0]); event.currentTarget.value = ""; }} /></label>
+      <SimpleScenePreview imageId={backgroundImageId} radius={Number(configuration.completion_radius_m)} xLimit={Number(configuration.target_x_limit_m)} yLimit={Number(configuration.target_y_max_m)} worldWidth={Number(configuration.world_width_m)} widthPx={fieldWidth} heightPx={fieldHeight} fill={String(configuration.zone_idle_fill)} outline={String(configuration.zone_idle_outline)} />
+      <div className="simple-zone-colors"><label>Zóna · výplň<input type="color" value={String(configuration.zone_idle_fill)} onChange={(event) => setConfiguration((current) => ({ ...current, zone_idle_fill: event.target.value }))} /></label><label>Zóna · okraj<input type="color" value={String(configuration.zone_idle_outline)} onChange={(event) => setConfiguration((current) => ({ ...current, zone_idle_outline: event.target.value }))} /></label><label>Úspech · výplň<input type="color" value={String(configuration.zone_ok_fill)} onChange={(event) => setConfiguration((current) => ({ ...current, zone_ok_fill: event.target.value }))} /></label><label>Úspech · okraj<input type="color" value={String(configuration.zone_ok_outline)} onChange={(event) => setConfiguration((current) => ({ ...current, zone_ok_outline: event.target.value }))} /></label></div>
+      {uploading && <p className="muted">Nahrávam obrázok…</p>}</div></div>
     {message && <p className="error">{message}</p>}
     <div className="simple-editor-actions"><button type="button" className="quiet" onClick={onClose}>Zrušiť</button><button type="button" className="primary" onClick={() => void save()}>Uložiť nastavenia</button></div>
   </section></div>;
