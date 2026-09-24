@@ -923,3 +923,6 @@ h1 { max-width: 880px; margin: 20px 0; font-size: clamp(42px, 7vw, 84px); line-h
 .student-result-detail h3 { margin: 0 0 10px; font-size: 1rem; }
 @media (max-width: 900px) { .simple-editor-layout { grid-template-columns: 1fr; } .student-result-heading { align-items: flex-start; flex-direction: column; } }
 @media (max-width: 600px) { .browser-toolbar { flex-wrap: wrap; } .browser-toolbar .mode-switch { width: 100%; } .filters { grid-template-columns: 1fr; } }
+
+.detail-header-actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 10px; }
+@media (max-width: 600px) { .detail-header-actions { width: 100%; justify-content: flex-start; } .detail-window-bar { flex-wrap: wrap; } }
