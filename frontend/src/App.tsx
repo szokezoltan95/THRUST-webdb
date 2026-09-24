@@ -251,6 +251,25 @@ export function App() {
       setUploadMessage("Vyber raw dátový súbor.");
       return;
     }
+    const analysisFile = form.get("analysis_file");
+    let analysisData: Record<string, unknown> | null = null;
+    if (analysisFile instanceof File && analysisFile.size) {
+      try {
+        const parsed: unknown = JSON.parse(await analysisFile.text());
+        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("Neplatný JSON analýzy.");
+        analysisData = parsed as Record<string, unknown>;
+        const chosen = tests.find((test) => test.id === form.get("test_definition_id"));
+        if (chosen?.analysis_profile.toUpperCase().startsWith("SIMPLE") && analysisData.analysis_type !== "SIMPLE_2D_FLIGHT") {
+          throw new Error("Zvolený SimPLE test vyžaduje analýzu SimPLE.");
+        }
+        if (chosen?.analysis_profile.toUpperCase().startsWith("SCOPE") && analysisData.analysis_type === "SIMPLE_2D_FLIGHT") {
+          throw new Error("Analýza SimPLE nepatrí k testu SCoPE.");
+        }
+      } catch (reason) {
+        setUploadMessage(reason instanceof Error ? reason.message : "Súbor analýzy nie je platný JSON.");
+        return;
+      }
+    }
     const buffer = await file.arrayBuffer();
     let binary = "";
     for (const byte of new Uint8Array(buffer)) binary += String.fromCharCode(byte);
@@ -266,11 +285,12 @@ export function App() {
           raw_content_type: "text/tab-separated-values",
           raw_log_base64: btoa(binary),
           status: "recorded",
+          analysis_data: analysisData,
         }),
       });
       setMeasurements((current) => [uploaded, ...current]);
       setOverview((current) => current ? { ...current, measurement_count: current.measurement_count + 1 } : current);
-      setUploadMessage("Dátový súbor bol nahraný.");
+      setUploadMessage(analysisData ? "Raw log a výsledky boli nahrané." : "Raw log bol nahraný bez analýzy. Výsledky sa zobrazia až po nahratí analýzy.");
       event.currentTarget.reset();
     } catch (reason) {
       setUploadMessage(reason instanceof Error ? reason.message : "Súbor sa nepodarilo nahrať.");
@@ -792,7 +812,7 @@ export function App() {
                     {(() => { const selected = measurements.find((item) => item.id === selectedMeasurementId); if (!selected) return <div className="empty-list"><h2>Vyber meranie</h2><p className="muted">V ľavom paneli vyber meranie, ktoré chceš preskúmať.</p></div>; const isSimple = getMeasurementMode(selected, tests) === "SIMPLE"; return <><h2>{selected.test_type}</h2><p className="muted">{selected.source_file_name} · {formatDate(selected.started_at)}</p><div className="detail-grid"><div><span>Vzorky</span><strong>{String(selected.analysis_data?.sample_count ?? selected.analysis_data?.simple_sample_count ?? "—")}</strong></div><div><span>Trvanie</span><strong>{selected.analysis_data?.duration_s ? String(Number(selected.analysis_data.duration_s).toFixed(2)) + " s" : "—"}</strong></div><div><span>Raw dáta</span><strong>{selected.raw_sha256 ? "Archivované" : "Nie sú dostupné"}</strong></div><div><span>Merací režim</span><strong>{isSimple ? "SimPLE · 2D let" : "SCoPE · odozva osí"}</strong></div></div>{isSimple ? <SimpleAnalysisView analysis={selected.analysis_data ?? {}} /> : <div className="results-layout"><div className="results-chart-column"><div className="chart-toolbar"><label>Zobrazenie<select value={chartMode} onChange={(event) => setChartMode(event.target.value as "single" | "all")}><option value="single">Vybraný kanál</option><option value="all">Všetky osi</option></select></label>{chartMode === "single" && <label>Kanál<select value={chartChannel} onChange={(event) => setChartChannel(event.target.value)}><option>AILE</option><option>ELEV</option><option>THRO</option><option>RUDD</option></select></label>}</div><ResponseChart data={selected.analysis_data?.normalized_step_response} channel={chartChannel} mode={chartMode} /></div><ResponseMetrics data={selected.analysis_data?.normalized_step_response} /></div>}</>; })()}
                   </section>
                 </div>
-                {manualUploadOpen && <div className="backdrop" onMouseDown={() => setManualUploadOpen(false)}><section className="login upload-dialog" onMouseDown={(event) => event.stopPropagation()}><div className="eyebrow">NÚDZOVÁ SYNCHRONIZÁCIA</div><h2>Manuálne nahrať dátový súbor</h2><p className="muted">Použi iba vtedy, ak upload počas sessionu zlyhal.</p><form className="measurement-form modal-form" onSubmit={async (event) => { await uploadMeasurement(event); setManualUploadOpen(false); }}><label>Účastník<select name="participant_id" required><option value="">Vyber účastníka</option>{participants.map((participant) => <option key={participant.id} value={participant.id}>{participant.participant_code}</option>)}</select></label><label>Test<select name="test_definition_id" required><option value="">Vyber test</option>{tests.filter((test) => test.is_active).map((test) => <option key={test.id} value={test.id}>{test.name} · v{test.version}</option>)}</select></label><label>Dátum a čas<input name="started_at" type="datetime-local" step="60" required /></label><label>Raw log · SCoPE alebo SimPLE<input name="raw_file" type="file" accept=".txt,.tsv,text/plain" required /></label><div className="actions"><button type="button" className="quiet" onClick={() => setManualUploadOpen(false)}>Zrušiť</button><button className="primary" type="submit">Nahrať dáta</button></div></form>{uploadMessage && <p className="notice">{uploadMessage}</p>}</section></div>}
+                {manualUploadOpen && <div className="backdrop" onMouseDown={() => setManualUploadOpen(false)}><section className="login upload-dialog" onMouseDown={(event) => event.stopPropagation()}><div className="eyebrow">NÚDZOVÁ SYNCHRONIZÁCIA</div><h2>Manuálne nahrať dátový súbor</h2><p className="muted">Použi iba vtedy, ak upload počas sessionu zlyhal.</p><form className="measurement-form modal-form" onSubmit={async (event) => { await uploadMeasurement(event); setManualUploadOpen(false); }}><label>Účastník<select name="participant_id" required><option value="">Vyber účastníka</option>{participants.map((participant) => <option key={participant.id} value={participant.id}>{participant.participant_code}</option>)}</select></label><label>Test<select name="test_definition_id" required><option value="">Vyber test</option>{tests.filter((test) => test.is_active && test.analysis_profile.toUpperCase().startsWith(resultMode)).map((test) => <option key={test.id} value={test.id}>{test.name} · v{test.version}</option>)}</select></label><label>Dátum a čas<input name="started_at" type="datetime-local" step="60" required /></label><label>Raw log · SCoPE alebo SimPLE<input name="raw_file" type="file" accept=".txt,.tsv,text/plain" required /></label><label>Analýza merania · JSON (nepovinné)<input name="analysis_file" type="file" accept=".json,application/json" /></label><div className="actions"><button type="button" className="quiet" onClick={() => setManualUploadOpen(false)}>Zrušiť</button><button className="primary" type="submit">Nahrať dáta</button></div></form>{uploadMessage && <p className="notice">{uploadMessage}</p>}</section></div>}
               </>}
 
             </section>
