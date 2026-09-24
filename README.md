@@ -54,7 +54,8 @@ docker compose -f docker-compose.yml -f docker-compose.https.yml exec backend al
 ```
 
 The HTTPS Nginx configuration publishes port 443 and redirects port 80 to
-HTTPS. PostgreSQL and backend traffic remain on the private Docker network; no
+HTTPS. Ensure the server and network firewall allow inbound TCP ports 80 and 443.
+PostgreSQL and backend traffic remain on the private Docker network; no
 database migration is required for TLS. Keep the certificate private key out of
 the repository and backups that are not access-controlled.
 
@@ -68,12 +69,21 @@ archived TSV/GZIP files, saved analysis JSON, CSV tables, and per-measurement PD
 reports with plots. The complete pseudonymous data archive is available only to
 superadmin and is delivered as a ZIP; it excludes login accounts.
 
-Apply any pending schema changes after updating the source:
+After `git pull`, keep using the same Compose files used to start the server.
+For an HTTP-only local development stack:
 
 ```console
-git pull
 docker compose up -d --build
 docker compose exec backend alembic upgrade head
+```
+
+For the HTTPS deployment, include the HTTPS overlay on every Compose command so
+an update does not replace the TLS-enabled Nginx configuration with the local
+HTTP-only setup:
+
+```console
+docker compose -f docker-compose.yml -f docker-compose.https.yml up -d --build
+docker compose -f docker-compose.yml -f docker-compose.https.yml exec backend alembic upgrade head
 ```
 
 ## Security boundary
