@@ -1040,6 +1040,9 @@ function SimpleTrace({ name, channel, color }: { name: string; channel?: SimpleT
 }
 
 function SimpleAnalysisView({ analysis }: { analysis: Record<string, unknown> }) {
+  if (!analysis.metrics || typeof analysis.metrics !== "object" || !analysis.step_response) {
+    return <section className="simple-analysis-view"><div className="eyebrow">SIMULOVANÝ LET</div><h3>Analýza SimPLE nie je dostupná</h3><p className="muted">K tomuto meraniu je uložený iba raw log. Pri núdzovom nahratí prilož aj súbor analýzy JSON vytvorený lokálnym THRUSTom.</p></section>;
+  }
   const rawMetrics = analysis.metrics && typeof analysis.metrics === "object" ? analysis.metrics as Record<string, unknown> : {};
   const response = analysis.step_response && typeof analysis.step_response === "object" ? analysis.step_response as { channels?: Record<string, SimpleTraceChannel> } : {};
   const metrics: [string, string, string][] = [
@@ -1053,7 +1056,7 @@ function SimpleAnalysisView({ analysis }: { analysis: Record<string, unknown> })
     ["Trvanie", "simple_duration_s", " s"],
   ];
   const display = (key: string, suffix: string) => { const value = rawMetrics[key]; if (typeof value !== "number" || !Number.isFinite(value)) return "—"; const scaled = key === "simple_in_zone_fraction" ? value * 100 : value; return `${scaled.toFixed(key === "simple_action_count" || key === "simple_reset_count" ? 0 : 2)}${suffix}`; };
-  return <section className="simple-analysis-view"><header className="simple-analysis-heading"><div><div className="eyebrow">SIMULOVANÝ LET</div><h3>Výsledky SimPLE</h3></div><span className="simple-analysis-version">Analýza {String(analysis.algorithm_version ?? "v1")}</span></header><div className="simple-metric-grid">{metrics.map(([label, key, suffix]) => <article className="simple-metric-card" key={key}><span>{label}</span><strong>{display(key, suffix)}</strong></article>)}</div><div className="simple-trace-grid"><SimpleTrace name="x" channel={response.channels?.x} color="#45d5ff"/><SimpleTrace name="y" channel={response.channels?.y} color="#ff6878"/></div></section>;
+  return <section className="simple-analysis-view"><header className="simple-analysis-heading"><div><div className="eyebrow">SIMULOVANÝ LET</div><h3>Výsledky SimPLE</h3></div><span className="simple-analysis-version">Analýza {String(analysis.algorithm_version ?? "v1")}</span></header>{analysis.algorithm_version === "1.0.0" && <p className="notice">Toto meranie používa staršie vyhodnotenie; počty akcií, resetov a čas v zóne môžu byť neúplné.</p>}<div className="simple-metric-grid">{metrics.map(([label, key, suffix]) => <article className="simple-metric-card" key={key}><span>{label}</span><strong>{display(key, suffix)}</strong></article>)}</div><div className="simple-trace-grid"><SimpleTrace name="x" channel={response.channels?.x} color="#45d5ff"/><SimpleTrace name="y" channel={response.channels?.y} color="#ff6878"/></div></section>;
 }
 
 function ChartPlot({ name, channel, time, min, max, expanded }: { name: string; channel: NormalizedChannel; time: number[]; min: number; max: number; expanded?: boolean }) {
