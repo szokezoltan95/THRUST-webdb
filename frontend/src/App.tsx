@@ -192,6 +192,14 @@ export function App() {
   const [activeSection, setActiveSection] = useState<AdminSection>("overview");
 
   useEffect(() => {
+    setError("");
+    setAccountMessage("");
+    setParticipantMessage("");
+    setTestMessage("");
+    setUploadMessage("");
+  }, [language]);
+
+  useEffect(() => {
     const syncRoute = () => {
       const path = window.location.pathname.replace(/\/+$/, "");
       setIsRegisterPage(path === "/register");
@@ -1460,6 +1468,12 @@ function StudentPortal({ user, onLogout }: { user: User; onLogout: () => Promise
   const [consentMessage, setConsentMessage] = useState("");
   const [editingProfile, setEditingProfile] = useState(false);
   const [profileMessage, setProfileMessage] = useState("");
+
+  useEffect(() => {
+    setError("");
+    setConsentMessage("");
+    setProfileMessage("");
+  }, [language]);
 
   async function revokeConsent(kind: ConsentKind) {
     const name = kind === "research" ? t("výskumný súhlas") : t("súhlas so spracovaním osobných údajov");
