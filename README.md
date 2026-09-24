@@ -32,6 +32,24 @@ Student accounts and measurement upload are intentionally deferred until the fir
 
 Set `COOKIE_SECURE=true` when the application is served through HTTPS in production.
 
+## Longitudinal trends and reports
+
+Researcher and administrator accounts can create pseudonymous participant
+groups, compare any combination of participants and saved groups on the Trends
+page, and view date-based or test-based averages. Python computes the tables and
+Matplotlib creates the downloadable PNG charts. The Reports page downloads
+archived TSV/GZIP files, saved analysis JSON, CSV tables, and per-measurement PDF
+reports with plots. The complete pseudonymous data archive is available only to
+superadmin and is delivered as a ZIP; it excludes login accounts.
+
+Apply any pending schema changes after updating the source:
+
+```console
+git pull
+docker compose up -d --build
+docker compose exec backend alembic upgrade head
+```
+
 ## Security boundary
 
 - Never store names, e-mail addresses, university identifiers, or the local ID-to-name mapping here.

@@ -971,4 +971,12 @@ header > .actions, .registration-header > .actions { margin-top: 0; align-items:
 .trend-chart circle { fill: #78e0c0; stroke: #07121f; stroke-width: 2; }
 .trend-axis-labels { display: flex; justify-content: space-between; color: #8ea5bc; font-size: .75rem; }
 .trend-data-table .data-table-head, .trend-data-table .data-table-row { grid-template-columns: 1fr 1fr 1fr; }
+.trend-select-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin: 12px 0; }
+.trend-select-grid label { display: grid; gap: 8px; color: #8ea5bc; }
+.trend-select-grid select { min-height: 130px; padding: 8px; color: #f4f8fb; background: #07121f; border: 1px solid var(--line); }
+.report-chart-image { display: block; width: min(100%, 1100px); height: auto; margin: 12px auto 22px; border: 1px solid var(--line); background: #f8fafc; }
+.trend-data-table .data-table-head, .trend-data-table .data-table-row { grid-template-columns: minmax(140px, 1.2fr) minmax(120px, 1fr) repeat(4, minmax(80px, .7fr)); }
+.report-actions { flex-wrap: wrap; justify-content: flex-start; }
+.report-actions a { text-decoration: none; }
+@media (max-width: 760px) { .trend-select-grid { grid-template-columns: 1fr; } .trend-data-table { overflow-x: auto; } .trend-data-table .data-table-head, .trend-data-table .data-table-row { min-width: 800px; } }
 @media (max-width: 900px) { .simple-editor-layout { grid-template-columns: 1fr; } .simple-scene-preview { min-height: 220px; } }
