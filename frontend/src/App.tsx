@@ -19,9 +19,9 @@ type Participant = { id: string; participant_code: string; is_active: boolean; c
 type AdminAccount = { id: string; username: string; email: string | null; first_name: string | null; last_name: string | null; role: string; effective_role: string; is_active: boolean; participant_id: string | null; participant_code: string | null; created_at: string };
 type TestDefinition = { id: string; test_code: string; name: string; version: string; status: string; analysis_profile: string; configuration: Record<string, unknown>; is_active: boolean };
 type Measurement = { id: string; participant_id: string; test_definition_id: string | null; test_type: string; status: string; started_at: string; source_file_name: string | null; raw_sha256: string | null; raw_size_bytes: number | null; analysis_data: Record<string, unknown> | null };
-type ParticipantDetail = { participant: Participant; measurements: { id: string; test_type: string; status: string; started_at: string; raw_data_available?: boolean }[] };
+type ParticipantDetail = { participant: Participant; measurements: { id: string; test_type: string; status: string; started_at: string; raw_data_available?: boolean; raw_size_bytes?: number | null }[] };
 type AdminSection = "overview" | "participants" | "tests" | "measurements";
-type StudentMeasurement = { id: string; test_type: string; status: string; started_at: string; analysis_data: Record<string, unknown> | null };
+type StudentMeasurement = { id: string; test_type: string; status: string; started_at: string; raw_size_bytes: number | null; analysis_data: Record<string, unknown> | null };
 type StudentProfile = { username: string; email: string | null; role: string; participant_code: string; first_name: string; last_name: string; created_at: string; birth_date: string | null; pilot_experience: string | null; flight_hours_range: string | null; pilot_certificate: string | null; primary_uav_type: string | null; simulator_experience: string | null; self_rated_skill: number | null; sex?: string | null; dominant_hand?: string | null; vision_correction?: string | null; vision_diopters_left?: number | null; vision_diopters_right?: number | null; rc_experience?: string | null; fpv_experience?: string | null; game_controller_experience?: string | null; video_game_experience?: string | null; }
 type StudentComparison = { available: boolean; minimum_group_size: number; cohort_participant_count: number; own_measurement_count: number; own_average: Record<string, number>; cohort_average: Record<string, number> };
 
@@ -49,6 +49,24 @@ function formatDate(value: string | null | undefined): string {
   const month = MONTH_ABBREVIATIONS[date.getUTCMonth()];
   const day = String(date.getUTCDate()).padStart(2, "0");
   return `${year}/${month}/${day}`;
+}
+
+function formatDateTime(value: string | null | undefined): string {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  const time = [date.getUTCHours(), date.getUTCMinutes(), date.getUTCSeconds()].map((part) => String(part).padStart(2, "0")).join(":");
+  return `${formatDate(value)} ${time} UTC`;
+}
+
+function formatBytes(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value) || value < 0) return "—";
+  if (value < 1024) return `${value} B`;
+  const units = ["KB", "MB", "GB", "TB"];
+  let size = value / 1024;
+  let unit = 0;
+  while (size >= 1024 && unit < units.length - 1) { size /= 1024; unit += 1; }
+  return `${size.toFixed(size < 10 ? 1 : 0)} ${units[unit]}`;
 }
 
 function parseFormattedDate(value: string): string | null {
@@ -281,7 +299,7 @@ export function App() {
           test_definition_id: form.get("test_definition_id"),
           started_at: new Date(startedAt).toISOString(),
           source_file_name: file.name,
-          raw_content_type: "text/tab-separated-values",
+          raw_content_type: file.name.toLowerCase().endsWith(".gz") ? "application/gzip" : "text/tab-separated-values",
           raw_log_base64: btoa(binary),
           status: "recorded",
           analysis_data: analysisData,
@@ -711,10 +729,10 @@ export function App() {
                      <section className="participant-detail-section">
                        <div className="participant-section-heading"><div><div className="eyebrow">HISTÓRIA</div><h3>Posledných 5 meraní</h3></div><span className="muted">{rows.length} spolu</span></div>
                        {rows.length ? <div className="data-table participant-history-table">
-                         <div className="data-table-head"><span>Test</span><span>Dátum</span><span>Stav</span><span>Výsledok</span></div>
+                         <div className="data-table-head"><span>Test</span><span>Dátum a čas</span><span>Veľkosť súboru</span><span>Stav</span><span>Výsledok</span></div>
                          {[...rows].sort((left, right) => right.started_at.localeCompare(left.started_at)).slice(0, 5).map((measurement) => {
                            const hasResult = rows.some((item) => item.id === measurement.id);
-                           return <div className="data-table-row" key={measurement.id}><strong>{measurement.test_type}</strong><span>{formatDate(measurement.started_at)}</span><span>{measurement.status}</span><span className="row-actions"><button className="quiet compact" disabled={!hasResult} onClick={() => { setSelectedMeasurementId(measurement.id); }}>{hasResult ? "Otvoriť" : "Bez výsledkov"}</button></span></div>;
+                           return <div className="data-table-row" key={measurement.id}><strong>{measurement.test_type}</strong><span>{formatDateTime(measurement.started_at)}</span><span>{formatBytes(measurement.raw_size_bytes)}</span><span>{measurement.status}</span><span className="row-actions"><button className="quiet compact" disabled={!hasResult} onClick={() => { setSelectedMeasurementId(measurement.id); }}>{hasResult ? "Otvoriť" : "Bez výsledkov"}</button></span></div>;
                          })}
                        </div> : <div className="participant-empty-state">Účastník zatiaľ nemá zaznamenané žiadne merania.</div>}
                      </section>
@@ -766,7 +784,7 @@ export function App() {
                    return <section className="browser-detail detail-modal-open participant-detail-modal">
                     <div className="detail-header"><div><div className="eyebrow">MERANIA ÚČASTNÍKA</div><h2>{participant.participant_code}</h2></div><div className="detail-header-actions"><ModeSwitch value={resultMode} onChange={changeResultMode} /><button className="quiet compact" onClick={() => { setParticipantDialog(null); setSelectedMeasurementId(null); }}>Zavrieť</button></div></div>
                     <p className="muted">História {resultMode === "SCOPE" ? "SCoPE" : "SimPLE"} meraní účastníka.</p>
-                    <div className="data-table participant-history-table"><div className="data-table-head"><span>Test</span><span>Dátum</span><span>Stav</span><span>Akcia</span></div>{rows.map((measurement) => <div className="data-table-row" key={measurement.id}><strong>{measurement.test_type}</strong><span>{formatDate(measurement.started_at)}</span><span>{measurement.status}</span><button className="quiet compact row-actions" onClick={() => setSelectedMeasurementId(measurement.id)}>Otvoriť výsledok</button></div>)}</div>
+                    <div className="data-table participant-history-table"><div className="data-table-head"><span>Test</span><span>Dátum a čas</span><span>Veľkosť súboru</span><span>Stav</span><span>Akcia</span></div>{rows.map((measurement) => <div className="data-table-row" key={measurement.id}><strong>{measurement.test_type}</strong><span>{formatDateTime(measurement.started_at)}</span><span>{formatBytes(measurement.raw_size_bytes)}</span><span>{measurement.status}</span><button className="quiet compact row-actions" onClick={() => setSelectedMeasurementId(measurement.id)}>Otvoriť výsledok</button></div>)}</div>
                     {rows.length === 0 && <p className="muted">Pre tento režim zatiaľ nie sú synchronizované merania.</p>}
                   </section>;
                 })()}
@@ -805,14 +823,14 @@ export function App() {
                       <input type="date" value={measurementDateTo} onChange={(event) => setMeasurementDateTo(event.target.value)} aria-label="Do dátumu" />
                     </div>
                     <div className="selection-toolbar"><label><input type="checkbox" checked={filteredMeasurements().length > 0 && filteredMeasurements().every((item) => selectedMeasurementIds.includes(item.id))} onChange={() => setSelectedMeasurementIds(filteredMeasurements().every((item) => selectedMeasurementIds.includes(item.id)) ? [] : filteredMeasurements().map((item) => item.id))} /> Vybrať všetky</label>{user.role === "superadmin" && <button className="quiet compact danger" disabled={!selectedMeasurementIds.length} onClick={deleteSelectedMeasurements}>Odstrániť vybrané</button>}</div>
-                    <div className="measurement-list">{filteredMeasurements().map((measurement) => <button className={selectedMeasurementId === measurement.id ? "measurement-item selected" : "measurement-item"} key={measurement.id} onClick={() => setSelectedMeasurementId(measurement.id)}><input type="checkbox" checked={selectedMeasurementIds.includes(measurement.id)} onChange={(event) => { event.stopPropagation(); toggleMeasurementSelection(measurement.id); }} onClick={(event) => event.stopPropagation()} /><span className="measurement-main"><strong>{participantCodeFor(measurement.participant_id)}</strong><span>{formatDate(measurement.started_at)} · {measurement.test_type} · {measurement.source_file_name ?? "raw"}</span></span><span className="measurement-status">{measurement.raw_sha256 ? "Archivované" : "Bez raw dát"}</span></button>)}</div>
+                    <div className="measurement-list">{filteredMeasurements().map((measurement) => <button className={selectedMeasurementId === measurement.id ? "measurement-item selected" : "measurement-item"} key={measurement.id} onClick={() => setSelectedMeasurementId(measurement.id)}><input type="checkbox" checked={selectedMeasurementIds.includes(measurement.id)} onChange={(event) => { event.stopPropagation(); toggleMeasurementSelection(measurement.id); }} onClick={(event) => event.stopPropagation()} /><span className="measurement-main"><strong>{participantCodeFor(measurement.participant_id)}</strong><span>{formatDateTime(measurement.started_at)} · {measurement.test_type} · {measurement.source_file_name ?? "raw"}</span><small>{formatBytes(measurement.raw_size_bytes)} na serveri</small></span><span className="measurement-status">{measurement.raw_sha256 ? "Archivované" : "Bez raw dát"}</span></button>)}</div>
                     {filteredMeasurements().length === 0 && <p className="muted empty-list">Filteru nezodpovedajú žiadne archivované merania.</p>}
                   </section>
                   <section className={selectedMeasurementId ? "panel workbench-detail detail-modal-open" : "panel workbench-detail detail-modal-closed"}>
                     {(() => { const selected = measurements.find((item) => item.id === selectedMeasurementId); return selected ? <MeasurementDetailBody measurement={selected} tests={tests} onClose={() => setSelectedMeasurementId(null)} /> : <div className="empty-list"><h2>Vyber meranie</h2><p className="muted">V ľavom paneli vyber meranie, ktoré chceš preskúmať.</p></div>; })()}
                   </section>
                 </div>
-                {manualUploadOpen && <div className="backdrop" onMouseDown={() => setManualUploadOpen(false)}><section className="login upload-dialog" onMouseDown={(event) => event.stopPropagation()}><div className="eyebrow">NÚDZOVÁ SYNCHRONIZÁCIA</div><h2>Manuálne nahrať dátový súbor</h2><p className="muted">Použi iba vtedy, ak upload počas sessionu zlyhal.</p><form className="measurement-form modal-form" onSubmit={async (event) => { await uploadMeasurement(event); setManualUploadOpen(false); }}><label>Účastník<select name="participant_id" required><option value="">Vyber účastníka</option>{participants.map((participant) => <option key={participant.id} value={participant.id}>{participant.participant_code}</option>)}</select></label><label>Test<select name="test_definition_id" required><option value="">Vyber test</option>{tests.filter((test) => test.is_active && test.analysis_profile.toUpperCase().startsWith(resultMode)).map((test) => <option key={test.id} value={test.id}>{test.name} · v{test.version}</option>)}</select></label><label>Dátum a čas<input name="started_at" type="datetime-local" step="60" required /></label><label>Raw log · SCoPE alebo SimPLE<input name="raw_file" type="file" accept=".txt,.tsv,text/plain" required /></label><label>Analýza merania · JSON (nepovinné)<input name="analysis_file" type="file" accept=".json,application/json" /></label><div className="actions"><button type="button" className="quiet" onClick={() => setManualUploadOpen(false)}>Zrušiť</button><button className="primary" type="submit">Nahrať dáta</button></div></form>{uploadMessage && <p className="notice">{uploadMessage}</p>}</section></div>}
+                {manualUploadOpen && <div className="backdrop" onMouseDown={() => setManualUploadOpen(false)}><section className="login upload-dialog" onMouseDown={(event) => event.stopPropagation()}><div className="eyebrow">NÚDZOVÁ SYNCHRONIZÁCIA</div><h2>Manuálne nahrať dátový súbor</h2><p className="muted">Použi iba vtedy, ak upload počas sessionu zlyhal.</p><form className="measurement-form modal-form" onSubmit={async (event) => { await uploadMeasurement(event); setManualUploadOpen(false); }}><label>Účastník<select name="participant_id" required><option value="">Vyber účastníka</option>{participants.map((participant) => <option key={participant.id} value={participant.id}>{participant.participant_code}</option>)}</select></label><label>Test<select name="test_definition_id" required><option value="">Vyber test</option>{tests.filter((test) => test.is_active && test.analysis_profile.toUpperCase().startsWith(resultMode)).map((test) => <option key={test.id} value={test.id}>{test.name} · v{test.version}</option>)}</select></label><label>Dátum a čas<input name="started_at" type="datetime-local" step="60" required /></label><label>Raw log · SCoPE alebo SimPLE<input name="raw_file" type="file" accept=".tsv,.tsv.gz,.gz,.txt,text/plain,application/gzip" required /></label><label>Analýza merania · JSON (nepovinné)<input name="analysis_file" type="file" accept=".json,application/json" /></label><div className="actions"><button type="button" className="quiet" onClick={() => setManualUploadOpen(false)}>Zrušiť</button><button className="primary" type="submit">Nahrať dáta</button></div></form>{uploadMessage && <p className="notice">{uploadMessage}</p>}</section></div>}
               </>}
 
             </section>
@@ -1122,8 +1140,8 @@ function MeasurementDetailBody({ measurement, tests, onClose }: { measurement: M
   const isSimple = getMeasurementMode(measurement, tests) === "SIMPLE";
   return <>
     <div className="detail-window-bar"><div className="eyebrow">DETAIL MERANIA · {isSimple ? "SimPLE" : "SCoPE"}</div><div className="detail-header-actions"><button className="quiet compact" onClick={onClose}>Zavrieť</button></div></div>
-    <h2>{measurement.test_type}</h2><p className="muted">{measurement.source_file_name} · {formatDate(measurement.started_at)}</p>
-    <div className="detail-grid"><div><span>Vzorky</span><strong>{String(measurement.analysis_data?.sample_count ?? measurement.analysis_data?.simple_sample_count ?? "—")}</strong></div><div><span>Trvanie</span><strong>{measurement.analysis_data?.duration_s ? `${Number(measurement.analysis_data.duration_s).toFixed(2)} s` : "—"}</strong></div><div><span>Raw dáta</span><strong>{measurement.raw_sha256 ? "Archivované" : "Nie sú dostupné"}</strong></div><div><span>Merací režim</span><strong>{isSimple ? "SimPLE · 2D let" : "SCoPE · odozva osí"}</strong></div></div>
+    <h2>{measurement.test_type}</h2><p className="muted">{measurement.source_file_name} · {formatDateTime(measurement.started_at)}</p>
+    <div className="detail-grid"><div><span>Vzorky</span><strong>{String(measurement.analysis_data?.sample_count ?? measurement.analysis_data?.simple_sample_count ?? "—")}</strong></div><div><span>Trvanie</span><strong>{measurement.analysis_data?.duration_s ? `${Number(measurement.analysis_data.duration_s).toFixed(2)} s` : "—"}</strong></div><div><span>Raw dáta</span><strong>{measurement.raw_sha256 ? `Archivované · ${formatBytes(measurement.raw_size_bytes)}` : "Nie sú dostupné"}</strong></div><div><span>Merací režim</span><strong>{isSimple ? "SimPLE · 2D let" : "SCoPE · odozva osí"}</strong></div></div>
     {isSimple ? <SimpleAnalysisView analysis={measurement.analysis_data ?? {}} /> : <div className="results-layout"><div className="results-chart-column"><ResponseChart data={measurement.analysis_data?.normalized_step_response} /></div><ResponseMetrics data={measurement.analysis_data?.normalized_step_response} /></div>}
   </>;
 }
@@ -1514,8 +1532,8 @@ function StudentPortal({ user, onLogout }: { user: User; onLogout: () => Promise
       </section>}
       <section className="panel">
         <div className="student-result-heading"><div><div className="eyebrow">VÝSLEDKY</div><h2>Moje merania · {mode === "SCOPE" ? "SCoPE" : "SimPLE"}</h2></div><ModeSwitch value={mode} onChange={(selected) => { setMode(selected); setSelectedMeasurementId(null); }} /></div>
-        {visibleMeasurements.length ? <div className="table-wrap"><table><thead><tr><th>Test</th><th>Stav</th><th>Dátum</th><th>Výsledky</th></tr></thead><tbody>{visibleMeasurements.map((m) => <tr key={m.id}><td>{m.test_type}</td><td>{m.status}</td><td>{formatDate(m.started_at)}</td><td><button type="button" className="quiet compact" onClick={() => setSelectedMeasurementId(m.id === selectedMeasurementId ? null : m.id)}>{m.id === selectedMeasurementId ? "Skryť" : "Zobraziť"}</button></td></tr>)}</tbody></table></div> : <p className="muted">Zatiaľ nemáš uložené meranie {mode === "SCOPE" ? "SCoPE" : "SimPLE"}.</p>}
-        {selectedMeasurement && <div className="student-result-detail"><h3>{selectedMeasurement.test_type} · {formatDate(selectedMeasurement.started_at)}</h3>{mode === "SIMPLE" ? <SimpleAnalysisView analysis={selectedMeasurement.analysis_data ?? {}} /> : selectedMeasurement.analysis_data?.normalized_step_response ? <><ResponseChart data={selectedMeasurement.analysis_data.normalized_step_response} /><ResponseMetrics data={selectedMeasurement.analysis_data.normalized_step_response} /></> : <p className="muted">Toto meranie nemá uloženú analýzu odozvy.</p>}</div>}
+        {visibleMeasurements.length ? <div className="table-wrap"><table><thead><tr><th>Test</th><th>Stav</th><th>Dátum a čas</th><th>Veľkosť súboru</th><th>Výsledky</th></tr></thead><tbody>{visibleMeasurements.map((m) => <tr key={m.id}><td>{m.test_type}</td><td>{m.status}</td><td>{formatDateTime(m.started_at)}</td><td>{formatBytes(m.raw_size_bytes)}</td><td><button type="button" className="quiet compact" onClick={() => setSelectedMeasurementId(m.id === selectedMeasurementId ? null : m.id)}>{m.id === selectedMeasurementId ? "Skryť" : "Zobraziť"}</button></td></tr>)}</tbody></table></div> : <p className="muted">Zatiaľ nemáš uložené meranie {mode === "SCOPE" ? "SCoPE" : "SimPLE"}.</p>}
+        {selectedMeasurement && <div className="student-result-detail"><h3>{selectedMeasurement.test_type} · {formatDateTime(selectedMeasurement.started_at)}</h3>{mode === "SIMPLE" ? <SimpleAnalysisView analysis={selectedMeasurement.analysis_data ?? {}} /> : selectedMeasurement.analysis_data?.normalized_step_response ? <><ResponseChart data={selectedMeasurement.analysis_data.normalized_step_response} /><ResponseMetrics data={selectedMeasurement.analysis_data.normalized_step_response} /></> : <p className="muted">Toto meranie nemá uloženú analýzu odozvy.</p>}</div>}
       </section>
       <section className="panel">
         <div className="eyebrow">ANONYMIZOVANÉ POROVNANIE · {mode === "SCOPE" ? "SCoPE" : "SimPLE"}</div>
