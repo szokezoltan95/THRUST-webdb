@@ -900,3 +900,26 @@ h1 { max-width: 880px; margin: 20px 0; font-size: clamp(42px, 7vw, 84px); line-h
 .simple-trace .plot-axis-label { fill: #7e94aa; font-size: 10px; }
 .simple-trace .chart-zero { stroke: #738ba2; stroke-width: 1; stroke-dasharray: 5 4; }
 @media (max-width: 900px) { .simple-metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .simple-trace-grid { grid-template-columns: 1fr; } }
+
+
+/* Shared mode controls and SimPLE scene editor */
+.mode-switch { display: inline-flex; align-items: stretch; flex: 0 0 auto; min-width: 210px; padding: 3px; gap: 3px; border: 1px solid #31536a; border-radius: 10px; background: #081724; }
+.mode-switch-option { flex: 1; min-width: 92px; padding: 9px 12px; border: 1px solid transparent; border-radius: 7px; background: transparent; color: #9db5c9; font: inherit; font-size: .83rem; font-weight: 700; cursor: pointer; }
+.mode-switch-option.active { background: #123e52; border-color: #3ebad5; color: #f0fbff; box-shadow: 0 0 12px #39b9d122; }
+.mode-switch-option:hover:not(.active) { background: #172b3a; color: #f0fbff; }
+.filters .mode-switch { grid-column: 1 / -1; justify-self: start; }
+.simple-editor-window { width: min(1220px, 100%); }
+.simple-editor-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(250px, 330px); gap: 18px; align-items: start; }
+.simple-editor-layout > div:first-child { min-width: 0; }
+.simple-editor-layout > div:first-child > p { margin: 14px 2px; font-size: .78rem; }
+.simple-background-panel { display: grid; gap: 14px; min-width: 0; padding: 16px; border: 1px solid #29445d; border-radius: 10px; background: #0b1b2c; }
+.simple-background-panel label { display: grid; gap: 6px; color: #9db0c4; font-size: .82rem; }
+.simple-background-panel select, .simple-background-panel input { width: 100%; min-width: 0; padding: 10px; color: #eef5ff; border: 1px solid #29445d; border-radius: 7px; background: #07121f; }
+.simple-background-panel input[type=file] { font-size: .72rem; }
+.simple-background-preview { display: block; width: 100%; max-height: 280px; object-fit: contain; border: 1px solid #29445d; background: #020b12; }
+.student-result-heading { display: flex; justify-content: space-between; align-items: center; gap: 14px; margin-bottom: 10px; }
+.student-result-heading h2 { margin: 3px 0; }
+.student-result-detail { margin-top: 14px; padding: 14px; border: 1px solid var(--line); background: #0a1826; }
+.student-result-detail h3 { margin: 0 0 10px; font-size: 1rem; }
+@media (max-width: 900px) { .simple-editor-layout { grid-template-columns: 1fr; } .student-result-heading { align-items: flex-start; flex-direction: column; } }
+@media (max-width: 600px) { .browser-toolbar { flex-wrap: wrap; } .browser-toolbar .mode-switch { width: 100%; } .filters { grid-template-columns: 1fr; } }
