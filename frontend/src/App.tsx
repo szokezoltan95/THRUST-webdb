@@ -1367,6 +1367,8 @@ function StudentPortal({ user, onLogout }: { user: User; onLogout: () => Promise
   const [profile, setProfile] = useState<StudentProfile | null>(null);
   const [measurements, setMeasurements] = useState<StudentMeasurement[]>([]);
   const [comparison, setComparison] = useState<StudentComparison | null>(null);
+  const [mode, setMode] = useState<MeasurementMode>("SCOPE");
+  const [selectedMeasurementId, setSelectedMeasurementId] = useState<string | null>(null);
   const [consents, setConsents] = useState<ConsentStatuses | null>(null);
   const [consentTexts, setConsentTexts] = useState<ConsentDocuments | null>(null);
   const [consentDialog, setConsentDialog] = useState<ConsentKind | null>(null);
@@ -1404,7 +1406,6 @@ function StudentPortal({ user, onLogout }: { user: User; onLogout: () => Promise
 
     void Promise.all([
       load<StudentMeasurement[]>("Merania", "/api/student/measurements", setMeasurements),
-      load<StudentComparison>("Porovnanie", "/api/student/comparison", setComparison),
       load<ConsentStatuses>("Súhlasy", "/api/student/consents", setConsents),
       load<ConsentDocuments>("Texty súhlasov", "/api/public/consent-texts", setConsentTexts),
       load<StudentProfile>("Profil", "/api/student/profile", setProfile),
@@ -1413,13 +1414,25 @@ function StudentPortal({ user, onLogout }: { user: User; onLogout: () => Promise
     });
   }, []);
 
+  useEffect(() => {
+    let active = true;
+    setComparison(null);
+    void request<StudentComparison>(`/api/student/comparison?mode=${mode}`)
+      .then((result) => { if (active) setComparison(result); })
+      .catch((reason) => { if (active) setError(reason instanceof Error ? reason.message : "Porovnanie sa nepodarilo načítať."); });
+    return () => { active = false; };
+  }, [mode]);
+
+  const visibleMeasurements = measurements.filter((item) => getMeasurementMode(item) === mode);
+  const selectedMeasurement = visibleMeasurements.find((item) => item.id === selectedMeasurementId);
+
   return <main className="student-shell">
     <header><div className="brand"><span className="mark">T</span><div><strong>THRUST</strong><small>Študentský portál</small></div></div><button className="quiet" onClick={onLogout}>Odhlásiť</button></header>
     <section className="public student-content">
       <div className="eyebrow">OSOBNÝ PROFIL</div>
       <h1>Ahoj, {profile?.first_name || user.first_name || user.username}.</h1>
       <p className="lead">Tvoje účastnícke ID: <strong>{user.participant_code || "—"}</strong></p>
-      <div className="stats"><Metric label="Moje merania" value={measurements.length} /><Metric label="Skupina" value={comparison?.cohort_participant_count ?? "—"} /><Metric label="Porovnanie" value={comparison?.available ? "dostupné" : "čaká na limit"} /></div>
+      <div className="stats"><Metric label="Moje merania" value={visibleMeasurements.length} /><Metric label="Skupina" value={comparison?.cohort_participant_count ?? "—"} /><Metric label="Porovnanie" value={comparison?.available ? "dostupné" : "čaká na limit"} /></div>
       {error && <p className="error">{error}</p>}
       {profile && <section className="panel student-profile-panel">
         <div className="profile-panel-heading"><div><div className="eyebrow">PROFIL PILOTA</div><h2>Moje údaje</h2><p className="muted">Osobné údaje a odpovede z registrácie.</p></div>
@@ -1451,11 +1464,12 @@ function StudentPortal({ user, onLogout }: { user: User; onLogout: () => Promise
           ]} />}
       </section>}
       <section className="panel">
-        <div className="eyebrow">VÝSLEDKY</div><h2>Moje merania</h2>
-        {measurements.length ? <div className="table-wrap"><table><thead><tr><th>Test</th><th>Stav</th><th>Dátum</th></tr></thead><tbody>{measurements.map((m) => <tr key={m.id}><td>{m.test_type}</td><td>{m.status}</td><td>{formatDate(m.started_at)}</td></tr>)}</tbody></table></div> : <p className="muted">Zatiaľ nemáš uložené žiadne meranie.</p>}
+        <div className="student-result-heading"><div><div className="eyebrow">VÝSLEDKY</div><h2>Moje merania · {mode === "SCOPE" ? "SCoPE" : "SimPLE"}</h2></div><ModeSwitch value={mode} onChange={(selected) => { setMode(selected); setSelectedMeasurementId(null); }} /></div>
+        {visibleMeasurements.length ? <div className="table-wrap"><table><thead><tr><th>Test</th><th>Stav</th><th>Dátum</th><th>Výsledky</th></tr></thead><tbody>{visibleMeasurements.map((m) => <tr key={m.id}><td>{m.test_type}</td><td>{m.status}</td><td>{formatDate(m.started_at)}</td><td><button type="button" className="quiet compact" onClick={() => setSelectedMeasurementId(m.id === selectedMeasurementId ? null : m.id)}>{m.id === selectedMeasurementId ? "Skryť" : "Zobraziť"}</button></td></tr>)}</tbody></table></div> : <p className="muted">Zatiaľ nemáš uložené meranie {mode === "SCOPE" ? "SCoPE" : "SimPLE"}.</p>}
+        {selectedMeasurement && <div className="student-result-detail"><h3>{selectedMeasurement.test_type} · {formatDate(selectedMeasurement.started_at)}</h3>{mode === "SIMPLE" ? <SimpleAnalysisView analysis={selectedMeasurement.analysis_data ?? {}} /> : selectedMeasurement.analysis_data?.normalized_step_response ? <><ResponseChart data={selectedMeasurement.analysis_data.normalized_step_response} channel="AILE" mode="all" /><ResponseMetrics data={selectedMeasurement.analysis_data.normalized_step_response} /></> : <p className="muted">Toto meranie nemá uloženú analýzu odozvy.</p>}</div>}
       </section>
       <section className="panel">
-        <div className="eyebrow">ANONYMIZOVANÉ POROVNANIE</div>
+        <div className="eyebrow">ANONYMIZOVANÉ POROVNANIE · {mode === "SCOPE" ? "SCoPE" : "SimPLE"}</div>
         {comparison?.available ? <><p>Tvoje priemery: {formatMetricMap(comparison.own_average)}</p><p>Skupinové priemery: {formatMetricMap(comparison.cohort_average)}</p></> : <p className="muted">Porovnanie sa zobrazí po nazbieraní dostatočne veľkej skupiny.</p>}
       </section>
       <section className="panel">
