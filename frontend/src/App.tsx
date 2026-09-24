@@ -933,7 +933,30 @@ function metricsFor(channel: NormalizedChannel | undefined, time: number[]): Ste
 }
 
 
-function AllMeasurementStats({ measurements }: { measurements: Measurement[] }) {
+function AllMeasurementStats({ measurements, mode }: { measurements: Measurement[]; mode: MeasurementMode }) {
+  if (mode === "SIMPLE") {
+    const analyzed = measurements.filter((item) => item.analysis_data?.analysis_type === "SIMPLE_2D_FLIGHT");
+    const average = (key: string) => {
+      const values = analyzed.map((item) => (item.analysis_data?.metrics as Record<string, unknown> | undefined)?.[key])
+        .filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+      return values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null;
+    };
+    const error = average("simple_mean_target_error_m");
+    const zone = average("simple_in_zone_fraction");
+    const duration = average("simple_duration_s");
+    const resets = average("simple_reset_count");
+    return <div className="participant-statistics">
+      <div className="participant-stat-grid">
+        <article><span>Merania SimPLE</span><strong>{measurements.length}</strong></article>
+        <article><span>S analýzou letu</span><strong>{analyzed.length}</strong></article>
+        <article><span>Priemerná chyba cieľa</span><strong>{error === null ? "—" : error.toFixed(2) + " m"}</strong></article>
+        <article><span>Čas v cieľovej zóne</span><strong>{zone === null ? "—" : (zone * 100).toFixed(1) + " %"}</strong></article>
+        <article><span>Priemerné trvanie</span><strong>{duration === null ? "—" : duration.toFixed(1) + " s"}</strong></article>
+        <article><span>Priemerné resety</span><strong>{resets === null ? "—" : resets.toFixed(1)}</strong></article>
+      </div>
+      {analyzed.length === 0 && <div className="participant-empty-state">{measurements.length ? "SimPLE logy zatiaľ nemajú nahranú lokálnu analýzu." : "Štatistiky sa zobrazia po prvom meraní SimPLE."}</div>}
+    </div>;
+  }
   const completed = measurements.filter((item) => item.status === "completed" || item.status === "recorded").length;
   const testTypes = new Set(measurements.map((item) => item.test_type)).size;
   const analyzed = measurements.filter((item) => Boolean(item.analysis_data?.normalized_step_response)).length;
