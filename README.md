@@ -1,5 +1,13 @@
 # THRUST-webdb
 
+The frontend offers Slovak and English in the header. It starts in Slovak if
+the browser's system language is Slovak, otherwise in English; a manual choice
+is remembered in the browser. Consent documents are served in the selected
+language and their accepted text is stored with the registration record.
+Set `DATA_RETENTION_NOTICE_EN` alongside `DATA_RETENTION_NOTICE` in the server
+`.env` for the English consent text. The API marks the English document
+unconfigured until this translation and the controller details are present.
+
 Central web database for THRUST measurements. The server stores pseudonymous participant codes only; the mapping between a participant and their real identity must remain outside this system.
 
 ## Current scope

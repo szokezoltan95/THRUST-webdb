@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     data_controller_address: str = ""
     data_controller_email: str = ""
     data_retention_notice: str = ""
+    data_retention_notice_en: str = ""
 
 
 @lru_cache
@@ -28,4 +29,3 @@ def get_settings() -> Settings:
 
 
 settings = get_settings()
-

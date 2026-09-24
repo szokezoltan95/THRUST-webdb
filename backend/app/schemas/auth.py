@@ -1,4 +1,5 @@
 from datetime import date, datetime
+from typing import Literal
 
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
@@ -10,6 +11,7 @@ class LoginRequest(BaseModel):
 
 
 class RegistrationRequest(BaseModel):
+    consent_language: Literal["sk", "en"] = "sk"
     email: EmailStr
     password: str = Field(min_length=10, max_length=1024)
     first_name: str = Field(min_length=1, max_length=120)
@@ -52,6 +54,7 @@ class RegistrationRequest(BaseModel):
 
 
 class ResearcherRegistrationRequest(BaseModel):
+    consent_language: Literal["sk", "en"] = "sk"
     email: EmailStr
     password: str = Field(min_length=10, max_length=1024)
     first_name: str = Field(min_length=1, max_length=120)

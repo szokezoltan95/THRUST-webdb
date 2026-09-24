@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import AuthContext, effective_role, require_authenticated, require_user_csrf
 from app.core.config import settings
-from app.core.consents import GDPR_CONSENT_VERSION, RESEARCH_CONSENT_TEXT, RESEARCH_CONSENT_VERSION, gdpr_consent_text
+from app.core.consents import GDPR_CONSENT_VERSION, RESEARCH_CONSENT_VERSION, gdpr_consent_text, research_consent_text
 from app.core.security import (
     hash_password,
     new_csrf_token,
@@ -116,13 +116,13 @@ async def register(
             user_id=user.id,
             consent_type="research",
             version=payload.consent_version or RESEARCH_CONSENT_VERSION,
-            text_snapshot=RESEARCH_CONSENT_TEXT,
+            text_snapshot=research_consent_text(payload.consent_language),
         ),
         ResearchConsent(
             user_id=user.id,
             consent_type="gdpr",
             version=payload.gdpr_consent_version or GDPR_CONSENT_VERSION,
-            text_snapshot=gdpr_consent_text(),
+            text_snapshot=gdpr_consent_text(payload.consent_language),
         ),
     ])
     await db.commit()
@@ -168,7 +168,7 @@ async def register_researcher(
         user_id=user.id,
         consent_type="gdpr",
         version=payload.gdpr_consent_version or GDPR_CONSENT_VERSION,
-        text_snapshot=gdpr_consent_text(),
+        text_snapshot=gdpr_consent_text(payload.consent_language),
     ))
     await db.commit()
     return await create_session(user, response, db)

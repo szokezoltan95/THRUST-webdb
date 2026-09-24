@@ -31,6 +31,7 @@ services:
       DATA_CONTROLLER_ADDRESS: ${DATA_CONTROLLER_ADDRESS:-}
       DATA_CONTROLLER_EMAIL: ${DATA_CONTROLLER_EMAIL:-}
       DATA_RETENTION_NOTICE: ${DATA_RETENTION_NOTICE:-}
+      DATA_RETENTION_NOTICE_EN: ${DATA_RETENTION_NOTICE_EN:-}
     volumes:
       - measurement_data:/var/lib/thrust-webdb/measurements
     depends_on:

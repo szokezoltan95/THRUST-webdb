@@ -58,6 +58,13 @@ h1 { max-width: 880px; margin: 20px 0; font-size: clamp(42px, 7vw, 84px); line-h
 .login input { width: 100%; padding: 12px; color: #eef5ff; background: #07101c; border: 1px solid #31506e; border-radius: 3px; outline: none; }
 .login input:focus { border-color: #45d5ff; box-shadow: 0 0 0 3px #45d5ff22; }
 .actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 28px; }
+.header-actions { display: flex; align-items: center; gap: 16px; }
+header > .actions, .registration-header > .actions { margin-top: 0; align-items: center; }
+.language-switch { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 2px; border: 1px solid #31506e; border-radius: 5px; padding: 2px; }
+.language-switch button { border: 0; border-radius: 3px; padding: 6px 8px; color: #a9c4db; background: transparent; font-size: 12px; font-weight: 700; }
+.language-switch button[aria-pressed="true"] { color: #06101c; background: #45d5ff; }
+.language-switch button:focus-visible { outline: 2px solid #45d5ff; outline-offset: 2px; }
+@media (max-width: 700px) { header:has(> .actions) { height: auto; min-height: 78px; gap: 12px; flex-wrap: wrap; padding-block: 12px; } header > .actions { flex-wrap: wrap; } .topbar { gap: 16px; flex-wrap: wrap; } }
 .error { color: #ff8897; }
 @media (max-width: 700px) { header { padding: 0 20px; } .brand small { display: none; } .public,.workspace { padding: 70px 20px; } .stats { grid-template-columns: 1fr; margin-top: 42px; } .metric { min-height: 110px; } h1 { font-size: 48px; } }
 :root { --line: #1d334b; }
