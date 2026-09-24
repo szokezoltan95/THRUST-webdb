@@ -4,6 +4,7 @@ from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 from statistics import mean
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
@@ -138,16 +139,28 @@ def numeric_metrics(analysis_data: dict | None) -> dict[str, float]:
 
 @router.get("/comparison")
 async def comparison(
+    mode: Literal["SCOPE", "SIMPLE"] = "SCOPE",
     auth: AuthContext = Depends(require_authenticated),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     student = require_student(auth).user
+    profiles = dict((await db.execute(select(TestDefinition.id, TestDefinition.analysis_profile))).all())
+
+    def belongs_to_mode(item: Measurement) -> bool:
+        profile = profiles.get(item.test_definition_id, "").upper()
+        if profile.startswith(("SIMPLE", "SCOPE")):
+            return profile.startswith(mode)
+        analysis = item.analysis_data if isinstance(item.analysis_data, dict) else {}
+        if str(analysis.get("analysis_type", "")).upper().startswith("SIMPLE"):
+            return mode == "SIMPLE"
+        return str(item.test_type).upper().startswith("SIMPLE") == (mode == "SIMPLE")
+
     own_result = await db.scalars(
         select(Measurement)
         .where(Measurement.participant_id == student.participant_id)
         .order_by(Measurement.started_at.desc())
     )
-    own = list(own_result)
+    own = [item for item in own_result if belongs_to_mode(item)]
     revoked_participant_ids = set(
         await db.scalars(
             select(AdminUser.participant_id)
@@ -160,8 +173,12 @@ async def comparison(
         )
     )
     cohort_result = await db.scalars(select(Measurement).where(Measurement.status.in_(["completed", "recorded"])))
-    cohort = [item for item in cohort_result if item.participant_id not in revoked_participant_ids]
-    eligible = len({item.participant_id for item in cohort}) >= settings.public_min_group_size
+    cohort = [
+        item for item in cohort_result
+        if item.participant_id not in revoked_participant_ids and belongs_to_mode(item)
+    ]
+    cohort_count = len({item.participant_id for item in cohort})
+    eligible = cohort_count >= settings.public_min_group_size
     own_values: dict[str, list[float]] = defaultdict(list)
     cohort_values: dict[str, list[float]] = defaultdict(list)
     for item in own:
@@ -171,9 +188,10 @@ async def comparison(
         for key, value in numeric_metrics(item.analysis_data).items():
             cohort_values[key].append(value)
     return {
+        "mode": mode,
         "available": eligible,
         "minimum_group_size": settings.public_min_group_size,
-        "cohort_participant_count": len({item.participant_id for item in cohort}),
+        "cohort_participant_count": cohort_count,
         "own_measurement_count": len(own),
         "own_average": {key: mean(values) for key, values in own_values.items()},
         "cohort_average": {key: mean(values) for key, values in cohort_values.items()} if eligible else {},
