@@ -5,6 +5,7 @@ import base64
 import binascii
 import gzip
 import io
+import zlib
 
 
 class RawUploadInvalid(ValueError):
@@ -54,6 +55,6 @@ def decode_raw_upload(encoded: str | None, *, file_name: str | None, content_typ
                     raise RawUploadTooLarge("Rozbalený raw log prekračuje bezpečný limit.")
     except RawUploadInvalid:
         raise
-    except (OSError, EOFError) as exc:
+    except (OSError, EOFError, zlib.error) as exc:
         raise RawUploadInvalid("Gzip raw log je poškodený alebo neúplný.") from exc
     return raw_bytes

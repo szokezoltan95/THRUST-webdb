@@ -1,4 +1,3 @@
-import base64
 import hashlib
 from collections import defaultdict
 from datetime import datetime, timezone
