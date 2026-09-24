@@ -745,7 +745,7 @@ export function App() {
                 </section>
                 {selectedTestId && (() => { const selected = tests.find((test) => test.id === selectedTestId); return selected ? <section className={selectedTestId ? "browser-detail detail-modal-open" : "browser-detail detail-modal-closed"}><div className="detail-header"><div><div className="eyebrow">KONFIGURÁCIA TESTU</div><h2>{selected.name} · v{selected.version}</h2></div><button className="quiet compact" onClick={() => setSelectedTestId(null)}>Zavrieť detail</button></div><div className="detail-grid"><div><span>Kód</span><strong>{selected.test_code}</strong></div><div><span>Profil</span><strong>{selected.analysis_profile}</strong></div><div><span>Stav</span><strong>{selected.status}</strong></div><div><span>Aktívny</span><strong>{selected.is_active ? "Áno" : "Nie"}</strong></div></div><pre className="config-preview">{JSON.stringify(selected.configuration, null, 2)}</pre></section> : null })()}
                 <TestCreator onCreated={(test) => { setTests((current) => [...current, test]); setEditingTestId(test.id); }} />
-                {editingTestId && (() => { const editing = tests.find((test) => test.id === editingTestId); if (!editing) return null; const onSaved = (saved: TestDefinition) => { setTests((current) => current.map((item) => item.id === saved.id ? saved : item)); setEditingTestId(null); }; return editing.analysis_profile.toUpperCase().startsWith("SIMPLE") ? <SimpleTestEditor test={editing} onClose={() => setEditingTestId(null)} onSaved={onSaved} /> : <TestEditor test={editing} onClose={() => setEditingTestId(null)} onSaved={onSaved} />; })()}
+                {editingTestId && (() => { const editing = tests.find((test) => test.id === editingTestId); if (!editing) return null; const onSaved = (saved: TestDefinition) => { setTests((current) => current.map((item) => item.id === saved.id ? saved : item)); setEditingTestId(null); }; return editing.analysis_profile.toUpperCase().startsWith("SIMPLE") ? <SimpleTestEditor test={editing} csrfToken={user.csrf_token} onClose={() => setEditingTestId(null)} onSaved={onSaved} /> : <TestEditor test={editing} onClose={() => setEditingTestId(null)} onSaved={onSaved} />; })()}
               </>}
               {activeSection === "measurements" && <>
                 <div className="workbench">
@@ -1064,7 +1064,6 @@ const initialSimpleConfiguration: Record<string, number> = {
   hold_time_s: 1,
   countdown_s: 3,
   zoom_px_per_m: 500,
-  target_zone_radius_px: 100,
   completion_radius_m: 0.1,
   target_x_limit_m: 1.5,
   target_y_max_m: 2,
@@ -1124,7 +1123,8 @@ function TestCreator({ onCreated }: { onCreated: (test: TestDefinition) => void 
   </section>;
 }
 
-function SimpleTestEditor({ test, onClose, onSaved }: { test: TestDefinition; onClose: () => void; onSaved: (test: TestDefinition) => void }) {
+type BackgroundImage = { id: string; filename: string; width: number; height: number; created_at: string };
+function SimpleTestEditor({ test, csrfToken, onClose, onSaved }: { test: TestDefinition; csrfToken: string; onClose: () => void; onSaved: (test: TestDefinition) => void }) {
   const [configuration, setConfiguration] = useState<Record<string, number>>(() => {
     const values: Record<string, number> = { ...initialSimpleConfiguration };
     for (const [key, value] of Object.entries(test.configuration)) {
@@ -1133,13 +1133,49 @@ function SimpleTestEditor({ test, onClose, onSaved }: { test: TestDefinition; on
     return values;
   });
   const [message, setMessage] = useState("");
+  const [backgrounds, setBackgrounds] = useState<BackgroundImage[]>([]);
+  const [backgroundImageId, setBackgroundImageId] = useState(String(test.configuration.background_image_id ?? ""));
+  const [uploading, setUploading] = useState(false);
+  useEffect(() => {
+    void request<BackgroundImage[]>("/api/backgrounds").then(setBackgrounds).catch((reason) =>
+      setMessage(reason instanceof Error ? reason.message : "Obrázky sa nepodarilo načítať.")
+    );
+  }, []);
+  async function uploadBackground(file: File | undefined) {
+    if (!file) return;
+    if (file.size > 5_000_000 || !["image/png", "image/jpeg"].includes(file.type)) {
+      setMessage("Vyber PNG alebo JPEG s veľkosťou najviac 5 MB.");
+      return;
+    }
+    setUploading(true);
+    setMessage("");
+    try {
+      const imageBase64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result).split(",")[1] ?? "");
+        reader.onerror = () => reject(new Error("Obrázok sa nepodarilo načítať."));
+        reader.readAsDataURL(file);
+      });
+      const uploaded = await request<BackgroundImage>("/api/backgrounds", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken },
+        body: JSON.stringify({ filename: file.name, image_base64: imageBase64 }),
+      });
+      setBackgrounds((items) => [uploaded, ...items]);
+      setBackgroundImageId(uploaded.id);
+      setMessage("Pozadie bolo nahrané. Ulož nastavenia testu, aby sa použilo.");
+    } catch (reason) {
+      setMessage(reason instanceof Error ? reason.message : "Pozadie sa nepodarilo nahrať.");
+    } finally {
+      setUploading(false);
+    }
+  }
   const fields: [keyof typeof initialSimpleConfiguration, string, number, number, number][] = [
     ["sampling_hz", "Vzorkovacia frekvencia [Hz]", 20, 500, 1],
     ["action_timeout_s", "Limit času na cieľ [s]", 0.1, 60, 0.1],
     ["hold_time_s", "Výdrž v cieľovej zóne [s]", 0.1, 30, 0.1],
     ["countdown_s", "Odpočítavanie [s]", 0, 60, 1],
     ["zoom_px_per_m", "Mierka sveta [px/m]", 50, 2000, 10],
-    ["target_zone_radius_px", "Polomer vykreslenej zóny [px]", 10, 1000, 5],
     ["completion_radius_m", "Tolerancia zásahu [m]", 0.01, 2, 0.01],
     ["target_x_limit_m", "Limit cieľa v osi X [m]", 0.1, 20, 0.1],
     ["target_y_max_m", "Maximálna výška cieľa [m]", 0.1, 20, 0.1],
@@ -1155,7 +1191,7 @@ function SimpleTestEditor({ test, onClose, onSaved }: { test: TestDefinition; on
       const saved = await request<TestDefinition>(`/api/admin/tests/${test.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ configuration }),
+        body: JSON.stringify({ configuration: { ...configuration, ...(backgroundImageId ? { background_image_id: backgroundImageId } : {}) } }),
       });
       onSaved(saved);
     } catch (reason) {
@@ -1165,7 +1201,7 @@ function SimpleTestEditor({ test, onClose, onSaved }: { test: TestDefinition; on
   return <div className="editor-backdrop"><section className="test-editor-window simple-editor-window">
     <header className="editor-header"><div><div className="eyebrow">SIMPLE · NASTAVENIE TESTU</div><h2>{test.name}</h2><p className="muted">{test.test_code} · v{test.version}</p></div><button type="button" className="quiet compact" onClick={onClose}>Zavrieť</button></header>
     <div className="simple-editor-intro"><ProgramWordmark mode="SIMPLE" /><p>Určuje sa tu letová úloha, mierka 2D sveta a fyzikálne parametre modelu. Joystick a break/reset zostávajú lokálnymi nastaveniami THRUSTu.</p></div>
-    <div className="simple-config-grid">{fields.map(([key, label, min, max, step]) => <label key={key}>{label}<input type="number" min={min} max={max} step={step} value={configuration[key] ?? initialSimpleConfiguration[key]} onChange={(event) => setConfiguration((current) => ({ ...current, [key]: Number(event.target.value) }))} /></label>)}</div>
+    <div className="simple-editor-layout"><div><div className="simple-config-grid">{fields.map(([key, label, min, max, step]) => <label key={key}>{label}<input type="number" min={min} max={max} step={step} value={configuration[key] ?? initialSimpleConfiguration[key]} onChange={(event) => setConfiguration((current) => ({ ...current, [key]: Number(event.target.value) }))} /></label>)}</div><p className="muted">Vykreslená cieľová zóna má presne polomer tolerancie zásahu; jej veľkosť sa vypočíta z mierky sveta.</p></div><div className="simple-background-panel"><div className="eyebrow">POZADIE LETOVEJ SCÉNY</div><label>Vybrané pozadie<select value={backgroundImageId} onChange={(event) => setBackgroundImageId(event.target.value)}><option value="">Predvolené pozadie SimPLE</option>{backgrounds.map((item) => <option key={item.id} value={item.id}>{item.filename} · {item.width}×{item.height}</option>)}</select></label><label>Nahrať vlastné PNG / JPEG<input type="file" accept="image/png,image/jpeg" disabled={uploading} onChange={(event) => { void uploadBackground(event.target.files?.[0]); event.currentTarget.value = ""; }} /></label>{backgroundImageId && <img className="simple-background-preview" src={`/api/backgrounds/${backgroundImageId}`} alt="Náhľad pozadia SimPLE" />}{uploading && <p className="muted">Nahrávam obrázok…</p>}</div></div>
     {message && <p className="error">{message}</p>}
     <div className="simple-editor-actions"><button type="button" className="quiet" onClick={onClose}>Zrušiť</button><button type="button" className="primary" onClick={() => void save()}>Uložiť nastavenia</button></div>
   </section></div>;
