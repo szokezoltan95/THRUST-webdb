@@ -28,9 +28,35 @@ Student accounts and measurement upload are intentionally deferred until the fir
 2. Start the stack: `docker compose up --build`.
 3. Apply migrations: `docker compose exec backend alembic upgrade head`.
 4. Create the first administrator: `docker compose exec backend python -m app.create_admin admin`.
-5. Open `http://localhost:8080`.
+5. Open `http://localhost`.
 
-Set `COOKIE_SECURE=true` when the application is served through HTTPS in production.
+### HTTPS deployment
+
+The default Compose setup is for local development over HTTP. For deployment with
+HTTPS, obtain a certificate for the WebDB hostname from TUKE or another trusted
+certificate authority. Place the certificate chain at
+`certs/fullchain.pem` and its private key at `certs/privkey.pem`; the whole
+`certs/` directory is ignored by Git.
+
+Set these values in the server's `.env` file:
+
+```dotenv
+COOKIE_SECURE=true
+ALLOWED_HOSTS=webdb.example.tuke.sk
+```
+
+Replace the example hostname with the actual name used by clients and included
+in the certificate. Start the HTTPS configuration with:
+
+```console
+docker compose -f docker-compose.yml -f docker-compose.https.yml up -d --build
+docker compose -f docker-compose.yml -f docker-compose.https.yml exec backend alembic upgrade head
+```
+
+The HTTPS Nginx configuration publishes port 443 and redirects port 80 to
+HTTPS. PostgreSQL and backend traffic remain on the private Docker network; no
+database migration is required for TLS. Keep the certificate private key out of
+the repository and backups that are not access-controlled.
 
 ## Longitudinal trends and reports
 
@@ -55,7 +81,7 @@ docker compose exec backend alembic upgrade head
 - Never store names, e-mail addresses, university identifiers, or the local ID-to-name mapping here.
 - Never commit `.env`, database dumps, participant mappings, tokens, or measurement exports.
 - PostgreSQL must not be exposed directly to the internet.
-- Production traffic must terminate over HTTPS at a trusted reverse proxy.
+- Production traffic must terminate over HTTPS at a trusted reverse proxy; the optional Compose HTTPS overlay provides TLS at the frontend Nginx.
 
 ## Local client configuration
 
