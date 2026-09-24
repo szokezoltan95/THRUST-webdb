@@ -1209,7 +1209,7 @@ function SimpleScenePreview({ imageId, radius, xLimit, yLimit, worldWidth, width
   const droneY = Math.max(40, horizon - Math.min(yLimit * .5, .8) * scale);
   return <div className="simple-scene-preview" style={{ aspectRatio: `${widthPx} / ${heightPx}` }} aria-label="Náhľad SimPLE scény">
     {imageId ? <img src={`/api/backgrounds/${imageId}`} alt="Zvolené pozadie SimPLE" /> : <div className="simple-scene-default" />}
-    <svg viewBox={`0 0 720 ${sceneHeight}`} preserveAspectRatio="none" role="img" aria-label="Modrý dron a cieľová zóna">
+    <svg viewBox={`0 0 720 ${sceneHeight}`} preserveAspectRatio="xMidYMid meet" role="img" aria-label="Modrý dron a cieľová zóna">
       <rect x="0" y={horizon} width="720" height={sceneHeight - horizon} className="scene-ground" />
       <line x1="0" y1={horizon} x2="720" y2={horizon} className="scene-ground-line" />
       <circle cx={targetX} cy={targetY} r={zoneRadius} fill={fill} stroke={outline} strokeWidth="2.5" className="scene-target-zone" />
@@ -1273,6 +1273,9 @@ function SimpleTestEditor({ test, csrfToken, onClose, onSaved }: { test: TestDef
   const resolutions = [[1920,1080,"1920 × 1080 · 16:9"],[2560,1440,"2560 × 1440 · 16:9"],[1280,720,"1280 × 720 · 16:9"],[1920,1200,"1920 × 1200 · 16:10"],[1280,800,"1280 × 800 · 16:10"],[1280,1024,"1280 × 1024 · 5:4"],[1024,768,"1024 × 768 · 4:3"]] as const;
   const fieldWidth = Number(configuration.field_width_px ?? 1920);
   const fieldHeight = Number(configuration.field_height_px ?? 1080);
+  const resolutionOptions = resolutions.some(([w,h]) => w === fieldWidth && h === fieldHeight)
+    ? resolutions
+    : [[fieldWidth, fieldHeight, `${fieldWidth} × ${fieldHeight} · aktuálne`] as const, ...resolutions];
   const worldHeight = Number(configuration.world_width_m) * fieldHeight / fieldWidth;
   async function save() {
     setMessage("");
@@ -1289,7 +1292,7 @@ function SimpleTestEditor({ test, csrfToken, onClose, onSaved }: { test: TestDef
     <header className="editor-header"><div><div className="eyebrow">SIMPLE · NASTAVENIE TESTU</div><h2>{test.name}</h2><p className="muted">{test.test_code} · v{test.version}</p></div><button type="button" className="quiet compact" onClick={onClose}>Zavrieť</button></header>
     <div className="simple-editor-intro"><ProgramWordmark mode="SIMPLE" /><p>Určuje sa tu letová úloha, mierka 2D sveta a fyzikálne parametre modelu. Joystick a break/reset zostávajú lokálnymi nastaveniami THRUSTu.</p></div>
     <div className="simple-editor-layout"><div>
-      <div className="simple-config-grid"><label>Rozlíšenie / pomer strán<select value={`${fieldWidth}x${fieldHeight}`} onChange={(event) => { const [w,h] = event.target.value.split("x").map(Number); setConfiguration((current) => ({ ...current, field_width_px: w, field_height_px: h })); }}>{resolutions.map(([w,h,label]) => <option key={`${w}x${h}`} value={`${w}x${h}`}>{label}</option>)}</select></label>
+      <div className="simple-config-grid"><label>Rozlíšenie / pomer strán<select value={`${fieldWidth}x${fieldHeight}`} onChange={(event) => { const [w,h] = event.target.value.split("x").map(Number); setConfiguration((current) => ({ ...current, field_width_px: w, field_height_px: h })); }}>{resolutionOptions.map(([w,h,label]) => <option key={`${w}x${h}`} value={`${w}x${h}`}>{label}</option>)}</select></label>
       {numericFields.map(([key,label,min,max,step]) => <label key={key}>{label}<input type="number" min={min} max={max} step={step} value={Number(configuration[key] ?? initialSimpleConfiguration[key])} onChange={(event) => setConfiguration((current) => ({ ...current, [key]: Number(event.target.value) }))} />{key === "world_width_m" && <small>Odvodená výška: {worldHeight.toFixed(2)} m</small>}</label>)}</div>
       <p className="muted">Obrazovka určuje iba pomer strán. Výška ihriska sa počíta z nastavenej šírky a pomeru strán.</p>
     </div><div className="simple-background-panel"><div className="eyebrow">POZADIE A NÁHĽAD</div><label>Vybrané pozadie<select value={backgroundImageId} onChange={(event) => setBackgroundImageId(event.target.value)}><option value="">Predvolené vektorové pozadie SimPLE</option>{backgrounds.map((item) => <option key={item.id} value={item.id}>{item.filename} · {item.width}×{item.height}</option>)}</select></label><label>Nahrať vlastné PNG / JPEG<input type="file" accept="image/png,image/jpeg" disabled={uploading} onChange={(event) => { void uploadBackground(event.target.files?.[0]); event.currentTarget.value = ""; }} /></label>
