@@ -2,7 +2,6 @@
 export type Language = "sk" | "en";
 
 const english: Record<string, string> = {
-  "Úvodná stránka": "Welcome page",
   "LETECKÁ FAKULTA TUKE · VÝSKUM RIADENIA UAV": "FACULTY OF AERONAUTICS TUKE · UAV CONTROL RESEARCH", "Testy": "Tests",
   "Za každým letom je človek.": "Behind every flight is a person.",
   "THRUST skúma, ako piloti reagujú a ovládajú dron. Spája meranie, analýzu a porovnávanie výsledkov, aby sme ľudskému výkonu pri riadení UAV lepšie rozumeli.": "THRUST explores how pilots respond and control a drone. It brings together measurement, analysis and comparison of results to better understand human performance in UAV control.",
@@ -49,6 +48,7 @@ const english: Record<string, string> = {
   "Verziu testu sa nepodarilo odstrániť.": "Could not delete test version.",
   "výskumný súhlas": "research consent", "VÝSTUP": "OUTPUT", "Výzva": "Prompt", "VZHĽAD": "APPEARANCE",
   "Administrácia": "Administration", "Prehľad": "Overview", "Prehľad meraní": "Measurement overview",
+  "Zbaliť menu": "Collapse menu", "Rozbaliť menu": "Expand menu", "Potiahni na zmenu poradia": "Drag to reorder",
   "Účastníci": "Participants", "Účastníci a účty": "Participants and accounts", "Testy a konfigurácie": "Tests and configurations",
   "Merania a výsledky": "Measurements and results", "Systém online": "System online", "Odhlásiť": "Log out",
   "Skupiny a trendy": "Groups and trends", "DLHODOBÉ ŠTATISTIKY": "LONGITUDINAL STATISTICS", "Skupiny účastníkov": "Participant groups",

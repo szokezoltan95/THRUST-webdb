@@ -339,6 +339,19 @@ export function App() {
   const [activeConsentDocument, setActiveConsentDocument] = useState<ConsentDocument | null>(null);
   const [error, setError] = useState("");
   const [activeSection, setActiveSection] = useState<AdminSection>("overview");
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => localStorage.getItem("thrust-webdb-sidebar-collapsed") === "true");
+  const [navOrder, setNavOrder] = useState<AdminSection[]>(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem("thrust-webdb-nav-order") || "[]") as AdminSection[];
+      const allowed: AdminSection[] = ["overview", "participants", "groups", "trends", "reports", "tests", "measurements", "welcome"];
+      const uniqueStored = [...new Set(stored)].filter((item) => allowed.includes(item));
+      return [...uniqueStored, ...allowed.filter((item) => !uniqueStored.includes(item))];
+    } catch { return ["overview", "participants", "groups", "trends", "reports", "tests", "measurements", "welcome"]; }
+  });
+  const [draggedNavItem, setDraggedNavItem] = useState<AdminSection | null>(null);
+
+  useEffect(() => { localStorage.setItem("thrust-webdb-sidebar-collapsed", String(sidebarCollapsed)); }, [sidebarCollapsed]);
+  useEffect(() => { localStorage.setItem("thrust-webdb-nav-order", JSON.stringify(navOrder)); }, [navOrder]);
 
   useEffect(() => {
     setError("");
@@ -884,6 +897,31 @@ export function App() {
     return <span className="role-label">{account.effective_role}</span>;
   }
 
+  const navItems: { id: AdminSection; icon: string; label: string }[] = [
+    { id: "overview", icon: "⌂", label: t("Prehľad") },
+    { id: "participants", icon: "◎", label: t("Účastníci a účty") },
+    { id: "groups", icon: "◉", label: t("Skupiny") },
+    { id: "trends", icon: "⌁", label: t("Trendy") },
+    { id: "reports", icon: "⇩", label: t("Exporty a reporty") },
+    { id: "tests", icon: "▣", label: t("Testy a konfigurácie") },
+    { id: "measurements", icon: "↗", label: t("Merania a výsledky") },
+    { id: "welcome", icon: "✎", label: t("Úvodná stránka") },
+  ];
+  const visibleNavItems = navOrder.map((id) => navItems.find((item) => item.id === id)!).filter((item) => item.id !== "welcome" || user?.role === "admin" || user?.role === "superadmin");
+  function moveNavItem(target: AdminSection) {
+    if (!draggedNavItem || draggedNavItem === target) return;
+    setNavOrder((current) => {
+      const next = [...current];
+      const from = next.indexOf(draggedNavItem);
+      const to = next.indexOf(target);
+      if (from < 0 || to < 0) return current;
+      next.splice(from, 1);
+      next.splice(to, 0, draggedNavItem);
+      return next;
+    });
+    setDraggedNavItem(null);
+  }
+
   if (user?.role === "student") return <StudentPortal user={user} onLogout={logout} />;
   if (isRegisterPage && !user) return <>
     <RegistrationPage onSubmit={register} onBack={leaveRegistration} onLogin={() => { leaveRegistration(); setLoginOpen(true); }} onResearcherRegister={openResearcherRegistration} error={error} consentTexts={consentTexts} onOpenConsent={setConsentDialog} />
@@ -897,20 +935,13 @@ export function App() {
   return (
     <main>
       {user ? (
-        <div className="app-shell">
+        <div className={sidebarCollapsed ? "app-shell sidebar-collapsed" : "app-shell"}>
           <aside className="sidebar">
-            <Brand />
+            <div className="sidebar-brand-row"><Brand /><button type="button" className="sidebar-toggle" aria-expanded={!sidebarCollapsed} aria-label={sidebarCollapsed ? t("Rozbaliť menu") : t("Zbaliť menu")} title={sidebarCollapsed ? t("Rozbaliť menu") : t("Zbaliť menu")} onClick={() => setSidebarCollapsed((collapsed) => !collapsed)}>{sidebarCollapsed ? "»" : "«"}</button></div>
             <nav className="side-nav" aria-label={t("Administrácia")}>
-              <button className={activeSection === "overview" ? "nav-item active" : "nav-item"} onClick={() => setActiveSection("overview")}><span>⌂</span>{t("Prehľad")}</button>
-              <button className={activeSection === "participants" ? "nav-item active" : "nav-item"} onClick={() => setActiveSection("participants")}><span>◎</span>{t("Účastníci a účty")}</button>
-              <button className={activeSection === "groups" ? "nav-item active" : "nav-item"} onClick={() => setActiveSection("groups")}><span>◉</span>{t("Skupiny")}</button>
-              <button className={activeSection === "trends" ? "nav-item active" : "nav-item"} onClick={() => setActiveSection("trends")}><span>⌁</span>{t("Trendy")}</button>
-              <button className={activeSection === "reports" ? "nav-item active" : "nav-item"} onClick={() => setActiveSection("reports")}><span>⇩</span>{t("Exporty a reporty")}</button>
-              <button className={activeSection === "tests" ? "nav-item active" : "nav-item"} onClick={() => setActiveSection("tests")}><span>▣</span>{t("Testy a konfigurácie")}</button>
-              <button className={activeSection === "measurements" ? "nav-item active" : "nav-item"} onClick={() => setActiveSection("measurements")}><span>↗</span>{t("Merania a výsledky")}</button>
-              {(user.role === "admin" || user.role === "superadmin") && <button className={activeSection === "welcome" ? "nav-item active" : "nav-item"} onClick={() => setActiveSection("welcome")}><span>✎</span>{t("Úvodná stránka")}</button>}
+              {visibleNavItems.map((item) => <button key={item.id} type="button" draggable onDragStart={(event) => { setDraggedNavItem(item.id); event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("text/plain", item.id); }} onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = "move"; }} onDrop={(event) => { event.preventDefault(); moveNavItem(item.id); }} onDragEnd={() => setDraggedNavItem(null)} title={sidebarCollapsed ? item.label : t("Potiahni na zmenu poradia") + ` · ${item.label}`} aria-label={item.label} className={`nav-item${activeSection === item.id ? " active" : ""}${draggedNavItem === item.id ? " nav-item-dragging" : ""}`} onClick={() => setActiveSection(item.id)}><span className="nav-icon" aria-hidden="true">{item.icon}</span><span className="nav-label">{item.label}</span></button>)}
             </nav>
-            <div className="sidebar-footer"><span>{user.username} · {user.role}</span><button className="quiet" onClick={logout}>{t("Odhlásiť")}</button></div>
+            <div className="sidebar-footer"><span className="sidebar-user">{user.username} · {user.role}</span><button className="quiet" onClick={logout} title={t("Odhlásiť")}>{sidebarCollapsed ? "↪" : t("Odhlásiť")}</button></div>
           </aside>
           <div className="app-main">
             <header className="topbar"><div><div className="eyebrow">{t("ADMINISTRÁCIA ·")} {user.role.toUpperCase()}</div><h1>{activeSection === "overview" ? t("Prehľad meraní") : activeSection === "participants" ? t("Účastníci a účty") : activeSection === "groups" ? t("Skupiny") : activeSection === "trends" ? t("Trendy") : activeSection === "reports" ? t("Exporty a reporty") : activeSection === "tests" ? t("Testy a konfigurácie") : activeSection === "welcome" ? t("Úvodná stránka") : t("Merania a výsledky")}</h1></div><div className="header-actions"><LanguageSwitcher /><span className="status-dot">{t("Systém online")}</span></div></header>
@@ -1017,6 +1048,9 @@ export function App() {
                        </div>
                      </section>}
                      {user?.role === "superadmin" && (!linkedAccount || linkedAccount.effective_role !== "superadmin") && <div className="participant-purge-row"><p className="muted">{t("Úplné vymazanie odstráni konto, súhlasy, účastníka, merania aj archivované raw súbory.")}</p><button className="quiet compact danger" onClick={() => void permanentlyDeleteParticipant(participant, linkedAccount)}>{t("Trvalo vymazať všetko")}</button></div>}
+Warning: truncated output (original token count: 8909)
+Total output lines: 150
+
                      {(user?.role === "admin" || user?.role === "superadmin") && <section className="participant-detail-section participant-edit-section"><div className="participant-section-heading"><div><div className="eyebrow">{t("EDITÁCIA")}</div><h3>{t("Upraviť údaje účastníka")}</h3></div></div><ParticipantProfileEditor participant={participant} csrfToken={user.csrf_token} onSaved={(updated) => { setParticipants((items) => items.map((item) => item.id === updated.id ? updated : item)); setSelectedParticipant((current) => current ? { ...current, participant: updated } : current); setAccountMessage(t("Profil účastníka bol uložený.")); }} /></section>}
                    </section>;
                    return <section className="browser-detail detail-modal-open participant-detail-modal">
@@ -1065,20 +1099,7 @@ export function App() {
                     {sortRows(filteredMeasurements(), reportMeasurementSort, (m, column) => ({
                       participant: participantCodeFor(m.participant_id), test: m.test_type, date: m.started_at,
                       analysis: m.analysis_data ? 1 : 0,
-                    }[column as "participant" | "test" | "date" | "analysis"])).map((m) => <label className="measurement-item" key={m.id}>
-                      <input type="checkbox" checked={reportMeasurementIds.includes(m.id)} onChange={(event) => setReportMeasurementIds((ids) => event.target.checked ? [...ids, m.id] : ids.filter((id) => id !== m.id))} />
-                      <strong>{participantCodeFor(m.participant_id)}</strong><span>{m.test_type}</span><span>{formatDateTime(m.started_at)}</span><small>{m.analysis_data ? t("Analýza uložená") : t("Bez uloženej analýzy")}</small>
-                    </label>)}
-                  </div>
-                  <div className="actions report-actions"><button className="quiet" disabled={!reportMeasurementIds.length} onClick={() => void downloadProtectedFile(`/api/admin/reports/measurements.csv?${reportMeasurementIds.map((id) => `measurement_ids=${encodeURIComponent(id)}`).join("&")}`, "thrust-measurements.csv")}>{t("Stiahnuť tabuľku CSV")}</button>{reportMeasurementIds.length === 1 && (() => { const id = reportMeasurementIds[0]; const selected = measurements.find((m) => m.id === id); return <><a className="quiet" href={`/api/admin/measurements/${id}/raw`}>{t("Stiahnuť raw TSV/GZIP")}</a><a className="quiet" href={`/api/admin/reports/measurements/${id}.pdf`}>{t("PDF report + graf")}</a><button className="quiet" onClick={() => { if (selected) { const blob = new Blob([JSON.stringify(selected, null, 2)], { type: "application/json" }); const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = `measurement-${id}.json`; link.click(); URL.revokeObjectURL(link.href); } }}>{t("Stiahnuť JSON analýzy")}</button></>; })()}</div>
-                </section>
-                {user.role === "superadmin" && <section className="panel quick-panel"><div className="eyebrow">{t("SUPERADMIN · KOMPLETNÝ EXPORT")}</div><h2>{t("Všetky pseudonymné dáta WebDB")}</h2><p className="muted">{t("ZIP obsahuje profily účastníkov, skupiny, definície testov, analýzy a všetky dostupné raw logy. Neobsahuje prihlasovacie účty.")}</p><button className="primary" onClick={() => void downloadProtectedFile("/api/admin/reports/all-data.zip", "thrust-webdb-full-export.zip", user.csrf_token)}>{t("Stiahnuť kompletný ZIP")}</button></section>}
-              </>}
-              {activeSection === "tests" && <>
-                <section className="browser-panel">
-                  <div className="browser-header"><div><div className="eyebrow">{t("KATALÓG TESTOV")}</div><h2>{t("Testy a konfigurácie")}</h2><p className="muted">{t("Každá verzia testu je samostatná, nemenná konfigurácia pre THRUST.")}</p></div></div>
-                  <div className="browser-toolbar"><select value={testModeFilter} onChange={(event) => setTestModeFilter(event.target.value as "ALL" | MeasurementMode)} aria-label={t("Režim testu")}><option value="ALL">{t("Všetky programy")}</option><option value="SCOPE">{t("SCoPE")}</option><option value="SIMPLE">{t("SimPLE")}</option></select><input placeholder={t("Hľadať kód, názov alebo profil…")} value={testSearch} onChange={(event) => setTestSearch(event.target.value)} /></div>
-                  <div className="data-table test-table"><div className="data-table-head"><SortHeader label={t("Kód")} active={testSort.column === "code"} direction={testSort.direction} onClick={() => setTestSort((current) => nextSort(current, "code"))} /><SortHeader label={t("Názov")} active={testSort.column === "name"} direction={testSort.direction} onClick={() => setTestSort((current) => nextSort(current, "name"))} /><SortHeader label={t("Verzia")} active={testSort.column === "version"} direction={testSort.direction} onClick={() => setTestSort((current) => nextSort(current, "version"))} /><SortHeader label={t("Profil")} active={testSort.column === "profile"} direction={testSort.direction} onClick={() => setTestSort((current) => nextSort(current, "profile"))} /><span>{t("Stav / akcie")}</span></div>{filteredTests().map((test) => <div className="data-table-row" key={test.id}><strong className="test-code-cell"><ProgramWordmark mode={test.analysis_profile.toUpperCase().startsWith("SIMPLE") ? "SIMPLE" : "SCOPE"} compact />{test.test_code}</strong><span>{test.name}</span><span>{t("v")}{test.version}</span><span>{test.analysis_profile}</span><span className="row-actions"><span>{test.status}</span><button className="quiet compact" onClick={() => setSelectedTestId(test.id)}>{t("Otvoriť")}</button><button className="quiet compact" onClick={() => setEditingTestId(test.id)}>{t("Editovať")}</button>{user.role === "superadmin" && <button className="quiet compact danger" onClick={() => void deleteTestVersion(test)}>{t("Zmazať")}</button>}</span></div>)}</div>
+                    }[column as "participant" | "test" | "date" | "analysis"])).map((m) => <label className="measurement-item" key=…909 tokens truncated…TestSort((current) => nextSort(current, "version"))} /><SortHeader label={t("Profil")} active={testSort.column === "profile"} direction={testSort.direction} onClick={() => setTestSort((current) => nextSort(current, "profile"))} /><span>{t("Stav / akcie")}</span></div>{filteredTests().map((test) => <div className="data-table-row" key={test.id}><strong className="test-code-cell"><ProgramWordmark mode={test.analysis_profile.toUpperCase().startsWith("SIMPLE") ? "SIMPLE" : "SCOPE"} compact />{test.test_code}</strong><span>{test.name}</span><span>{t("v")}{test.version}</span><span>{test.analysis_profile}</span><span className="row-actions"><span>{test.status}</span><button className="quiet compact" onClick={() => setSelectedTestId(test.id)}>{t("Otvoriť")}</button><button className="quiet compact" onClick={() => setEditingTestId(test.id)}>{t("Editovať")}</button>{user.role === "superadmin" && <button className="quiet compact danger" onClick={() => void deleteTestVersion(test)}>{t("Zmazať")}</button>}</span></div>)}</div>
                   {filteredTests().length === 0 && <div className="empty-list"><h2>{t("Žiadne testy")}</h2><p className="muted">{t("Filteru nezodpovedá žiadna verzia testu.")}</p></div>}
                 </section>
                 {selectedTestId && (() => {
