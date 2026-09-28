@@ -1,14 +1,48 @@
 import { t, tf, serverMessage } from "./i18n";
 import { LanguageSwitcher, useLanguage } from "./LanguageContext";
 import { ChangeEvent, FormEvent, useEffect, useLayoutEffect, useRef, useState } from "react";
-import thrustLogo from "./img/THRUST_logo_white.svg";
+import thrustLogoWhite from "./img/THRUST_logo_white.svg";
+import thrustLogoBlack from "./img/THRUST_logo_black.svg";
 import lfSkLogo from "./img/lf_sk.svg";
 import lfEnLogo from "./img/lf_en.svg";
 import { WelcomeContent, defaultWelcomeBlocks, type WelcomeBlock, type WelcomeData } from "./WelcomeContent";
 import { WelcomeEditor } from "./WelcomeEditor";
 
-function Brand() {
-  return <div className="brand"><img src={thrustLogo} alt="THRUST" /></div>;
+type AccentTheme = "blue" | "red" | "green" | "purple" | "orange" | "teal" | "pink" | "gold";
+type ColorMode = "dark" | "light";
+const ACCENT_COLORS: Record<AccentTheme, string> = {
+  blue: "#45d5ff", red: "#ed6572", green: "#38bd86", purple: "#9b7bea",
+  orange: "#ed8b3b", teal: "#23aaa8", pink: "#df69a6", gold: "#c49b22",
+};
+const ACCENT_LABELS: Record<AccentTheme, string> = {
+  blue: "Modrá", red: "Červená", green: "Zelená", purple: "Fialová",
+  orange: "Oranžová", teal: "Tyrkysová", pink: "Ružová", gold: "Zlatá",
+};
+
+function Brand({ colorMode = "dark" }: { colorMode?: ColorMode }) {
+  return <div className="brand"><img src={colorMode === "light" ? thrustLogoBlack : thrustLogoWhite} alt="THRUST" /></div>;
+}
+
+function AppearanceControls({ accentTheme, colorMode, onAccentChange, onModeToggle }: {
+  accentTheme: AccentTheme;
+  colorMode: ColorMode;
+  onAccentChange: (theme: AccentTheme) => void;
+  onModeToggle: () => void;
+}) {
+  return <div className="appearance-controls">
+    <label className="appearance-theme-control">
+      <span className="appearance-color-dot" style={{ backgroundColor: ACCENT_COLORS[accentTheme] }} aria-hidden="true" />
+      <span className="visually-hidden">{t("Farebný motív")}</span>
+      <select aria-label={t("Farebný motív")} value={accentTheme} onChange={(event) => onAccentChange(event.target.value as AccentTheme)}>
+        {(Object.keys(ACCENT_COLORS) as AccentTheme[]).map((theme) => <option key={theme} value={theme}>{t(ACCENT_LABELS[theme])}</option>)}
+      </select>
+    </label>
+    <button type="button" className="appearance-mode-toggle" onClick={onModeToggle}
+      aria-label={colorMode === "dark" ? t("Prepnúť na svetlý režim") : t("Prepnúť na tmavý režim")}
+      title={colorMode === "dark" ? t("Svetlý režim") : t("Tmavý režim")}>
+      <span aria-hidden="true">{colorMode === "dark" ? "☼" : "☾"}</span><span className="appearance-mode-label">{colorMode === "dark" ? t("Tmavý režim") : t("Svetlý režim")}</span>
+    </button>
+  </div>;
 }
 
 function FacultyLogo() {
@@ -29,7 +63,7 @@ type PublicMetrics = {
   publishable: boolean;
 };
 
-type User = { username: string; role: string; csrf_token: string; email?: string | null; participant_id?: string | null; participant_code?: string | null; first_name?: string | null; last_name?: string | null };
+type User = { username: string; role: string; csrf_token: string; email?: string | null; participant_id?: string | null; participant_code?: string | null; first_name?: string | null; last_name?: string | null; accent_theme?: AccentTheme; color_mode?: ColorMode };
 type Overview = { participant_count: number; measurement_count: number };
 type Participant = { id: string; participant_code: string; is_active: boolean; created_at: string; birth_date?: string | null; pilot_experience?: string | null; flight_hours_range?: string | null; pilot_certificate?: string | null; primary_uav_type?: string | null; simulator_experience?: string | null; self_rated_skill?: number | null; sex?: string | null; dominant_hand?: string | null; vision_correction?: string | null; vision_diopters_left?: number | null; vision_diopters_right?: number | null; rc_experience?: string | null; fpv_experience?: string | null; game_controller_experience?: string | null; video_game_experience?: string | null; }
 type AdminAccount = { id: string; username: string; email: string | null; first_name: string | null; last_name: string | null; role: string; effective_role: string; is_active: boolean; participant_id: string | null; participant_code: string | null; created_at: string };
@@ -259,6 +293,9 @@ export function App() {
   const [metrics, setMetrics] = useState<PublicMetrics | null>(null);
   const [publishedWelcome, setPublishedWelcome] = useState<{ blocks: WelcomeBlock[] | null; data: WelcomeData }>({ blocks: null, data: {} });
   const [user, setUser] = useState<User | null>(null);
+  const [accentTheme, setAccentTheme] = useState<AccentTheme>("blue");
+  const [colorMode, setColorMode] = useState<ColorMode>("dark");
+  const appearanceRequestId = useRef(0);
   const [overview, setOverview] = useState<Overview | null>(null);
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [adminAccounts, setAdminAccounts] = useState<AdminAccount[]>([]);
@@ -353,6 +390,37 @@ export function App() {
   const navListRef = useRef<HTMLElement | null>(null);
   const previousNavRects = useRef<Map<string, DOMRect> | null>(null);
 
+  function applySignedInUser(signedIn: User) {
+    setUser(signedIn);
+    setAccentTheme(signedIn.accent_theme ?? "blue");
+    setColorMode(signedIn.color_mode ?? "dark");
+  }
+
+  async function saveAppearance(nextAccent: AccentTheme, nextMode: ColorMode) {
+    if (!user) return;
+    const requestId = ++appearanceRequestId.current;
+    const previousAccent = accentTheme;
+    const previousMode = colorMode;
+    setAccentTheme(nextAccent);
+    setColorMode(nextMode);
+    try {
+      const saved = await request<{ accent_theme: AccentTheme; color_mode: ColorMode }>("/api/auth/preferences", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", "X-CSRF-Token": user.csrf_token },
+        body: JSON.stringify({ accent_theme: nextAccent, color_mode: nextMode }),
+      });
+      if (requestId !== appearanceRequestId.current) return;
+      setAccentTheme(saved.accent_theme);
+      setColorMode(saved.color_mode);
+      setUser((current) => current ? { ...current, ...saved } : current);
+    } catch (reason) {
+      if (requestId !== appearanceRequestId.current) return;
+      setAccentTheme(previousAccent);
+      setColorMode(previousMode);
+      setError(reason instanceof Error ? reason.message : t("Nastavenie vzhľadu sa nepodarilo uložiť."));
+    }
+  }
+
   useEffect(() => { localStorage.setItem("thrust-webdb-sidebar-collapsed", String(sidebarCollapsed)); }, [sidebarCollapsed]);
   useEffect(() => { localStorage.setItem("thrust-webdb-nav-order", JSON.stringify(navOrder)); }, [navOrder]);
   useLayoutEffect(() => {
@@ -417,7 +485,7 @@ export function App() {
   useEffect(() => {
     request<PublicMetrics>("/api/public/metrics").then(setMetrics).catch(() => setMetrics(null));
     request<User>("/api/auth/me").then((sessionUser) => {
-      setUser(sessionUser);
+      applySignedInUser(sessionUser);
       if (["/register", "/register/researcher"].includes(window.location.pathname.replace(/\/+$/, ""))) {
         window.history.replaceState({}, "", "/");
         setIsRegisterPage(false);
@@ -734,7 +802,7 @@ export function App() {
           consent_language: language,
         }),
       });
-      setUser(signedIn); leaveRegistration();
+      applySignedInUser(signedIn); leaveRegistration();
     } catch (reason) { setError(reason instanceof Error ? reason.message : t("Registrácia zlyhala.")); }
   }
 
@@ -762,7 +830,7 @@ export function App() {
           consent_language: language,
         }),
       });
-      setUser(signedIn);
+      applySignedInUser(signedIn);
       leaveRegistration();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : t("Registrácia výskumníka zlyhala."));
@@ -855,7 +923,7 @@ export function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ identifier: data.get("identifier"), password: data.get("password") }),
       });
-      setUser(signedIn);
+      applySignedInUser(signedIn);
       setLoginOpen(false);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : t("Prihlásenie zlyhalo."));
@@ -967,7 +1035,7 @@ export function App() {
     setDraggedNavItem(null);
   }
 
-  if (user?.role === "student") return <StudentPortal user={user} onLogout={logout} />;
+  if (user?.role === "student") return <StudentPortal user={user} onLogout={logout} accentTheme={accentTheme} colorMode={colorMode} onAppearanceChange={(theme, mode) => void saveAppearance(theme, mode)} />;
   if (isRegisterPage && !user) return <>
     <RegistrationPage onSubmit={register} onBack={leaveRegistration} onLogin={() => { leaveRegistration(); setLoginOpen(true); }} onResearcherRegister={openResearcherRegistration} error={error} consentTexts={consentTexts} onOpenConsent={setConsentDialog} />
     {consentDialog && consentTexts && <ConsentTextDialog kind={consentDialog} document={activeConsentDocument || consentTexts[consentDialog]} onClose={() => { setConsentDialog(null); setActiveConsentDocument(null); }} />}
@@ -978,18 +1046,18 @@ export function App() {
   </>;
 
   return (
-    <main>
+    <main data-accent-theme={accentTheme} data-color-mode={colorMode}>
       {user ? (
         <div className={sidebarCollapsed ? "app-shell sidebar-collapsed" : "app-shell"}>
           <aside className="sidebar">
-            <div className="sidebar-brand-row"><Brand /><button type="button" className="sidebar-toggle" aria-expanded={!sidebarCollapsed} aria-label={sidebarCollapsed ? t("Rozbaliť menu") : t("Zbaliť menu")} title={sidebarCollapsed ? t("Rozbaliť menu") : t("Zbaliť menu")} onClick={() => setSidebarCollapsed((collapsed) => !collapsed)}>{sidebarCollapsed ? "»" : "«"}</button></div>
+            <div className="sidebar-brand-row"><Brand colorMode={colorMode} /><button type="button" className="sidebar-toggle" aria-expanded={!sidebarCollapsed} aria-label={sidebarCollapsed ? t("Rozbaliť menu") : t("Zbaliť menu")} title={sidebarCollapsed ? t("Rozbaliť menu") : t("Zbaliť menu")} onClick={() => setSidebarCollapsed((collapsed) => !collapsed)}>{sidebarCollapsed ? "»" : "«"}</button></div>
             <nav ref={navListRef} className="side-nav" aria-label={t("Administrácia")}>
               {visibleNavItems.map((item) => <button key={item.id} data-nav-id={item.id} type="button" draggable onDragStart={(event) => { setDraggedNavItem(item.id); event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("text/plain", item.id); }} onDragEnter={() => setDropTargetNavItem(item.id)} onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = "move"; setDropTargetNavItem(item.id); }} onDragLeave={(event) => { if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) setDropTargetNavItem(null); }} onDrop={(event) => { event.preventDefault(); moveNavItem(item.id); setDropTargetNavItem(null); }} onDragEnd={() => { setDraggedNavItem(null); setDropTargetNavItem(null); }} title={sidebarCollapsed ? item.label : t("Potiahni na zmenu poradia") + ` · ${item.label}`} aria-label={item.label} className={`nav-item${activeSection === item.id ? " active" : ""}${draggedNavItem === item.id ? " nav-item-dragging" : ""}${dropTargetNavItem === item.id && draggedNavItem !== item.id ? " nav-item-drop-target" : ""}`} onClick={() => setActiveSection(item.id)}><span className="nav-icon" aria-hidden="true">{item.icon}</span><span className="nav-label">{item.label}</span></button>)}
             </nav>
             <div className="sidebar-footer"><span className="sidebar-user">{user.username} · {user.role}</span><button className="quiet" onClick={logout} title={t("Odhlásiť")}>{sidebarCollapsed ? "↪" : t("Odhlásiť")}</button></div>
           </aside>
           <div className="app-main">
-            <header className="topbar"><div><div className="eyebrow">{t("ADMINISTRÁCIA ·")} {user.role.toUpperCase()}</div><h1>{activeSection === "overview" ? t("Prehľad meraní") : activeSection === "participants" ? t("Účastníci a účty") : activeSection === "groups" ? t("Skupiny") : activeSection === "trends" ? t("Trendy") : activeSection === "reports" ? t("Exporty a reporty") : activeSection === "tests" ? t("Testy a konfigurácie") : activeSection === "welcome" ? t("Úvodná stránka") : t("Merania a výsledky")}</h1></div><div className="header-actions"><LanguageSwitcher /><span className="status-dot">{t("Systém online")}</span></div></header>
+            <header className="topbar"><div><div className="eyebrow">{t("ADMINISTRÁCIA ·")} {user.role.toUpperCase()}</div><h1>{activeSection === "overview" ? t("Prehľad meraní") : activeSection === "participants" ? t("Účastníci a účty") : activeSection === "groups" ? t("Skupiny") : activeSection === "trends" ? t("Trendy") : activeSection === "reports" ? t("Exporty a reporty") : activeSection === "tests" ? t("Testy a konfigurácie") : activeSection === "welcome" ? t("Úvodná stránka") : t("Merania a výsledky")}</h1></div><div className="header-actions"><AppearanceControls accentTheme={accentTheme} colorMode={colorMode} onAccentChange={(theme) => void saveAppearance(theme, colorMode)} onModeToggle={() => void saveAppearance(accentTheme, colorMode === "dark" ? "light" : "dark")} /><LanguageSwitcher /><span className="status-dot">{t("Systém online")}</span></div></header>
             <section className="workspace">
               {activeSection === "welcome" && (user.role === "admin" || user.role === "superadmin") && <WelcomeEditor csrfToken={user.csrf_token} initialLanguage={language} metrics={metrics} />}
               {activeSection === "overview" && <>
@@ -1827,7 +1895,13 @@ function Metric({ label, value }: { label: string; value: string | number }) {
   return <article className="metric"><span>{label}</span><strong>{value}</strong></article>;
 }
 
-function StudentPortal({ user, onLogout }: { user: User; onLogout: () => Promise<void> }) {
+function StudentPortal({ user, onLogout, accentTheme, colorMode, onAppearanceChange }: {
+  user: User;
+  onLogout: () => Promise<void>;
+  accentTheme: AccentTheme;
+  colorMode: ColorMode;
+  onAppearanceChange: (theme: AccentTheme, mode: ColorMode) => void;
+}) {
   const { language } = useLanguage();
   const [profile, setProfile] = useState<StudentProfile | null>(null);
   const [measurements, setMeasurements] = useState<StudentMeasurement[]>([]);
@@ -1906,8 +1980,8 @@ function StudentPortal({ user, onLogout }: { user: User; onLogout: () => Promise
   const visibleMeasurements = sortRows(measurements.filter((item) => getMeasurementMode(item) === mode), studentMeasurementSort, (item, column) => ({ test: item.test_type, status: item.status, date: item.started_at, size: item.raw_size_bytes ?? 0 }[column as "test" | "status" | "date" | "size"]));
   const selectedMeasurement = visibleMeasurements.find((item) => item.id === selectedMeasurementId);
 
-  return <main className="student-shell">
-    <header><Brand /><div className="header-actions"><LanguageSwitcher /><button className="quiet" onClick={onLogout}>{t("Odhlásiť")}</button></div></header>
+  return <main className="student-shell" data-accent-theme={accentTheme} data-color-mode={colorMode}>
+    <header><Brand colorMode={colorMode} /><div className="header-actions"><AppearanceControls accentTheme={accentTheme} colorMode={colorMode} onAccentChange={(theme) => onAppearanceChange(theme, colorMode)} onModeToggle={() => onAppearanceChange(accentTheme, colorMode === "dark" ? "light" : "dark")} /><LanguageSwitcher /><button className="quiet" onClick={onLogout}>{t("Odhlásiť")}</button></div></header>
     <section className="public student-content">
       <div className="eyebrow">{t("OSOBNÝ PROFIL")}</div>
       <h1>{t("Ahoj,")} {profile?.first_name || user.first_name || user.username}.</h1>

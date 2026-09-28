@@ -18,7 +18,7 @@ from app.core.security import (
 )
 from app.db.session import get_db
 from app.models import AdminSession, AdminUser, Participant, ResearchConsent
-from app.schemas.auth import LoginRequest, RegistrationRequest, ResearcherRegistrationRequest, UserResponse
+from app.schemas.auth import AppearancePreferences, LoginRequest, RegistrationRequest, ResearcherRegistrationRequest, UserResponse
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
 
@@ -32,6 +32,8 @@ def response_for_user(user: AdminUser, csrf_token: str, participant_code: str | 
         participant_code=participant_code,
         first_name=user.first_name,
         last_name=user.last_name,
+        accent_theme=user.accent_theme,
+        color_mode=user.color_mode,
     )
 
 
@@ -205,6 +207,18 @@ async def me(
         participant = await db.get(Participant, auth.user.participant_id)
         participant_code = participant.participant_code if participant is not None else None
     return response_for_user(auth.user, auth.session.csrf_token, participant_code)
+
+
+@router.put("/preferences", response_model=AppearancePreferences)
+async def update_appearance_preferences(
+    payload: AppearancePreferences,
+    auth: AuthContext = Depends(require_user_csrf),
+    db: AsyncSession = Depends(get_db),
+) -> AppearancePreferences:
+    auth.user.accent_theme = payload.accent_theme
+    auth.user.color_mode = payload.color_mode
+    await db.commit()
+    return AppearancePreferences(accent_theme=auth.user.accent_theme, color_mode=auth.user.color_mode)
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)

@@ -22,6 +22,8 @@ class AdminUser(Base):
     username: Mapped[str] = mapped_column(String(80), unique=True, nullable=False)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     role: Mapped[str] = mapped_column(String(30), nullable=False, default="admin")
+    accent_theme: Mapped[str] = mapped_column(String(20), nullable=False, default="blue", server_default="blue")
+    color_mode: Mapped[str] = mapped_column(String(10), nullable=False, default="dark", server_default="dark")
     email: Mapped[str | None] = mapped_column(String(255), unique=True, nullable=True)
     first_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
     last_name: Mapped[str | None] = mapped_column(String(120), nullable=True)

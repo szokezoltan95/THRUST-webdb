@@ -81,6 +81,13 @@ class UserResponse(BaseModel):
     participant_code: str | None = None
     first_name: str | None = None
     last_name: str | None = None
+    accent_theme: Literal["blue", "red", "green", "purple", "orange", "teal", "pink", "gold"] = "blue"
+    color_mode: Literal["dark", "light"] = "dark"
+
+
+class AppearancePreferences(BaseModel):
+    accent_theme: Literal["blue", "red", "green", "purple", "orange", "teal", "pink", "gold"]
+    color_mode: Literal["dark", "light"]
 
 
 class StudentProfileResponse(BaseModel):

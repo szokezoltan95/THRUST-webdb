@@ -2,6 +2,10 @@
 export type Language = "sk" | "en";
 
 const english: Record<string, string> = {
+  "Farebný motív": "Color theme", "Modrá": "Blue", "Červená": "Red", "Zelená": "Green",
+  "Fialová": "Purple", "Oranžová": "Orange", "Tyrkysová": "Teal", "Ružová": "Pink", "Zlatá": "Gold",
+  "Svetlý režim": "Light mode", "Tmavý režim": "Dark mode", "Prepnúť na svetlý režim": "Switch to light mode",
+  "Prepnúť na tmavý režim": "Switch to dark mode", "Nastavenie vzhľadu sa nepodarilo uložiť.": "Could not save appearance preferences.",
   "LETECKÁ FAKULTA TUKE · VÝSKUM RIADENIA UAV": "FACULTY OF AERONAUTICS TUKE · UAV CONTROL RESEARCH", "Testy": "Tests",
   "Za každým letom je človek.": "Behind every flight is a person.",
   "THRUST skúma, ako piloti reagujú a ovládajú dron. Spája meranie, analýzu a porovnávanie výsledkov, aby sme ľudskému výkonu pri riadení UAV lepšie rozumeli.": "THRUST explores how pilots respond and control a drone. It brings together measurement, analysis and comparison of results to better understand human performance in UAV control.",
