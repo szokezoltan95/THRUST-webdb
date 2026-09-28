@@ -10,10 +10,10 @@ button, input { font: inherit; }
 button { cursor: pointer; }
 main { min-height: 100vh; }
 header { height: 78px; padding: 0 5vw; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #1d334b; background: rgba(7,16,28,.82); backdrop-filter: blur(14px); }
-.brand { display: flex; gap: 13px; align-items: center; letter-spacing: .08em; }
-.brand strong, .brand small { display: block; }
-.brand small { margin-top: 3px; color: #7791ad; font-size: 12px; letter-spacing: .04em; }
-.mark { width: 38px; height: 38px; display: grid; place-items: center; color: #06101c; background: #45d5ff; font-weight: 900; clip-path: polygon(0 0,100% 0,100% 72%,72% 100%,0 100%); }
+.brand { display: flex; align-items: center; flex: 0 0 auto; }
+.brand img { display: block; width: 158px; height: auto; }
+.welcome-identities { display: flex; align-items: center; gap: 28px; }
+.faculty-logo { display: block; width: 124px; height: auto; }
 .public, .workspace { max-width: 1180px; margin: 0 auto; padding: 12vh 5vw 80px; }
 .workspace { padding-top: 8vh; }
 .eyebrow { color: #45d5ff; font-size: 13px; font-weight: 750; letter-spacing: .14em; }
@@ -66,7 +66,7 @@ header > .actions, .registration-header > .actions { margin-top: 0; align-items:
 .language-switch button:focus-visible { outline: 2px solid #45d5ff; outline-offset: 2px; }
 @media (max-width: 700px) { header:has(> .actions) { height: auto; min-height: 78px; gap: 12px; flex-wrap: wrap; padding-block: 12px; } header > .actions { flex-wrap: wrap; } .topbar { gap: 16px; flex-wrap: wrap; } }
 .error { color: #ff8897; }
-@media (max-width: 700px) { header { padding: 0 20px; } .brand small { display: none; } .public,.workspace { padding: 70px 20px; } .stats { grid-template-columns: 1fr; margin-top: 42px; } .metric { min-height: 110px; } h1 { font-size: 48px; } }
+@media (max-width: 700px) { header { padding: 0 20px; } .welcome-identities { gap: 14px; } .brand img { width: 128px; } .faculty-logo { width: 94px; } .public,.workspace { padding: 70px 20px; } .stats { grid-template-columns: 1fr; margin-top: 42px; } .metric { min-height: 110px; } h1 { font-size: 48px; } }
 :root { --line: #1d334b; }
 .app-shell { min-height: 100vh; display: flex; }
 .sidebar { width: 270px; flex: 0 0 270px; display: flex; flex-direction: column; padding: 28px 18px 20px; border-right: 1px solid var(--line); background: rgba(5,14,24,.9); }

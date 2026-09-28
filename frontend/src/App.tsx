@@ -1,6 +1,18 @@
 import { t, tf, serverMessage } from "./i18n";
 import { LanguageSwitcher, useLanguage } from "./LanguageContext";
 import { ChangeEvent, FormEvent, useEffect, useRef, useState } from "react";
+import thrustLogo from "./img/THRUST_logo_white.svg";
+import lfSkLogo from "./img/lf_sk.svg";
+import lfEnLogo from "./img/lf_en.svg";
+
+function Brand() {
+  return <div className="brand"><img src={thrustLogo} alt="THRUST" /></div>;
+}
+
+function FacultyLogo() {
+  const { language } = useLanguage();
+  return <img className="faculty-logo" src={language === "sk" ? lfSkLogo : lfEnLogo} alt={language === "sk" ? "Letecká fakulta TUKE" : "Faculty of Aeronautics TUKE"} />;
+}
 
 type ConsentDocument = { version: string; text: string; configured?: boolean };
 type ConsentDocuments = { research: ConsentDocument; gdpr: ConsentDocument };
@@ -764,7 +776,7 @@ export function App() {
       {user ? (
         <div className="app-shell">
           <aside className="sidebar">
-            <div className="brand"><span className="mark">{t("T")}</span><div><strong>{t("THRUST")}</strong><small>{t("UAV Human Performance Research")}</small></div></div>
+            <Brand />
             <nav className="side-nav" aria-label={t("Administrácia")}>
               <button className={activeSection === "overview" ? "nav-item active" : "nav-item"} onClick={() => setActiveSection("overview")}><span>⌂</span>{t("Prehľad")}</button>
               <button className={activeSection === "participants" ? "nav-item active" : "nav-item"} onClick={() => setActiveSection("participants")}><span>◎</span>{t("Účastníci a účty")}</button>
@@ -998,15 +1010,15 @@ export function App() {
         </div>
       ) : (
         <>
-          <header><div className="brand"><span className="mark">{t("T")}</span><div><strong>{t("THRUST")}</strong><small>{t("UAV Human Performance Research")}</small></div></div><div className="actions"><LanguageSwitcher /><button className="quiet" onClick={openRegistration}>{t("Registrácia")}</button><button className="quiet" onClick={() => setLoginOpen(true)}>{t("Prihlásenie")}</button></div></header>
+          <header className="welcome-header"><div className="welcome-identities"><Brand /><FacultyLogo /></div><div className="actions"><LanguageSwitcher /><button className="quiet" onClick={openRegistration}>{t("Registrácia")}</button><button className="quiet" onClick={() => setLoginOpen(true)}>{t("Prihlásenie")}</button></div></header>
           <section className="public">
-          <div className="eyebrow">{t("TESTING HUB FOR RESEARCH IN UAV SIMULATION AND TRAINING")}</div>
-          <h1>{t("Merateľný pohľad na výkon pilotov UAV.")}</h1>
-          <p className="lead">{t("THRUST spája štandardizované experimenty, lokálne analytické modely a anonymizované skupinové výsledky.")}</p>
+          <div className="eyebrow">{t("LETECKÁ FAKULTA TUKE · VÝSKUM RIADENIA UAV")}</div>
+          <h1>{t("THRUST")}</h1>
+          <p className="lead">{t("Výskumný systém na zber a analýzu údajov z úloh riadenia UAV. Merania prebiehajú v lokálnej aplikácii; WebDB eviduje testy, merania a výsledky.")}</p>
           <div className="stats">
             <Metric label={t("Účastníci")} value={metrics?.participant_count ?? "—"} />
             <Metric label={t("Merania")} value={metrics?.measurement_count ?? "—"} />
-            <Metric label={t("Aktívne testy")} value="SCoPE" />
+            <Metric label={t("Testy")} value="SCoPE · SimPLE" />
           </div>
           {metrics && !metrics.publishable && <p className="privacy">{t("Verejné štatistiky sa zobrazia po dosiahnutí minimálnej skupiny")} {metrics.minimum_group_size} {t("účastníkov.")}</p>}
           </section>
@@ -1031,7 +1043,7 @@ function RegistrationPage({ onSubmit, onBack, onLogin, onResearcherRegister, err
 }) {
   return <main className="registration-page">
     <header className="registration-header">
-      <div className="brand"><span className="mark">{t("T")}</span><div><strong>{t("THRUST")}</strong><small>{t("UAV Human Performance Research")}</small></div></div>
+      <Brand />
       <div className="actions"><LanguageSwitcher /><button type="button" className="quiet" onClick={onBack}>{t("Späť na hlavnú stránku")}</button><button type="button" className="quiet" onClick={onResearcherRegister}>{t("Registrácia výskumníka")}</button><button type="button" className="quiet" onClick={onLogin}>{t("Už mám účet · Prihlásiť sa")}</button></div>
     </header>
     <section className="registration-content">
@@ -1301,7 +1313,7 @@ function MeasurementDetailBody({ measurement, tests, onClose }: { measurement: M
   return <>
     <div className="detail-window-bar"><div className="eyebrow">{t("DETAIL MERANIA ·")} {isSimple ? "SimPLE" : "SCoPE"}</div><div className="detail-header-actions"><button className="quiet compact" onClick={onClose}>{t("Zavrieť")}</button></div></div>
     <h2>{measurement.test_type}</h2><p className="muted">{measurement.source_file_name} · {formatDateTime(measurement.started_at)}</p>
-    <div className="detail-grid"><div><span>{t("Vzorky")}</span><strong>{String(measurement.analysis_data?.sample_count ?? measurement.analysis_data?.simple_sample_count ?? "—")}</strong></div><div><span>{t("Trvanie")}</span><strong>{measurement.analysis_data?.duration_s ? `${Number(measurement.analysis_data.duration_s).toFixed(2)} s` : "—"}</strong></div><div><span>{t("Raw dáta")}</span><strong>{measurement.raw_sha256 ? tf("Archivované · {0}", formatBytes(measurement.raw_size_bytes)) : t("Nie sú dostupné")}</strong></div><div><span>{t("Merací režim")}</span><strong>{isSimple ? t("SimPLE · 2D let") : t("SCoPE · odozva osí")}</strong></div></div>
+    <div className="detail-grid"><div><span>{t("Vzorky")}</span><strong>{String(measurement.analysis_data?.sample_count ?? measurement.analysis_data?.simple_sample_count ?? "—")}</strong></div><div><span>{t("Trvanie")}</span><strong>{measurement.analysis_data?.duration_s ? `${Number(measurement.analysis_data.duration_s).toFixed(2)} s` : "—"}</strong></div><div><span>{t("Raw dáta")}</span><strong>{measurement.raw_sha256 ? tf("Archivované · {0}", formatBytes(measurement.raw_size_bytes)) : t("Nie sú dostupné")}</strong></div><div><span>{t("Merací režim")}</span><strong>{isSimple ? "SimPLE" : "SCoPE"}</strong></div></div>
     {isSimple ? <SimpleAnalysisView analysis={measurement.analysis_data ?? {}} /> : <div className="results-layout"><div className="results-chart-column"><ResponseChart data={measurement.analysis_data?.normalized_step_response} /></div><ResponseMetrics data={measurement.analysis_data?.normalized_step_response} /></div>}
   </>;
 }
@@ -1544,7 +1556,7 @@ function ResearcherRegistrationPage({ onSubmit, onBack, onStudentRegister, onLog
 }) {
   return <main className="registration-page">
     <header className="registration-header">
-      <div className="brand"><span className="mark">{t("T")}</span><div><strong>{t("THRUST")}</strong><small>{t("UAV Human Performance Research")}</small></div></div>
+      <Brand />
       <div className="actions"><LanguageSwitcher /><button type="button" className="quiet" onClick={onBack}>{t("Späť na hlavnú stránku")}</button><button type="button" className="quiet" onClick={onStudentRegister}>{t("Registrácia študenta")}</button><button type="button" className="quiet" onClick={onLogin}>{t("Prihlásiť sa")}</button></div>
     </header>
     <section className="registration-content">
@@ -1669,7 +1681,7 @@ function StudentPortal({ user, onLogout }: { user: User; onLogout: () => Promise
   const selectedMeasurement = visibleMeasurements.find((item) => item.id === selectedMeasurementId);
 
   return <main className="student-shell">
-    <header><div className="brand"><span className="mark">{t("T")}</span><div><strong>{t("THRUST")}</strong><small>{t("Študentský portál")}</small></div></div><div className="header-actions"><LanguageSwitcher /><button className="quiet" onClick={onLogout}>{t("Odhlásiť")}</button></div></header>
+    <header><Brand /><div className="header-actions"><LanguageSwitcher /><button className="quiet" onClick={onLogout}>{t("Odhlásiť")}</button></div></header>
     <section className="public student-content">
       <div className="eyebrow">{t("OSOBNÝ PROFIL")}</div>
       <h1>{t("Ahoj,")} {profile?.first_name || user.first_name || user.username}.</h1>

@@ -2,6 +2,8 @@
 export type Language = "sk" | "en";
 
 const english: Record<string, string> = {
+  "LETECKÁ FAKULTA TUKE · VÝSKUM RIADENIA UAV": "FACULTY OF AERONAUTICS TUKE · UAV CONTROL RESEARCH", "Testy": "Tests",
+  "Výskumný systém na zber a analýzu údajov z úloh riadenia UAV. Merania prebiehajú v lokálnej aplikácii; WebDB eviduje testy, merania a výsledky.": "A research system for collecting and analyzing UAV control task data. Measurements run in the local application; WebDB records tests, measurements and results.",
   "DETAIL KONTA": "ACCOUNT DETAILS", "Meno": "First name", "Priezvisko": "Last name",
   "na serveri": "on the server", "Ukladanie a vyhodnotenie": "Saving and analysis",
   "Vyber meranie": "Select a measurement",
@@ -111,8 +113,7 @@ const english: Record<string, string> = {
   "Vzorkovacia frekvencia": "Sampling frequency", "Trvanie": "Duration", "Výsledky SimPLE": "SimPLE results", "Analýza": "Analysis",
   "Toto meranie používa staršie vyhodnotenie; počty akcií, resetov a čas v zóne môžu byť neúplné.": "This measurement uses an older analysis; action counts, resets and time in zone may be incomplete.",
   "Vzorky": "Samples", "Raw dáta": "Raw data", "Archivované": "Archived", "Bez raw dát": "No raw data",
-  "Nie sú dostupné": "Unavailable", "Merací režim": "Measurement mode", "SCoPE · odozva osí": "SCoPE · axis response",
-  "SimPLE · 2D let": "SimPLE · 2D flight", "Normalizovaná odozva": "Normalized response",
+  "Nie sú dostupné": "Unavailable", "Merací režim": "Measurement mode", "Normalizovaná odozva": "Normalized response",
   "Normalizovaná odozva nie je dostupná.": "Normalized response is unavailable.", "Čas (s)": "Time (s)",
   "otvoriť ↗": "open ↗", "Detail grafu": "Chart details", "· normalizovaná odozva": "· normalized response",
   "Katalóg testov": "Test catalog", "Každá verzia testu je samostatná, nemenná konfigurácia pre THRUST.": "Each test version is a separate, immutable configuration for THRUST.",
@@ -173,8 +174,6 @@ const english: Record<string, string> = {
   "Detail merania ·": "Measurement details ·", "Stav / akcie": "Status / actions",
   "Zobraziť": "Show", "Skryť": "Hide", "Zobraziť graf": "Show chart",
   "Verejné štatistiky sa zobrazia po dosiahnutí minimálnej skupiny": "Public statistics appear once the minimum group size is reached",
-  "Merateľný pohľad na výkon pilotov UAV.": "A measurable view of UAV pilot performance.",
-  "THRUST spája štandardizované experimenty, lokálne analytické modely a anonymizované skupinové výsledky.": "THRUST combines standardized experiments, local analytical models and anonymized group results.",
   "Prihlásenie": "Log in", "Prihlásiť": "Log in", "Prihlásiť sa": "Log in", "Registrácia": "Register",
   "Vytvor si účet": "Create an account", "Späť na hlavnú stránku": "Back to home",
   "Už mám účet · Prihlásiť sa": "Already have an account · Log in",
