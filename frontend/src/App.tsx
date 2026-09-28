@@ -86,6 +86,96 @@ function formatBytes(value: number | null | undefined): string {
   return `${size.toFixed(size < 10 ? 1 : 0)} ${units[unit]}`;
 }
 
+type SortState = { column: string; direction: "asc" | "desc" };
+type SortValue = string | number | null | undefined;
+
+function nextSort(current: SortState, column: string): SortState {
+  return current.column === column
+    ? { column, direction: current.direction === "asc" ? "desc" : "asc" }
+    : { column, direction: "asc" };
+}
+
+function sortRows<T>(rows: T[], sort: SortState, valueFor: (row: T, column: string) => SortValue): T[] {
+  const sign = sort.direction === "asc" ? 1 : -1;
+  return [...rows].sort((left, right) => {
+    const a = valueFor(left, sort.column);
+    const b = valueFor(right, sort.column);
+    if (a == null || a === "") return b == null || b === "" ? 0 : 1;
+    if (b == null || b === "") return -1;
+    const comparison = typeof a === "number" && typeof b === "number"
+      ? a - b
+      : String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: "base" });
+    return comparison * sign;
+  });
+}
+
+function SortHeader({ label, active, direction, onClick }: {
+  label: string; active: boolean; direction: "asc" | "desc"; onClick: () => void;
+}) {
+  return <button type="button" className={active ? "sort-header active" : "sort-header"}
+    aria-pressed={active} onClick={onClick}>
+    {label}<span aria-hidden="true">{active ? (direction === "asc" ? "↑" : "↓") : "↕"}</span>
+  </button>;
+}
+
+function useDragScroll() {
+  useEffect(() => {
+    let active: { element: HTMLElement; pointerId: number; x: number; y: number; left: number; top: number; moved: boolean } | null = null;
+    let suppress: HTMLElement | null = null;
+    let suppressUntil = 0;
+    const onDown = (event: PointerEvent) => {
+      if (event.pointerType !== "mouse" || event.button !== 0) return;
+      const target = event.target instanceof Element ? event.target : null;
+      const element = target?.closest<HTMLElement>(".measurement-list, .table-wrap, .test-participant-table-wrap, .participant-table, .test-table, .trend-data-table");
+      if (!element || (element.scrollWidth <= element.clientWidth + 1 && element.scrollHeight <= element.clientHeight + 1)) return;
+      if (target?.closest("input, select, textarea, a, [contenteditable='true'], .sort-header")) return;
+      const itemButton = target?.closest(".measurement-item");
+      if (target?.closest("button") && !itemButton) return;
+      element.classList.add("drag-scroll");
+      active = { element, pointerId: event.pointerId, x: event.clientX, y: event.clientY, left: element.scrollLeft, top: element.scrollTop, moved: false };
+    };
+    const onMove = (event: PointerEvent) => {
+      if (!active || active.pointerId !== event.pointerId) return;
+      const dx = event.clientX - active.x;
+      const dy = event.clientY - active.y;
+      if (!active.moved && Math.hypot(dx, dy) < 5) return;
+      active.moved = true;
+      active.element.classList.add("is-dragging");
+      active.element.scrollLeft = active.left - dx;
+      active.element.scrollTop = active.top - dy;
+      event.preventDefault();
+    };
+    const finish = (event: PointerEvent) => {
+      if (!active || active.pointerId !== event.pointerId) return;
+      if (active.moved) {
+        suppress = active.element;
+        suppressUntil = Date.now() + 250;
+      }
+      active.element.classList.remove("is-dragging");
+      active = null;
+    };
+    const onClick = (event: MouseEvent) => {
+      if (suppress && Date.now() < suppressUntil && event.target instanceof Node && suppress.contains(event.target)) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        suppress = null;
+      }
+    };
+    document.addEventListener("pointerdown", onDown);
+    document.addEventListener("pointermove", onMove, { passive: false });
+    document.addEventListener("pointerup", finish);
+    document.addEventListener("pointercancel", finish);
+    document.addEventListener("click", onClick, true);
+    return () => {
+      document.removeEventListener("pointerdown", onDown);
+      document.removeEventListener("pointermove", onMove);
+      document.removeEventListener("pointerup", finish);
+      document.removeEventListener("pointercancel", finish);
+      document.removeEventListener("click", onClick, true);
+    };
+  }, []);
+}
+
 function measurementMetrics(analysis: Record<string, unknown> | null): Record<string, number> {
   if (!analysis) return {};
   const result: Record<string, number> = {};
@@ -165,6 +255,7 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
 
 export function App() {
   const { language } = useLanguage();
+  useDragScroll();
   const [metrics, setMetrics] = useState<PublicMetrics | null>(null);
   const [publishedWelcome, setPublishedWelcome] = useState<{ blocks: WelcomeBlock[] | null; data: WelcomeData }>({ blocks: null, data: {} });
   const [user, setUser] = useState<User | null>(null);
@@ -175,7 +266,13 @@ export function App() {
   const [participantCode, setParticipantCode] = useState("");
   const [participantMessage, setParticipantMessage] = useState("");
   const [participantSearch, setParticipantSearch] = useState("");
-  const [participantSort, setParticipantSort] = useState<"code" | "first" | "last" | "count">("code");
+  const [participantSort, setParticipantSort] = useState<SortState>({ column: "code", direction: "asc" });
+  const [testSort, setTestSort] = useState<SortState>({ column: "code", direction: "asc" });
+  const [overviewParticipantSort, setOverviewParticipantSort] = useState<SortState>({ column: "last", direction: "desc" });
+  const [trendSort, setTrendSort] = useState<SortState>({ column: "period", direction: "asc" });
+  const [historySort, setHistorySort] = useState<SortState>({ column: "date", direction: "desc" });
+  const [measurementSort, setMeasurementSort] = useState<SortState>({ column: "date", direction: "desc" });
+  const [reportMeasurementSort, setReportMeasurementSort] = useState<SortState>({ column: "date", direction: "desc" });
   const [tests, setTests] = useState<TestDefinition[]>([]);
   const defaultTestConfiguration = `{
   "sampling_hz": 100,
@@ -741,7 +838,11 @@ export function App() {
 
   function filteredTests() {
     const query = testSearch.trim().toLowerCase();
-    return tests.filter((test) => (testModeFilter === "ALL" || test.analysis_profile.toUpperCase().startsWith(testModeFilter)) && (!query || [test.test_code, test.name, test.version, test.analysis_profile].join(" ").toLowerCase().includes(query)));
+    const filtered = tests.filter((test) => (testModeFilter === "ALL" || test.analysis_profile.toUpperCase().startsWith(testModeFilter)) && (!query || [test.test_code, test.name, test.version, test.analysis_profile].join(" ").toLowerCase().includes(query)));
+    return sortRows(filtered, testSort, (test, column) => ({
+      code: test.test_code, name: test.name, version: test.version,
+      profile: test.analysis_profile, status: test.status,
+    }[column as "code" | "name" | "version" | "profile" | "status"]));
   }
 
   function participantMeasurements(participantId: string) {
@@ -750,22 +851,32 @@ export function App() {
 
   function filteredParticipants() {
     const query = participantSearch.trim().toLowerCase();
-    return [...participants]
-      .filter((participant) => { const account = adminAccounts.find((item) => item.participant_id === participant.id); return !query || [participant.participant_code, account?.first_name, account?.last_name, account?.email, account?.username].filter(Boolean).join(" ").toLowerCase().includes(query); })
-      .sort((left, right) => {
-        const leftMeasurements = participantMeasurements(left.id);
-        const rightMeasurements = participantMeasurements(right.id);
-        if (participantSort === "count") return rightMeasurements.length - leftMeasurements.length;
-        if (participantSort === "first") return (leftMeasurements[0]?.started_at ?? "").localeCompare(rightMeasurements[0]?.started_at ?? "");
-        if (participantSort === "last") return (rightMeasurements[0]?.started_at ?? "").localeCompare(leftMeasurements[0]?.started_at ?? "");
-        return left.participant_code.localeCompare(right.participant_code);
-      });
+    const filtered = participants.filter((participant) => {
+      const account = adminAccounts.find((item) => item.participant_id === participant.id);
+      return !query || [participant.participant_code, account?.first_name, account?.last_name, account?.email, account?.username].filter(Boolean).join(" ").toLowerCase().includes(query);
+    });
+    return sortRows(filtered, participantSort, (participant, column) => {
+      const account = adminAccounts.find((item) => item.participant_id === participant.id);
+      const runs = participantMeasurements(participant.id);
+      const dates = runs.map((item) => item.started_at).sort();
+      return ({
+        code: participant.participant_code,
+        account: [account?.first_name, account?.last_name].filter(Boolean).join(" ") || account?.username || account?.email || "",
+        first: dates[0],
+        last: dates.at(-1),
+        count: runs.length,
+      }[column as "code" | "account" | "first" | "last" | "count"]);
+    });
   }
 
   function visibleAccountOnlyRows() {
     const query = participantSearch.trim().toLowerCase();
-    return adminAccounts.filter((account) => !account.participant_id &&
+    const filtered = adminAccounts.filter((account) => !account.participant_id &&
       (!query || [account.first_name, account.last_name, account.email, account.username, account.role].filter(Boolean).join(" ").toLowerCase().includes(query)));
+    return sortRows(filtered, participantSort, (account, column) => ({
+      code: "", account: [account.first_name, account.last_name].filter(Boolean).join(" ") || account.username || account.email,
+      first: null, last: null, count: null,
+    }[column as "code" | "account" | "first" | "last" | "count"]));
   }
 
   function accountManagementActions(account: AdminAccount | null) {
@@ -814,8 +925,8 @@ export function App() {
                 <section className="browser-panel">
                   <div className="browser-header"><div><div className="eyebrow">{t("ÚČASTNÍCI A ÚČTY")}</div><h2>{user.role === "researcher" ? t("Účastníci a výskumné dáta") : t("Spoločná evidencia účastníkov a kont")}</h2><p className="muted">{user.role === "researcher" ? t("Výsledky, merania a pseudonymné profily účastníkov.") : t("Participant ID, používateľské konto a rola sú zobrazené spolu. Účty bez Participant ID sú súčasťou toho istého zoznamu.")}</p></div><div className="actions"><button className="quiet compact" onClick={() => void refreshAccounts()}>{t("Obnoviť")}</button>{(user.role === "admin" || user.role === "superadmin") && <button className="primary compact" onClick={() => document.getElementById("new-participant-code")?.focus()}>{t("Nové anonymné ID")}</button>}</div></div>
                   {accountMessage && <p className="notice">{accountMessage}</p>}
-                  <div className="browser-toolbar"><input placeholder={t("Hľadať ID, meno, e-mail alebo login…")} value={participantSearch} onChange={(event) => setParticipantSearch(event.target.value)} /><select value={participantSort} onChange={(event) => setParticipantSort(event.target.value as typeof participantSort)}><option value="code">{t("Zoradiť podľa ID")}</option><option value="first">{t("Najstarší prvý test")}</option><option value="last">{t("Najnovší posledný test")}</option><option value="count">{t("Počet meraní")}</option></select></div>
-                  <div className="data-table participant-table"><div className="data-table-head"><span>{t("Participant ID")}</span><span>{user.role === "researcher" ? t("Profil účastníka") : t("Konto / rola")}</span><span>{t("Prvé meranie")}</span><span>{t("Posledné meranie")}</span><span>{t("Meraní")}</span><span>{t("Akcie")}</span></div>
+                  <div className="browser-toolbar"><input placeholder={t("Hľadať ID, meno, e-mail alebo login…")} value={participantSearch} onChange={(event) => setParticipantSearch(event.target.value)} /></div>
+                  <div className="data-table participant-table"><div className="data-table-head"><SortHeader label={t("Participant ID")} active={participantSort.column === "code"} direction={participantSort.direction} onClick={() => setParticipantSort((current) => nextSort(current, "code"))} /><SortHeader label={user.role === "researcher" ? t("Profil účastníka") : t("Konto / rola")} active={participantSort.column === "account"} direction={participantSort.direction} onClick={() => setParticipantSort((current) => nextSort(current, "account"))} /><SortHeader label={t("Prvé meranie")} active={participantSort.column === "first"} direction={participantSort.direction} onClick={() => setParticipantSort((current) => nextSort(current, "first"))} /><SortHeader label={t("Posledné meranie")} active={participantSort.column === "last"} direction={participantSort.direction} onClick={() => setParticipantSort((current) => nextSort(current, "last"))} /><SortHeader label={t("Meraní")} active={participantSort.column === "count"} direction={participantSort.direction} onClick={() => setParticipantSort((current) => nextSort(current, "count"))} /><span>{t("Akcie")}</span></div>
                     {filteredParticipants().map((participant) => {
                       const rows = participantMeasurements(participant.id);
                       const first = rows.length ? rows[rows.length - 1].started_at : null;
@@ -856,8 +967,8 @@ export function App() {
                      <section className="participant-detail-section">
                        <div className="participant-section-heading"><div><div className="eyebrow">{t("HISTÓRIA")}</div><h3>{t("Posledných 5 meraní")}</h3></div><span className="muted">{rows.length} {t("spolu")}</span></div>
                        {rows.length ? <div className="data-table participant-history-table">
-                         <div className="data-table-head"><span>{t("Test")}</span><span>{t("Dátum a čas")}</span><span>{t("Veľkosť súboru")}</span><span>{t("Stav")}</span><span>{t("Výsledok")}</span></div>
-                         {[...rows].sort((left, right) => right.started_at.localeCompare(left.started_at)).slice(0, 5).map((measurement) => {
+                         <div className="data-table-head"><SortHeader label={t("Test")} active={historySort.column === "test"} direction={historySort.direction} onClick={() => setHistorySort((current) => nextSort(current, "test"))} /><SortHeader label={t("Dátum a čas")} active={historySort.column === "date"} direction={historySort.direction} onClick={() => setHistorySort((current) => nextSort(current, "date"))} /><SortHeader label={t("Veľkosť súboru")} active={historySort.column === "size"} direction={historySort.direction} onClick={() => setHistorySort((current) => nextSort(current, "size"))} /><SortHeader label={t("Stav")} active={historySort.column === "status"} direction={historySort.direction} onClick={() => setHistorySort((current) => nextSort(current, "status"))} /><span>{t("Výsledok")}</span></div>
+                         {sortRows(rows, historySort, (measurement, column) => ({ test: measurement.test_type, date: measurement.started_at, size: measurement.raw_size_bytes ?? 0, status: measurement.status }[column as "test" | "date" | "size" | "status"])).slice(0, 5).map((measurement) => {
                            const hasResult = rows.some((item) => item.id === measurement.id);
                            return <div className="data-table-row" key={measurement.id}><strong>{measurement.test_type}</strong><span>{formatDateTime(measurement.started_at)}</span><span>{formatBytes(measurement.raw_size_bytes)}</span><span>{measurement.status}</span><span className="row-actions"><button className="quiet compact" disabled={!hasResult} onClick={() => { setSelectedMeasurementId(measurement.id); }}>{hasResult ? t("Otvoriť") : t("Bez výsledkov")}</button></span></div>;
                          })}
@@ -911,7 +1022,7 @@ export function App() {
                    return <section className="browser-detail detail-modal-open participant-detail-modal">
                     <div className="detail-header"><div><div className="eyebrow">{t("MERANIA ÚČASTNÍKA")}</div><h2>{participant.participant_code}</h2></div><div className="detail-header-actions"><ModeSwitch value={resultMode} onChange={changeResultMode} /><button className="quiet compact" onClick={() => { setParticipantDialog(null); setSelectedMeasurementId(null); }}>{t("Zavrieť")}</button></div></div>
                     <p className="muted">{t("História")} {resultMode === "SCOPE" ? "SCoPE" : "SimPLE"} {t("meraní účastníka.")}</p>
-                    <div className="data-table participant-history-table"><div className="data-table-head"><span>{t("Test")}</span><span>{t("Dátum a čas")}</span><span>{t("Veľkosť súboru")}</span><span>{t("Stav")}</span><span>{t("Akcia")}</span></div>{rows.map((measurement) => <div className="data-table-row" key={measurement.id}><strong>{measurement.test_type}</strong><span>{formatDateTime(measurement.started_at)}</span><span>{formatBytes(measurement.raw_size_bytes)}</span><span>{measurement.status}</span><button className="quiet compact row-actions" onClick={() => setSelectedMeasurementId(measurement.id)}>{t("Otvoriť výsledok")}</button></div>)}</div>
+                    <div className="data-table participant-history-table"><div className="data-table-head"><SortHeader label={t("Test")} active={historySort.column === "test"} direction={historySort.direction} onClick={() => setHistorySort((current) => nextSort(current, "test"))} /><SortHeader label={t("Dátum a čas")} active={historySort.column === "date"} direction={historySort.direction} onClick={() => setHistorySort((current) => nextSort(current, "date"))} /><SortHeader label={t("Veľkosť súboru")} active={historySort.column === "size"} direction={historySort.direction} onClick={() => setHistorySort((current) => nextSort(current, "size"))} /><SortHeader label={t("Stav")} active={historySort.column === "status"} direction={historySort.direction} onClick={() => setHistorySort((current) => nextSort(current, "status"))} /><span>{t("Akcia")}</span></div>{sortRows(rows, historySort, (measurement, column) => ({ test: measurement.test_type, date: measurement.started_at, size: measurement.raw_size_bytes ?? 0, status: measurement.status }[column as "test" | "date" | "size" | "status"])).map((measurement) => <div className="data-table-row" key={measurement.id}><strong>{measurement.test_type}</strong><span>{formatDateTime(measurement.started_at)}</span><span>{formatBytes(measurement.raw_size_bytes)}</span><span>{measurement.status}</span><button className="quiet compact row-actions" onClick={() => setSelectedMeasurementId(measurement.id)}>{t("Otvoriť výsledok")}</button></div>)}</div>
                     {rows.length === 0 && <p className="muted">{t("Pre tento režim zatiaľ nie sú synchronizované merania.")}</p>}
                   </section>;
                 })()}
@@ -940,13 +1051,25 @@ export function App() {
                   {(() => { const selectedIds = new Set([...trendParticipants, ...groups.filter((g) => trendGroups.includes(g.id)).flatMap((g) => g.participant_ids)]); const options = Array.from(new Set(measurements.filter((m) => selectedIds.has(m.participant_id)).flatMap((m) => Object.keys(measurementMetrics(m.analysis_data))))).sort(); return <div className="filters"><label>{t("Parameter")}<select value={trendMetric} onChange={(event) => setTrendMetric(event.target.value)}><option value="">{t("Vyber parameter")}</option>{options.map((metric) => <option key={metric} value={metric}>{metric}</option>)}</select></label><label>{t("Os X")}<select value={trendAxis} onChange={(event) => setTrendAxis(event.target.value as "date" | "test")}><option value="date">{t("Dátum")}</option><option value="test">{t("Test")}</option></select></label><label>{t("Od dátumu")}<input type="date" value={trendFrom} onChange={(event) => setTrendFrom(event.target.value)} /></label><label>{t("Do dátumu")}<input type="date" value={trendTo} onChange={(event) => setTrendTo(event.target.value)} /></label><button className="primary" onClick={() => void loadTrendAnalysis()}>{t("Vykresliť trend")}</button></div>; })()}
                   {trendMessage && <p className="notice">{trendMessage}</p>}
                 </section>
-                {trendData && <section className="browser-panel"><div className="browser-header"><div><div className="eyebrow">{t("TREND ·")}{trendData.metric}</div><h2>{t("Graf a tabuľkové hodnoty")}</h2></div><div className="actions"><a className="quiet compact" href={`/api/admin/reports/trends.png?${trendQuery()}`} download="thrust-trend.png">{t("Stiahnuť PNG graf")}</a><a className="primary compact" href={`/api/admin/reports/trends.csv?${trendQuery()}`}>{t("Stiahnuť CSV")}</a></div></div><img className="report-chart-image" src={`/api/admin/reports/trends.png?${trendQuery()}&v=${Date.now()}`} alt={t("Matplotlib graf trendu")} /><div className="data-table trend-data-table"><div className="data-table-head"><span>{t("Účastník / skupina")}</span><span>{t("Obdobie")}</span><span>{t("Priemer")}</span><span>{t("SD")}</span><span>{t("Účastníkov")}</span><span>{t("Počet meraní")}</span></div>{trendData.series.flatMap((series) => series.points.map((point) => <div className="data-table-row" key={`${series.subject_id}-${point.label}`}><strong>{series.subject}</strong><span>{point.label}</span><span>{point.mean.toPrecision(5)}</span><span>{point.sd_sample?.toPrecision(4) ?? "—"}</span><span>{point.participant_count}</span><span>{point.measurement_count}</span></div>))}</div></section>}
+                {trendData && <section className="browser-panel"><div className="browser-header"><div><div className="eyebrow">{t("TREND ·")}{trendData.metric}</div><h2>{t("Graf a tabuľkové hodnoty")}</h2></div><div className="actions"><a className="quiet compact" href={`/api/admin/reports/trends.png?${trendQuery()}`} download="thrust-trend.png">{t("Stiahnuť PNG graf")}</a><a className="primary compact" href={`/api/admin/reports/trends.csv?${trendQuery()}`}>{t("Stiahnuť CSV")}</a></div></div><img className="report-chart-image" src={`/api/admin/reports/trends.png?${trendQuery()}&v=${Date.now()}`} alt={t("Matplotlib graf trendu")} /><div className="data-table trend-data-table"><div className="data-table-head"><SortHeader label={t("Účastník / skupina")} active={trendSort.column === "subject"} direction={trendSort.direction} onClick={() => setTrendSort((current) => nextSort(current, "subject"))} /><SortHeader label={t("Obdobie")} active={trendSort.column === "period"} direction={trendSort.direction} onClick={() => setTrendSort((current) => nextSort(current, "period"))} /><SortHeader label={t("Priemer")} active={trendSort.column === "mean"} direction={trendSort.direction} onClick={() => setTrendSort((current) => nextSort(current, "mean"))} /><SortHeader label={t("SD")} active={trendSort.column === "sd"} direction={trendSort.direction} onClick={() => setTrendSort((current) => nextSort(current, "sd"))} /><SortHeader label={t("Účastníkov")} active={trendSort.column === "participants"} direction={trendSort.direction} onClick={() => setTrendSort((current) => nextSort(current, "participants"))} /><SortHeader label={t("Počet meraní")} active={trendSort.column === "count"} direction={trendSort.direction} onClick={() => setTrendSort((current) => nextSort(current, "count"))} /></div>{sortRows(trendData.series.flatMap((series) => series.points.map((point) => ({ series, point }))), trendSort, ({ series, point }, column) => ({
+                    subject: series.subject, period: point.label, mean: point.mean, sd: point.sd_sample ?? null,
+                    participants: point.participant_count, count: point.measurement_count,
+                  }[column as "subject" | "period" | "mean" | "sd" | "participants" | "count"])).map(({ series, point }) => <div className="data-table-row" key={`${series.subject_id}-${point.label}`}><strong>{series.subject}</strong><span>{point.label}</span><span>{point.mean.toPrecision(5)}</span><span>{point.sd_sample?.toPrecision(4) ?? "—"}</span><span>{point.participant_count}</span><span>{point.measurement_count}</span></div>)}</div></section>}
               </>}
               {activeSection === "reports" && <>
                 <section className="browser-panel"><div className="browser-header"><div><div className="eyebrow">{t("EXPORTY A REPORTY")}</div><h2>{t("Stiahnuť analýzy a merania")}</h2><p className="muted">{t("Vyber merania a stiahni ich raw log, uloženú analýzu, tabuľku CSV alebo PDF report s grafmi.")}</p></div></div>
                   <div className="filters"><ModeSwitch value={resultMode} onChange={changeResultMode} /><label>{t("Účastník")}<select value={measurementParticipantFilter} onChange={(event) => setMeasurementParticipantFilter(event.target.value)}><option value="">{t("Všetci účastníci")}</option>{participants.map((p) => <option key={p.id} value={p.id}>{p.participant_code}</option>)}</select></label><label>{t("Test")}<select value={measurementTestFilter} onChange={(event) => setMeasurementTestFilter(event.target.value)}><option value="">{t("Všetky testy")}</option>{tests.map((test) => <option key={test.id} value={test.id}>{test.name} · v{test.version}</option>)}</select></label><label>{t("Od dátumu")}<input type="date" value={measurementDateFrom} onChange={(event) => setMeasurementDateFrom(event.target.value)} /></label><label>{t("Do dátumu")}<input type="date" value={measurementDateTo} onChange={(event) => setMeasurementDateTo(event.target.value)} /></label></div>
                   <div className="selection-toolbar"><label><input type="checkbox" checked={filteredMeasurements().length > 0 && filteredMeasurements().every((m) => reportMeasurementIds.includes(m.id))} onChange={() => setReportMeasurementIds(filteredMeasurements().every((m) => reportMeasurementIds.includes(m.id)) ? [] : filteredMeasurements().map((m) => m.id))} /> {t("Vybrať filtrované")}</label><span>{reportMeasurementIds.length} {t("vybraných")}</span></div>
-                  <div className="measurement-list">{filteredMeasurements().map((m) => <label className="measurement-item" key={m.id}><input type="checkbox" checked={reportMeasurementIds.includes(m.id)} onChange={(event) => setReportMeasurementIds((ids) => event.target.checked ? [...ids, m.id] : ids.filter((id) => id !== m.id))} /><span className="measurement-main"><strong>{participantCodeFor(m.participant_id)}</strong><span>{formatDateTime(m.started_at)} · {m.test_type} · {m.source_file_name ?? "raw"}</span><small>{m.analysis_data ? t("Analýza uložená") : t("Bez uloženej analýzy")}</small></span></label>)}</div>
+                  <div className="measurement-list report-measurement-list">
+                    <div className="measurement-list-head"><span aria-hidden="true"></span><SortHeader label={t("Participant ID")} active={reportMeasurementSort.column === "participant"} direction={reportMeasurementSort.direction} onClick={() => setReportMeasurementSort((current) => nextSort(current, "participant"))} /><SortHeader label={t("Test")} active={reportMeasurementSort.column === "test"} direction={reportMeasurementSort.direction} onClick={() => setReportMeasurementSort((current) => nextSort(current, "test"))} /><SortHeader label={t("Dátum a čas")} active={reportMeasurementSort.column === "date"} direction={reportMeasurementSort.direction} onClick={() => setReportMeasurementSort((current) => nextSort(current, "date"))} /><SortHeader label={t("Analýza")} active={reportMeasurementSort.column === "analysis"} direction={reportMeasurementSort.direction} onClick={() => setReportMeasurementSort((current) => nextSort(current, "analysis"))} /></div>
+                    {sortRows(filteredMeasurements(), reportMeasurementSort, (m, column) => ({
+                      participant: participantCodeFor(m.participant_id), test: m.test_type, date: m.started_at,
+                      analysis: m.analysis_data ? 1 : 0,
+                    }[column as "participant" | "test" | "date" | "analysis"])).map((m) => <label className="measurement-item" key={m.id}>
+                      <input type="checkbox" checked={reportMeasurementIds.includes(m.id)} onChange={(event) => setReportMeasurementIds((ids) => event.target.checked ? [...ids, m.id] : ids.filter((id) => id !== m.id))} />
+                      <strong>{participantCodeFor(m.participant_id)}</strong><span>{m.test_type}</span><span>{formatDateTime(m.started_at)}</span><small>{m.analysis_data ? t("Analýza uložená") : t("Bez uloženej analýzy")}</small>
+                    </label>)}
+                  </div>
                   <div className="actions report-actions"><button className="quiet" disabled={!reportMeasurementIds.length} onClick={() => void downloadProtectedFile(`/api/admin/reports/measurements.csv?${reportMeasurementIds.map((id) => `measurement_ids=${encodeURIComponent(id)}`).join("&")}`, "thrust-measurements.csv")}>{t("Stiahnuť tabuľku CSV")}</button>{reportMeasurementIds.length === 1 && (() => { const id = reportMeasurementIds[0]; const selected = measurements.find((m) => m.id === id); return <><a className="quiet" href={`/api/admin/measurements/${id}/raw`}>{t("Stiahnuť raw TSV/GZIP")}</a><a className="quiet" href={`/api/admin/reports/measurements/${id}.pdf`}>{t("PDF report + graf")}</a><button className="quiet" onClick={() => { if (selected) { const blob = new Blob([JSON.stringify(selected, null, 2)], { type: "application/json" }); const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = `measurement-${id}.json`; link.click(); URL.revokeObjectURL(link.href); } }}>{t("Stiahnuť JSON analýzy")}</button></>; })()}</div>
                 </section>
                 {user.role === "superadmin" && <section className="panel quick-panel"><div className="eyebrow">{t("SUPERADMIN · KOMPLETNÝ EXPORT")}</div><h2>{t("Všetky pseudonymné dáta WebDB")}</h2><p className="muted">{t("ZIP obsahuje profily účastníkov, skupiny, definície testov, analýzy a všetky dostupné raw logy. Neobsahuje prihlasovacie účty.")}</p><button className="primary" onClick={() => void downloadProtectedFile("/api/admin/reports/all-data.zip", "thrust-webdb-full-export.zip", user.csrf_token)}>{t("Stiahnuť kompletný ZIP")}</button></section>}
@@ -955,7 +1078,7 @@ export function App() {
                 <section className="browser-panel">
                   <div className="browser-header"><div><div className="eyebrow">{t("KATALÓG TESTOV")}</div><h2>{t("Testy a konfigurácie")}</h2><p className="muted">{t("Každá verzia testu je samostatná, nemenná konfigurácia pre THRUST.")}</p></div></div>
                   <div className="browser-toolbar"><select value={testModeFilter} onChange={(event) => setTestModeFilter(event.target.value as "ALL" | MeasurementMode)} aria-label={t("Režim testu")}><option value="ALL">{t("Všetky programy")}</option><option value="SCOPE">{t("SCoPE")}</option><option value="SIMPLE">{t("SimPLE")}</option></select><input placeholder={t("Hľadať kód, názov alebo profil…")} value={testSearch} onChange={(event) => setTestSearch(event.target.value)} /></div>
-                  <div className="data-table test-table"><div className="data-table-head"><span>{t("Kód")}</span><span>{t("Názov")}</span><span>{t("Verzia")}</span><span>{t("Profil")}</span><span>{t("Stav / akcie")}</span></div>{filteredTests().map((test) => <div className="data-table-row" key={test.id}><strong className="test-code-cell"><ProgramWordmark mode={test.analysis_profile.toUpperCase().startsWith("SIMPLE") ? "SIMPLE" : "SCOPE"} compact />{test.test_code}</strong><span>{test.name}</span><span>{t("v")}{test.version}</span><span>{test.analysis_profile}</span><span className="row-actions"><span>{test.status}</span><button className="quiet compact" onClick={() => setSelectedTestId(test.id)}>{t("Otvoriť")}</button><button className="quiet compact" onClick={() => setEditingTestId(test.id)}>{t("Editovať")}</button>{user.role === "superadmin" && <button className="quiet compact danger" onClick={() => void deleteTestVersion(test)}>{t("Zmazať")}</button>}</span></div>)}</div>
+                  <div className="data-table test-table"><div className="data-table-head"><SortHeader label={t("Kód")} active={testSort.column === "code"} direction={testSort.direction} onClick={() => setTestSort((current) => nextSort(current, "code"))} /><SortHeader label={t("Názov")} active={testSort.column === "name"} direction={testSort.direction} onClick={() => setTestSort((current) => nextSort(current, "name"))} /><SortHeader label={t("Verzia")} active={testSort.column === "version"} direction={testSort.direction} onClick={() => setTestSort((current) => nextSort(current, "version"))} /><SortHeader label={t("Profil")} active={testSort.column === "profile"} direction={testSort.direction} onClick={() => setTestSort((current) => nextSort(current, "profile"))} /><span>{t("Stav / akcie")}</span></div>{filteredTests().map((test) => <div className="data-table-row" key={test.id}><strong className="test-code-cell"><ProgramWordmark mode={test.analysis_profile.toUpperCase().startsWith("SIMPLE") ? "SIMPLE" : "SCOPE"} compact />{test.test_code}</strong><span>{test.name}</span><span>{t("v")}{test.version}</span><span>{test.analysis_profile}</span><span className="row-actions"><span>{test.status}</span><button className="quiet compact" onClick={() => setSelectedTestId(test.id)}>{t("Otvoriť")}</button><button className="quiet compact" onClick={() => setEditingTestId(test.id)}>{t("Editovať")}</button>{user.role === "superadmin" && <button className="quiet compact danger" onClick={() => void deleteTestVersion(test)}>{t("Zmazať")}</button>}</span></div>)}</div>
                   {filteredTests().length === 0 && <div className="empty-list"><h2>{t("Žiadne testy")}</h2><p className="muted">{t("Filteru nezodpovedá žiadna verzia testu.")}</p></div>}
                 </section>
                 {selectedTestId && (() => {
@@ -969,12 +1092,17 @@ export function App() {
                   const firstRun = orderedMeasurements[0]?.started_at;
                   const lastRun = orderedMeasurements.at(-1)?.started_at;
                   const completedPeople = participants.filter((participant) => (byParticipant.get(participant.id) ?? []).length > 0).length;
-                  const orderedParticipants = [...participants].sort((a, b) => {
-                    const aRuns = byParticipant.get(a.id) ?? [];
-                    const bRuns = byParticipant.get(b.id) ?? [];
-                    const aLast = aRuns.length ? aRuns[aRuns.length - 1].started_at : "";
-                    const bLast = bRuns.length ? bRuns[bRuns.length - 1].started_at : "";
-                    return bLast.localeCompare(aLast) || a.participant_code.localeCompare(b.participant_code);
+                  const orderedParticipants = sortRows(participants, overviewParticipantSort, (participant, column) => {
+                    const runs = [...(byParticipant.get(participant.id) ?? [])].sort((a, b) => a.started_at.localeCompare(b.started_at));
+                    const latest = runs.at(-1);
+                    return ({
+                      code: participant.participant_code,
+                      attendance: runs.length ? 1 : 0,
+                      count: runs.length,
+                      first: runs[0]?.started_at,
+                      last: latest?.started_at,
+                      status: latest?.status ?? (participant.is_active ? "active" : "inactive"),
+                    }[column as "code" | "attendance" | "count" | "first" | "last" | "status"]);
                   });
                   return <section className="browser-detail detail-modal-open test-overview">
                     <div className="detail-header"><div><div className="eyebrow">{t("PREHĽAD TESTU")}</div><h2>{selected.name} {t("· v")}{selected.version}</h2><p className="muted">{selected.test_code} · {selected.analysis_profile}</p></div><button className="quiet compact" onClick={() => setSelectedTestId(null)}>{t("Zavrieť detail")}</button></div>
@@ -986,7 +1114,7 @@ export function App() {
                       <div><span>{t("Stav testu")}</span><strong>{selected.status} · {selected.is_active ? t("Aktívny") : t("Neaktívny")}</strong></div>
                     </div>
                     <div className="test-overview-list-heading"><div><h3>{t("Účastníci")}</h3><p className="muted">{t("Prehľad účasti a počtu vykonaní tohto testu.")}</p></div><span>{participants.length} {t("účastníkov.")}</span></div>
-                    <div className="test-participant-table-wrap"><table className="test-participant-table"><thead><tr><th>{t("Participant ID")}</th><th>{t("Účasť")}</th><th>{t("Počet meraní")}</th><th>{t("Prvé meranie")}</th><th>{t("Posledné meranie")}</th><th>{t("Stav účastníka")}</th></tr></thead><tbody>{orderedParticipants.map((participant) => {
+                    <div className="test-participant-table-wrap"><table className="test-participant-table"><thead><tr><th><SortHeader label={t("Participant ID")} active={overviewParticipantSort.column === "code"} direction={overviewParticipantSort.direction} onClick={() => setOverviewParticipantSort((current) => nextSort(current, "code"))} /></th><th><SortHeader label={t("Účasť")} active={overviewParticipantSort.column === "attendance"} direction={overviewParticipantSort.direction} onClick={() => setOverviewParticipantSort((current) => nextSort(current, "attendance"))} /></th><th><SortHeader label={t("Počet meraní")} active={overviewParticipantSort.column === "count"} direction={overviewParticipantSort.direction} onClick={() => setOverviewParticipantSort((current) => nextSort(current, "count"))} /></th><th><SortHeader label={t("Prvé meranie")} active={overviewParticipantSort.column === "first"} direction={overviewParticipantSort.direction} onClick={() => setOverviewParticipantSort((current) => nextSort(current, "first"))} /></th><th><SortHeader label={t("Posledné meranie")} active={overviewParticipantSort.column === "last"} direction={overviewParticipantSort.direction} onClick={() => setOverviewParticipantSort((current) => nextSort(current, "last"))} /></th><th><SortHeader label={t("Stav účastníka")} active={overviewParticipantSort.column === "status"} direction={overviewParticipantSort.direction} onClick={() => setOverviewParticipantSort((current) => nextSort(current, "status"))} /></th></tr></thead><tbody>{orderedParticipants.map((participant) => {
                       const runs = [...(byParticipant.get(participant.id) ?? [])].sort((a, b) => a.started_at.localeCompare(b.started_at));
                       const latest = runs[runs.length - 1];
                       return <tr key={participant.id}><td><strong>{participant.participant_code}</strong></td><td><span className={runs.length ? "test-attendance completed" : "test-attendance pending"}>{runs.length ? t("Vykonal") : t("Nevykonal")}</span></td><td>{runs.length || "—"}</td><td>{runs[0] ? formatDateTime(runs[0].started_at) : "—"}</td><td>{latest ? formatDateTime(latest.started_at) : "—"}</td><td>{latest ? latest.status : (participant.is_active ? t("Aktívny") : t("Neaktívny"))}</td></tr>;
@@ -1009,7 +1137,18 @@ export function App() {
                       <input type="date" value={measurementDateTo} onChange={(event) => setMeasurementDateTo(event.target.value)} aria-label={t("Do dátumu")} />
                     </div>
                     <div className="selection-toolbar"><label><input type="checkbox" checked={filteredMeasurements().length > 0 && filteredMeasurements().every((item) => selectedMeasurementIds.includes(item.id))} onChange={() => setSelectedMeasurementIds(filteredMeasurements().every((item) => selectedMeasurementIds.includes(item.id)) ? [] : filteredMeasurements().map((item) => item.id))} /> {t("Vybrať všetky")}</label>{user.role === "superadmin" && <button className="quiet compact danger" disabled={!selectedMeasurementIds.length} onClick={deleteSelectedMeasurements}>{t("Odstrániť vybrané")}</button>}</div>
-                    <div className="measurement-list">{filteredMeasurements().map((measurement) => <button className={selectedMeasurementId === measurement.id ? "measurement-item selected" : "measurement-item"} key={measurement.id} onClick={() => setSelectedMeasurementId(measurement.id)}><input type="checkbox" checked={selectedMeasurementIds.includes(measurement.id)} onChange={(event) => { event.stopPropagation(); toggleMeasurementSelection(measurement.id); }} onClick={(event) => event.stopPropagation()} /><span className="measurement-main"><strong>{participantCodeFor(measurement.participant_id)}</strong><span>{formatDateTime(measurement.started_at)} · {measurement.test_type} · {measurement.source_file_name ?? "raw"}</span><small>{formatBytes(measurement.raw_size_bytes)} {t("na serveri")}</small></span><span className="measurement-status">{measurement.raw_sha256 ? t("Archivované") : t("Bez raw dát")}</span></button>)}</div>
+                    <div className="measurement-list archive-measurement-list">
+                      <div className="measurement-list-head"><span aria-hidden="true"></span><SortHeader label={t("Participant ID")} active={measurementSort.column === "participant"} direction={measurementSort.direction} onClick={() => setMeasurementSort((current) => nextSort(current, "participant"))} /><SortHeader label={t("Dátum a čas")} active={measurementSort.column === "date"} direction={measurementSort.direction} onClick={() => setMeasurementSort((current) => nextSort(current, "date"))} /><SortHeader label={t("Test")} active={measurementSort.column === "test"} direction={measurementSort.direction} onClick={() => setMeasurementSort((current) => nextSort(current, "test"))} /><SortHeader label={t("Veľkosť súboru")} active={measurementSort.column === "size"} direction={measurementSort.direction} onClick={() => setMeasurementSort((current) => nextSort(current, "size"))} /><SortHeader label={t("Stav")} active={measurementSort.column === "status"} direction={measurementSort.direction} onClick={() => setMeasurementSort((current) => nextSort(current, "status"))} /></div>
+                      {sortRows(filteredMeasurements(), measurementSort, (m, column) => ({
+                        participant: participantCodeFor(m.participant_id), date: m.started_at,
+                        test: m.test_type + " " + (m.source_file_name ?? ""),
+                        size: m.raw_size_bytes ?? 0, status: m.raw_sha256 ? 1 : 0,
+                      }[column as "participant" | "date" | "test" | "size" | "status"])).map((measurement) => <button className={selectedMeasurementId === measurement.id ? "measurement-item selected" : "measurement-item"} key={measurement.id} onClick={() => setSelectedMeasurementId(measurement.id)}>
+                        <input type="checkbox" checked={selectedMeasurementIds.includes(measurement.id)} onChange={(event) => { event.stopPropagation(); toggleMeasurementSelection(measurement.id); }} onClick={(event) => event.stopPropagation()} />
+                        <strong>{participantCodeFor(measurement.participant_id)}</strong><span>{formatDateTime(measurement.started_at)}</span><span>{measurement.test_type} · {measurement.source_file_name ?? "raw"}</span>
+                        <small>{formatBytes(measurement.raw_size_bytes)}</small><span className="measurement-status">{measurement.raw_sha256 ? t("Archivované") : t("Bez raw dát")}</span>
+                      </button>)}
+                    </div>
                     {filteredMeasurements().length === 0 && <p className="muted empty-list">{t("Filteru nezodpovedajú žiadne archivované merania.")}</p>}
                   </section>
                   <section className={selectedMeasurementId ? "panel workbench-detail detail-modal-open" : "panel workbench-detail detail-modal-closed"}>
@@ -1619,6 +1758,7 @@ function StudentPortal({ user, onLogout }: { user: User; onLogout: () => Promise
   const [comparison, setComparison] = useState<StudentComparison | null>(null);
   const [mode, setMode] = useState<MeasurementMode>("SCOPE");
   const [selectedMeasurementId, setSelectedMeasurementId] = useState<string | null>(null);
+  const [studentMeasurementSort, setStudentMeasurementSort] = useState<SortState>({ column: "date", direction: "desc" });
   const [consents, setConsents] = useState<ConsentStatuses | null>(null);
   const [consentTexts, setConsentTexts] = useState<ConsentDocuments | null>(null);
   const [consentDialog, setConsentDialog] = useState<ConsentKind | null>(null);
@@ -1687,7 +1827,7 @@ function StudentPortal({ user, onLogout }: { user: User; onLogout: () => Promise
     return () => { active = false; };
   }, [mode]);
 
-  const visibleMeasurements = measurements.filter((item) => getMeasurementMode(item) === mode);
+  const visibleMeasurements = sortRows(measurements.filter((item) => getMeasurementMode(item) === mode), studentMeasurementSort, (item, column) => ({ test: item.test_type, status: item.status, date: item.started_at, size: item.raw_size_bytes ?? 0 }[column as "test" | "status" | "date" | "size"]));
   const selectedMeasurement = visibleMeasurements.find((item) => item.id === selectedMeasurementId);
 
   return <main className="student-shell">
@@ -1729,7 +1869,7 @@ function StudentPortal({ user, onLogout }: { user: User; onLogout: () => Promise
       </section>}
       <section className="panel">
         <div className="student-result-heading"><div><div className="eyebrow">{t("VÝSLEDKY")}</div><h2>{t("Moje merania ·")} {mode === "SCOPE" ? "SCoPE" : "SimPLE"}</h2></div><ModeSwitch value={mode} onChange={(selected) => { setMode(selected); setSelectedMeasurementId(null); }} /></div>
-        {visibleMeasurements.length ? <div className="table-wrap"><table><thead><tr><th>{t("Test")}</th><th>{t("Stav")}</th><th>{t("Dátum a čas")}</th><th>{t("Veľkosť súboru")}</th><th>{t("Výsledky")}</th></tr></thead><tbody>{visibleMeasurements.map((m) => <tr key={m.id}><td>{m.test_type}</td><td>{m.status}</td><td>{formatDateTime(m.started_at)}</td><td>{formatBytes(m.raw_size_bytes)}</td><td><button type="button" className="quiet compact" onClick={() => setSelectedMeasurementId(m.id === selectedMeasurementId ? null : m.id)}>{m.id === selectedMeasurementId ? t("Skryť") : t("Zobraziť")}</button></td></tr>)}</tbody></table></div> : <p className="muted">{t("Zatiaľ nemáš uložené meranie")} {mode === "SCOPE" ? "SCoPE" : "SimPLE"}.</p>}
+        {visibleMeasurements.length ? <div className="table-wrap"><table><thead><tr><th><SortHeader label={t("Test")} active={studentMeasurementSort.column === "test"} direction={studentMeasurementSort.direction} onClick={() => setStudentMeasurementSort((current) => nextSort(current, "test"))} /></th><th><SortHeader label={t("Stav")} active={studentMeasurementSort.column === "status"} direction={studentMeasurementSort.direction} onClick={() => setStudentMeasurementSort((current) => nextSort(current, "status"))} /></th><th><SortHeader label={t("Dátum a čas")} active={studentMeasurementSort.column === "date"} direction={studentMeasurementSort.direction} onClick={() => setStudentMeasurementSort((current) => nextSort(current, "date"))} /></th><th><SortHeader label={t("Veľkosť súboru")} active={studentMeasurementSort.column === "size"} direction={studentMeasurementSort.direction} onClick={() => setStudentMeasurementSort((current) => nextSort(current, "size"))} /></th><th>{t("Výsledky")}</th></tr></thead><tbody>{visibleMeasurements.map((m) => <tr key={m.id}><td>{m.test_type}</td><td>{m.status}</td><td>{formatDateTime(m.started_at)}</td><td>{formatBytes(m.raw_size_bytes)}</td><td><button type="button" className="quiet compact" onClick={() => setSelectedMeasurementId(m.id === selectedMeasurementId ? null : m.id)}>{m.id === selectedMeasurementId ? t("Skryť") : t("Zobraziť")}</button></td></tr>)}</tbody></table></div> : <p className="muted">{t("Zatiaľ nemáš uložené meranie")} {mode === "SCOPE" ? "SCoPE" : "SimPLE"}.</p>}
         {selectedMeasurement && <div className="student-result-detail"><h3>{selectedMeasurement.test_type} · {formatDateTime(selectedMeasurement.started_at)}</h3>{mode === "SIMPLE" ? <SimpleAnalysisView analysis={selectedMeasurement.analysis_data ?? {}} /> : selectedMeasurement.analysis_data?.normalized_step_response ? <><ResponseChart data={selectedMeasurement.analysis_data.normalized_step_response} /><ResponseMetrics data={selectedMeasurement.analysis_data.normalized_step_response} /></> : <p className="muted">{t("Toto meranie nemá uloženú analýzu odozvy.")}</p>}</div>}
       </section>
       <section className="panel">

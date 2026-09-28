@@ -1068,3 +1068,95 @@ header > .actions, .registration-header > .actions { margin-top: 0; align-items:
 .welcome-subsection { padding: 14px; margin: 12px 0; border: 1px solid #29415a; }
 .welcome-check { display: flex; align-items: center; gap: 8px; margin: 8px 0; }
 .welcome-check small { margin-left: auto; color: #9db0c4; }
+
+
+/* Fast, transform-only motion and pointer-drag scrolling */
+@keyframes thrust-enter {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes thrust-modal-enter {
+  from { opacity: 0; transform: translateY(8px) scale(.99); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.welcome-header { animation: thrust-enter 220ms ease-out both; }
+.welcome-blocks > * { animation: thrust-enter 190ms ease-out both; }
+.welcome-blocks > *:nth-child(2) { animation-delay: 20ms; }
+.welcome-blocks > *:nth-child(3) { animation-delay: 40ms; }
+.welcome-blocks > *:nth-child(4) { animation-delay: 60ms; }
+.welcome-blocks > *:nth-child(5) { animation-delay: 80ms; }
+.welcome-blocks > *:nth-child(n+6) { animation-delay: 90ms; }
+.data-table-row, .measurement-item, .test-participant-table tbody tr {
+  animation: thrust-enter 140ms ease-out both;
+}
+.data-table-row:nth-child(2), .measurement-item:nth-child(2), .test-participant-table tbody tr:nth-child(2) { animation-delay: 15ms; }
+.data-table-row:nth-child(3), .measurement-item:nth-child(3), .test-participant-table tbody tr:nth-child(3) { animation-delay: 30ms; }
+.data-table-row:nth-child(4), .measurement-item:nth-child(4), .test-participant-table tbody tr:nth-child(4) { animation-delay: 45ms; }
+.data-table-row:nth-child(5), .measurement-item:nth-child(5), .test-participant-table tbody tr:nth-child(5) { animation-delay: 60ms; }
+.backdrop > *, .measurement-context-window, .chart-expand-window {
+  animation: thrust-modal-enter 170ms cubic-bezier(.2,.75,.25,1) both;
+}
+.sort-header {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  padding: 2px 0;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  font-weight: inherit;
+  letter-spacing: inherit;
+  line-height: inherit;
+  text-align: left;
+  text-transform: inherit;
+  cursor: pointer;
+}
+.sort-header span { color: #45d5ff; font-size: .95em; }
+.sort-header:hover, .sort-header:focus-visible, .sort-header.active { color: #d8f5ff; }
+.data-table-head .sort-header { overflow: hidden; }
+.data-table-head .sort-header span { flex: 0 0 auto; }
+.test-participant-table th .sort-header { white-space: nowrap; }
+.measurement-list-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: grid;
+  gap: 8px;
+  align-items: center;
+  min-height: 34px;
+  padding: 5px 8px;
+  color: #7890a8;
+  border-bottom: 1px solid var(--line);
+  background: #0a1726;
+  font-size: .68rem;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+.report-measurement-list .measurement-item {
+  grid-template-columns: 22px minmax(85px, .7fr) minmax(120px, 1fr) minmax(130px, 1fr) minmax(105px, .8fr);
+}
+.report-measurement-list .measurement-list-head {
+  grid-template-columns: 22px minmax(85px, .7fr) minmax(120px, 1fr) minmax(130px, 1fr) minmax(105px, .8fr);
+}
+.archive-measurement-list .measurement-item {
+  grid-template-columns: 22px minmax(80px, .65fr) minmax(135px, 1fr) minmax(180px, 1.4fr) minmax(90px, .65fr) minmax(105px, .75fr);
+}
+.archive-measurement-list .measurement-list-head {
+  grid-template-columns: 22px minmax(80px, .65fr) minmax(135px, 1fr) minmax(180px, 1.4fr) minmax(90px, .65fr) minmax(105px, .75fr);
+}
+.report-measurement-list, .archive-measurement-list { overflow: auto; }
+.report-measurement-list .measurement-item, .archive-measurement-list .measurement-item { text-align: left; }
+.drag-scroll { cursor: grab; scrollbar-width: thin; }
+.drag-scroll.is-dragging { cursor: grabbing; user-select: none; scroll-behavior: auto !important; }
+.participant-table, .test-table, .trend-data-table { overflow-x: auto; scrollbar-width: thin; }
+.table-wrap, .test-participant-table-wrap { scrollbar-width: thin; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: .01ms !important;
+  }
+}
