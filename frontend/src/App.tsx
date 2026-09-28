@@ -1,6 +1,6 @@
 import { t, tf, serverMessage } from "./i18n";
 import { LanguageSwitcher, useLanguage } from "./LanguageContext";
-import { ChangeEvent, FormEvent, useEffect, useRef, useState } from "react";
+import { ChangeEvent, FormEvent, useEffect, useLayoutEffect, useRef, useState } from "react";
 import thrustLogo from "./img/THRUST_logo_white.svg";
 import lfSkLogo from "./img/lf_sk.svg";
 import lfEnLogo from "./img/lf_en.svg";
@@ -349,9 +349,52 @@ export function App() {
     } catch { return ["overview", "participants", "groups", "trends", "reports", "tests", "measurements", "welcome"]; }
   });
   const [draggedNavItem, setDraggedNavItem] = useState<AdminSection | null>(null);
+  const [dropTargetNavItem, setDropTargetNavItem] = useState<AdminSection | null>(null);
+  const navListRef = useRef<HTMLElement | null>(null);
+  const previousNavRects = useRef<Map<string, DOMRect> | null>(null);
 
   useEffect(() => { localStorage.setItem("thrust-webdb-sidebar-collapsed", String(sidebarCollapsed)); }, [sidebarCollapsed]);
   useEffect(() => { localStorage.setItem("thrust-webdb-nav-order", JSON.stringify(navOrder)); }, [navOrder]);
+  useLayoutEffect(() => {
+    const workspace = document.querySelector(".app-main > .workspace");
+    if (!workspace) return;
+    const rows = workspace.querySelectorAll<HTMLElement>(".data-table-row, .measurement-item, .test-participant-table tbody tr");
+    const positions = new Map<Element, number>();
+    rows.forEach((row) => {
+      const parent = row.parentElement;
+      if (!parent) return;
+      const index = positions.get(parent) ?? 0;
+      positions.set(parent, index + 1);
+      row.style.animationDelay = `${Math.min(index * 28, 560)}ms`;
+    });
+  }, [activeSection, participants, adminAccounts, measurements, tests, groups, trendData]);
+  useLayoutEffect(() => {
+    const nav = navListRef.current;
+    const before = previousNavRects.current;
+    previousNavRects.current = null;
+    if (!nav || !before) return;
+    const items = [...nav.querySelectorAll<HTMLElement>("[data-nav-id]")];
+    const moved: HTMLElement[] = [];
+    items.forEach((item) => {
+      const oldRect = before.get(item.dataset.navId ?? "");
+      if (!oldRect) return;
+      const rect = item.getBoundingClientRect();
+      const dx = oldRect.left - rect.left;
+      const dy = oldRect.top - rect.top;
+      if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return;
+      item.style.transition = "none";
+      item.style.transform = `translate(${dx}px, ${dy}px)`;
+      moved.push(item);
+    });
+    if (!moved.length) return;
+    void nav.offsetHeight;
+    const frame = requestAnimationFrame(() => moved.forEach((item) => {
+      item.style.transition = "transform 280ms cubic-bezier(.2,.75,.25,1)";
+      item.style.transform = "";
+    }));
+    const timeout = window.setTimeout(() => moved.forEach((item) => { item.style.transition = ""; }), 310);
+    return () => { cancelAnimationFrame(frame); window.clearTimeout(timeout); };
+  }, [navOrder]);
 
   useEffect(() => {
     setError("");
@@ -910,6 +953,8 @@ export function App() {
   const visibleNavItems = navOrder.map((id) => navItems.find((item) => item.id === id)!).filter((item) => item.id !== "welcome" || user?.role === "admin" || user?.role === "superadmin");
   function moveNavItem(target: AdminSection) {
     if (!draggedNavItem || draggedNavItem === target) return;
+    const nav = navListRef.current;
+    previousNavRects.current = nav ? new Map([...nav.querySelectorAll<HTMLElement>("[data-nav-id]")].map((item) => [item.dataset.navId ?? "", item.getBoundingClientRect()])) : null;
     setNavOrder((current) => {
       const next = [...current];
       const from = next.indexOf(draggedNavItem);
@@ -938,8 +983,8 @@ export function App() {
         <div className={sidebarCollapsed ? "app-shell sidebar-collapsed" : "app-shell"}>
           <aside className="sidebar">
             <div className="sidebar-brand-row"><Brand /><button type="button" className="sidebar-toggle" aria-expanded={!sidebarCollapsed} aria-label={sidebarCollapsed ? t("Rozbaliť menu") : t("Zbaliť menu")} title={sidebarCollapsed ? t("Rozbaliť menu") : t("Zbaliť menu")} onClick={() => setSidebarCollapsed((collapsed) => !collapsed)}>{sidebarCollapsed ? "»" : "«"}</button></div>
-            <nav className="side-nav" aria-label={t("Administrácia")}>
-              {visibleNavItems.map((item) => <button key={item.id} type="button" draggable onDragStart={(event) => { setDraggedNavItem(item.id); event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("text/plain", item.id); }} onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = "move"; }} onDrop={(event) => { event.preventDefault(); moveNavItem(item.id); }} onDragEnd={() => setDraggedNavItem(null)} title={sidebarCollapsed ? item.label : t("Potiahni na zmenu poradia") + ` · ${item.label}`} aria-label={item.label} className={`nav-item${activeSection === item.id ? " active" : ""}${draggedNavItem === item.id ? " nav-item-dragging" : ""}`} onClick={() => setActiveSection(item.id)}><span className="nav-icon" aria-hidden="true">{item.icon}</span><span className="nav-label">{item.label}</span></button>)}
+            <nav ref={navListRef} className="side-nav" aria-label={t("Administrácia")}>
+              {visibleNavItems.map((item) => <button key={item.id} data-nav-id={item.id} type="button" draggable onDragStart={(event) => { setDraggedNavItem(item.id); event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("text/plain", item.id); }} onDragEnter={() => setDropTargetNavItem(item.id)} onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = "move"; setDropTargetNavItem(item.id); }} onDragLeave={(event) => { if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) setDropTargetNavItem(null); }} onDrop={(event) => { event.preventDefault(); moveNavItem(item.id); setDropTargetNavItem(null); }} onDragEnd={() => { setDraggedNavItem(null); setDropTargetNavItem(null); }} title={sidebarCollapsed ? item.label : t("Potiahni na zmenu poradia") + ` · ${item.label}`} aria-label={item.label} className={`nav-item${activeSection === item.id ? " active" : ""}${draggedNavItem === item.id ? " nav-item-dragging" : ""}${dropTargetNavItem === item.id && draggedNavItem !== item.id ? " nav-item-drop-target" : ""}`} onClick={() => setActiveSection(item.id)}><span className="nav-icon" aria-hidden="true">{item.icon}</span><span className="nav-label">{item.label}</span></button>)}
             </nav>
             <div className="sidebar-footer"><span className="sidebar-user">{user.username} · {user.role}</span><button className="quiet" onClick={logout} title={t("Odhlásiť")}>{sidebarCollapsed ? "↪" : t("Odhlásiť")}</button></div>
           </aside>

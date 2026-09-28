@@ -108,9 +108,11 @@ header > .actions, .registration-header > .actions { margin-top: 0; align-items:
 .nav-item:active { cursor: grabbing; }
 .nav-item .nav-icon { flex: 0 0 20px; width: 20px; color: #6e8ba8; font-size: 18px; text-align: center; }
 .nav-label { min-width: 0; }
-.nav-item-dragging { opacity: .38; }
+.side-nav .nav-item { transition: margin 180ms ease, min-height 180ms ease, padding 180ms ease, background-color 180ms ease, opacity 180ms ease, transform 280ms cubic-bezier(.2,.75,.25,1); }
+.nav-item-dragging { min-height: 8px; height: 8px; margin-block: 3px; padding-block: 0; overflow: hidden; opacity: .15; }
+.nav-item-drop-target { margin-top: 24px; }
 .nav-item:hover, .nav-item.active { border-color: #234761; color: #eef5ff; background: #10253a; }
-.nav-item.active span { color: #45d5ff; }
+.nav-item.active .nav-icon { color: #45d5ff; }
 .sidebar-footer { display: grid; gap: 10px; margin-top: auto; padding: 14px 10px 0; border-top: 1px solid var(--line); color: #7890a8; font-size: 12px; }
 .sidebar-footer .quiet { justify-self: start; padding: 7px 11px; }
 .app-main { min-width: 0; min-height: 0; height: 100%; flex: 1; display: flex; flex-direction: column; }
@@ -1173,6 +1175,15 @@ header > .actions, .registration-header > .actions { margin-top: 0; align-items:
 .drag-scroll.is-dragging { cursor: grabbing; user-select: none; scroll-behavior: auto !important; }
 .participant-table, .test-table, .trend-data-table { overflow-x: auto; scrollbar-width: thin; }
 .table-wrap, .test-participant-table-wrap { scrollbar-width: thin; }
+
+/* Keep the workspace full width as the sidebar changes size. */
+.app-main > .workspace { width: 100%; max-width: none; }
+
+/* Compact page title bar to leave more of the viewport for data. */
+.app-main > .topbar { min-height: 60px; padding: 8px clamp(18px, 3vw, 42px); }
+.app-main > .topbar h1 { margin: 2px 0 0; font-size: clamp(22px, 2.2vw, 30px); line-height: 1.1; letter-spacing: -.025em; }
+.app-main > .topbar .eyebrow { font-size: 10px; letter-spacing: .1em; }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: .01ms !important;
@@ -1180,4 +1191,8 @@ header > .actions, .registration-header > .actions { margin-top: 0; align-items:
     scroll-behavior: auto !important;
     transition-duration: .01ms !important;
   }
+}
+@media (max-width: 800px) {
+  .app-main > .topbar { min-height: 58px; padding: 8px 14px; }
+  .app-main > .topbar h1 { font-size: clamp(20px, 4vw, 26px); }
 }
