@@ -10,6 +10,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.api.dependencies import AuthContext, require_session
 from app.core.config import settings
+from app.db.base import Base
 from app.db.session import get_db
 from app.main import app
 from app.models import WelcomePage
@@ -20,7 +21,7 @@ async def test_welcome_draft_publish_permissions_and_images(tmp_path, monkeypatc
     monkeypatch.setattr(settings, "measurement_storage_path", str(tmp_path))
     engine = create_async_engine("sqlite+aiosqlite://", poolclass=StaticPool)
     async with engine.begin() as connection:
-        await connection.run_sync(WelcomePage.__table__.create)
+        await connection.run_sync(Base.metadata.create_all)
     factory = async_sessionmaker(engine, expire_on_commit=False)
 
     async def db():
@@ -48,7 +49,7 @@ async def test_welcome_draft_publish_permissions_and_images(tmp_path, monkeypatc
             assert (await client.get("/api/public/welcome?lang=sk")).json()["blocks"] is None
             assert (await client.post("/api/admin/welcome/publish?lang=sk", json={"revision": 0}, headers=headers)).status_code == 409
             assert (await client.post("/api/admin/welcome/publish?lang=sk", json={"revision": 1}, headers=headers)).status_code == 200
-            assert (await client.get("/api/public/welcome?lang=sk")).json()["blocks"] == blocks
+            assert (await client.get("/api/public/welcome?lang=sk")).json()["blocks"] == [blocks[0], {"id": "metrics", "type": "metrics", "items": ["participants", "measurements", "active_tests"], "trends": []}]
             assert (await client.get("/api/public/welcome?lang=en")).json()["blocks"] is None
             invalid = [{"id": "table", "type": "table", "title": "Bad", "columns": ["A", "B"], "rows": [["short"]]}]
             assert (await client.put("/api/admin/welcome/draft?lang=sk", json={"revision": 2, "blocks": invalid}, headers=headers)).status_code == 422

@@ -8,6 +8,11 @@ class Block(BaseModel):
     id: str = Field(pattern=r"^[a-zA-Z0-9_-]{1,64}$")
 
 
+class Eyebrow(Block):
+    type: Literal["eyebrow"]
+    text: str = Field(max_length=180)
+
+
 class Heading(Block):
     type: Literal["heading"]
     text: str = Field(max_length=180)
@@ -33,48 +38,60 @@ class ImageBlock(Block):
     alt: str = Field(min_length=1, max_length=180)
 
 
+class MetricTrend(BaseModel):
+    metric: str = Field(max_length=100, pattern=r"^[a-zA-Z0-9_.-]*$")
+    axis: Literal["month", "test"] = "month"
+    statistic: Literal["mean", "median"] = "mean"
+
+
 class Metrics(Block):
     type: Literal["metrics"]
+    items: list[Literal["participants", "measurements", "active_tests"]] = Field(default_factory=lambda: ["participants", "measurements", "active_tests"], max_length=3)
+    trends: list[MetricTrend] = Field(default_factory=list, max_length=4)
 
 
-class Table(Block):
-    type: Literal["table"]
+class DataChart(Block):
+    type: Literal["data_chart"]
     title: str = Field(max_length=180)
-    columns: list[str] = Field(min_length=2, max_length=6)
-    rows: list[list[str]] = Field(max_length=30)
+    metric: str = Field(max_length=100, pattern=r"^[a-zA-Z0-9_.-]*$")
+    axis: Literal["month", "test"] = "month"
+    statistic: Literal["mean", "median"] = "mean"
+    style: Literal["line", "bar"] = "line"
+
+
+class DataTable(Block):
+    type: Literal["data_table"]
+    title: str = Field(max_length=180)
+    metrics: list[str] = Field(max_length=8)
+    axis: Literal["month", "test"] = "month"
+    statistic: Literal["mean", "median"] = "mean"
 
     @model_validator(mode="after")
-    def valid_cells(self):
-        if any(len(cell) > 120 for cell in self.columns):
-            raise ValueError("Table headings are too long")
-        if any(len(row) != len(self.columns) or any(len(cell) > 300 for cell in row) for row in self.rows):
-            raise ValueError("Table row width or cell length is invalid")
+    def valid_metric_keys(self):
+        if any(len(key) > 100 or not all(char.isalnum() or char in "_.-" for char in key) for key in self.metrics):
+            raise ValueError("Invalid metric key")
+        if len(set(self.metrics)) != len(self.metrics):
+            raise ValueError("Metric keys must be unique")
         return self
 
 
-class ChartPoint(BaseModel):
-    label: str = Field(max_length=80)
-    value: float = Field(ge=-1e9, le=1e9, allow_inf_nan=False)
-
-
-class Chart(Block):
-    type: Literal["chart"]
-    title: str = Field(max_length=180)
-    unit: str = Field(default="", max_length=40)
-    style: Literal["line", "bar"] = "line"
-    points: list[ChartPoint] = Field(min_length=2, max_length=30)
-
-
-class Research(Block):
-    type: Literal["research"]
-    title: str = Field(max_length=180)
-    value: str = Field(max_length=80)
-    unit: str = Field(default="", max_length=40)
-    source: str = Field(default="", max_length=240)
+class Paper(Block):
+    type: Literal["paper"]
+    title: str = Field(min_length=1, max_length=500)
+    authors: list[str] = Field(min_length=1, max_length=30)
+    journal: str = Field(default="", max_length=240)
+    publisher: str = Field(default="", max_length=240)
+    year: int | None = Field(default=None, ge=1600, le=2200)
+    volume: str = Field(default="", max_length=60)
+    issue: str = Field(default="", max_length=60)
+    pages: str = Field(default="", max_length=80)
+    doi: str = Field(default="", max_length=180)
+    url: str = Field(default="", max_length=500)
+    abstract: str = Field(default="", max_length=3000)
 
 
 WelcomeBlock = Annotated[
-    Heading | Paragraph | Banner | ImageBlock | Metrics | Table | Chart | Research,
+    Eyebrow | Heading | Paragraph | Banner | ImageBlock | Metrics | DataChart | DataTable | Paper,
     Field(discriminator="type"),
 ]
 
