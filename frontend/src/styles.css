@@ -978,5 +978,22 @@ header > .actions, .registration-header > .actions { margin-top: 0; align-items:
 .trend-data-table .data-table-head, .trend-data-table .data-table-row { grid-template-columns: minmax(140px, 1.2fr) minmax(120px, 1fr) repeat(4, minmax(80px, .7fr)); }
 .report-actions { flex-wrap: wrap; justify-content: flex-start; }
 .report-actions a { text-decoration: none; }
+.test-overview-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(165px, 1fr)); gap: 10px; margin: 18px 0 24px; }
+.test-overview-stats > div { display: grid; gap: 8px; min-width: 0; padding: 14px; border: 1px solid var(--line); border-radius: 9px; background: rgba(255,255,255,.025); }
+.test-overview-stats span { color: #8ea5bc; font-size: .7rem; text-transform: uppercase; letter-spacing: .07em; }
+.test-overview-stats strong { overflow-wrap: anywhere; font-size: .95rem; }
+.test-overview-list-heading { display: flex; align-items: end; justify-content: space-between; gap: 12px; margin: 22px 0 10px; }
+.test-overview-list-heading h3 { margin: 0 0 4px; }
+.test-overview-list-heading p { margin: 0; font-size: .82rem; }
+.test-overview-list-heading > span { color: #8ea5bc; font-size: .82rem; }
+.test-participant-table-wrap { overflow-x: auto; border: 1px solid var(--line); }
+.test-participant-table { width: 100%; border-collapse: collapse; min-width: 760px; font-size: .82rem; }
+.test-participant-table th, .test-participant-table td { padding: 11px 12px; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap; }
+.test-participant-table th { color: #8ea5bc; font-size: .68rem; text-transform: uppercase; letter-spacing: .06em; background: rgba(255,255,255,.025); }
+.test-participant-table tbody tr:last-child td { border-bottom: 0; }
+.test-participant-table tbody tr:hover { background: rgba(255,255,255,.03); }
+.test-attendance { display: inline-flex; padding: 4px 8px; border-radius: 999px; font-size: .72rem; font-weight: 700; }
+.test-attendance.completed { color: #8ce1c3; background: rgba(40,170,125,.14); }
+.test-attendance.pending { color: #c0ccda; background: rgba(140,160,180,.13); }
 @media (max-width: 760px) { .trend-select-grid { grid-template-columns: 1fr; } .trend-data-table { overflow-x: auto; } .trend-data-table .data-table-head, .trend-data-table .data-table-row { min-width: 800px; } }
 @media (max-width: 900px) { .simple-editor-layout { grid-template-columns: 1fr; } .simple-scene-preview { min-height: 220px; } }

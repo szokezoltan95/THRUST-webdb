@@ -932,7 +932,41 @@ export function App() {
                   <div className="data-table test-table"><div className="data-table-head"><span>{t("Kód")}</span><span>{t("Názov")}</span><span>{t("Verzia")}</span><span>{t("Profil")}</span><span>{t("Stav / akcie")}</span></div>{filteredTests().map((test) => <div className="data-table-row" key={test.id}><strong className="test-code-cell"><ProgramWordmark mode={test.analysis_profile.toUpperCase().startsWith("SIMPLE") ? "SIMPLE" : "SCOPE"} compact />{test.test_code}</strong><span>{test.name}</span><span>{t("v")}{test.version}</span><span>{test.analysis_profile}</span><span className="row-actions"><span>{test.status}</span><button className="quiet compact" onClick={() => setSelectedTestId(test.id)}>{t("Otvoriť")}</button><button className="quiet compact" onClick={() => setEditingTestId(test.id)}>{t("Editovať")}</button>{user.role === "superadmin" && <button className="quiet compact danger" onClick={() => void deleteTestVersion(test)}>{t("Zmazať")}</button>}</span></div>)}</div>
                   {filteredTests().length === 0 && <div className="empty-list"><h2>{t("Žiadne testy")}</h2><p className="muted">{t("Filteru nezodpovedá žiadna verzia testu.")}</p></div>}
                 </section>
-                {selectedTestId && (() => { const selected = tests.find((test) => test.id === selectedTestId); return selected ? <section className={selectedTestId ? "browser-detail detail-modal-open" : "browser-detail detail-modal-closed"}><div className="detail-header"><div><div className="eyebrow">{t("KONFIGURÁCIA TESTU")}</div><h2>{selected.name} {t("· v")}{selected.version}</h2></div><button className="quiet compact" onClick={() => setSelectedTestId(null)}>{t("Zavrieť detail")}</button></div><div className="detail-grid"><div><span>{t("Kód")}</span><strong>{selected.test_code}</strong></div><div><span>{t("Profil")}</span><strong>{selected.analysis_profile}</strong></div><div><span>{t("Stav")}</span><strong>{selected.status}</strong></div><div><span>{t("Aktívny")}</span><strong>{selected.is_active ? t("Áno") : t("Nie")}</strong></div></div><pre className="config-preview">{JSON.stringify(selected.configuration, null, 2)}</pre></section> : null })()}
+                {selectedTestId && (() => {
+                  const selected = tests.find((test) => test.id === selectedTestId);
+                  if (!selected) return null;
+                  const legacyTestType = `${selected.test_code} v${selected.version}`.toLowerCase();
+                  const testMeasurements = measurements.filter((measurement) => measurement.test_definition_id === selected.id || (!measurement.test_definition_id && measurement.test_type.toLowerCase() === legacyTestType));
+                  const byParticipant = new Map<string, Measurement[]>();
+                  testMeasurements.forEach((measurement) => byParticipant.set(measurement.participant_id, [...(byParticipant.get(measurement.participant_id) ?? []), measurement]));
+                  const orderedMeasurements = [...testMeasurements].sort((a, b) => a.started_at.localeCompare(b.started_at));
+                  const firstRun = orderedMeasurements[0]?.started_at;
+                  const lastRun = orderedMeasurements.at(-1)?.started_at;
+                  const completedPeople = participants.filter((participant) => (byParticipant.get(participant.id) ?? []).length > 0).length;
+                  const orderedParticipants = [...participants].sort((a, b) => {
+                    const aRuns = byParticipant.get(a.id) ?? [];
+                    const bRuns = byParticipant.get(b.id) ?? [];
+                    const aLast = aRuns.length ? aRuns[aRuns.length - 1].started_at : "";
+                    const bLast = bRuns.length ? bRuns[bRuns.length - 1].started_at : "";
+                    return bLast.localeCompare(aLast) || a.participant_code.localeCompare(b.participant_code);
+                  });
+                  return <section className="browser-detail detail-modal-open test-overview">
+                    <div className="detail-header"><div><div className="eyebrow">{t("PREHĽAD TESTU")}</div><h2>{selected.name} {t("· v")}{selected.version}</h2><p className="muted">{selected.test_code} · {selected.analysis_profile}</p></div><button className="quiet compact" onClick={() => setSelectedTestId(null)}>{t("Zavrieť detail")}</button></div>
+                    <div className="test-overview-stats">
+                      <div><span>{t("Vykonania spolu")}</span><strong>{testMeasurements.length}</strong></div>
+                      <div><span>{t("Účastníci s meraním")}</span><strong>{completedPeople} / {participants.length}</strong></div>
+                      <div><span>{t("Prvé vykonanie")}</span><strong>{firstRun ? formatDateTime(firstRun) : "—"}</strong></div>
+                      <div><span>{t("Posledné vykonanie")}</span><strong>{lastRun ? formatDateTime(lastRun) : "—"}</strong></div>
+                      <div><span>{t("Stav testu")}</span><strong>{selected.status} · {selected.is_active ? t("Aktívny") : t("Neaktívny")}</strong></div>
+                    </div>
+                    <div className="test-overview-list-heading"><div><h3>{t("Účastníci")}</h3><p className="muted">{t("Prehľad účasti a počtu vykonaní tohto testu.")}</p></div><span>{participants.length} {t("účastníkov.")}</span></div>
+                    <div className="test-participant-table-wrap"><table className="test-participant-table"><thead><tr><th>{t("Participant ID")}</th><th>{t("Účasť")}</th><th>{t("Počet meraní")}</th><th>{t("Prvé meranie")}</th><th>{t("Posledné meranie")}</th><th>{t("Stav účastníka")}</th></tr></thead><tbody>{orderedParticipants.map((participant) => {
+                      const runs = [...(byParticipant.get(participant.id) ?? [])].sort((a, b) => a.started_at.localeCompare(b.started_at));
+                      const latest = runs[runs.length - 1];
+                      return <tr key={participant.id}><td><strong>{participant.participant_code}</strong></td><td><span className={runs.length ? "test-attendance completed" : "test-attendance pending"}>{runs.length ? t("Vykonal") : t("Nevykonal")}</span></td><td>{runs.length || "—"}</td><td>{runs[0] ? formatDateTime(runs[0].started_at) : "—"}</td><td>{latest ? formatDateTime(latest.started_at) : "—"}</td><td>{latest ? latest.status : (participant.is_active ? t("Aktívny") : t("Neaktívny"))}</td></tr>;
+                    })}</tbody></table></div>
+                  </section>;
+                })()}
                 <TestCreator onCreated={(test) => { setTests((current) => [...current, test]); setEditingTestId(test.id); }} />
                 {editingTestId && (() => { const editing = tests.find((test) => test.id === editingTestId); if (!editing) return null; const onSaved = (saved: TestDefinition) => { setTests((current) => current.map((item) => item.id === saved.id ? saved : item)); setEditingTestId(null); }; return editing.analysis_profile.toUpperCase().startsWith("SIMPLE") ? <SimpleTestEditor test={editing} csrfToken={user.csrf_token} onClose={() => setEditingTestId(null)} onSaved={onSaved} /> : <TestEditor test={editing} onClose={() => setEditingTestId(null)} onSaved={onSaved} />; })()}
               </>}

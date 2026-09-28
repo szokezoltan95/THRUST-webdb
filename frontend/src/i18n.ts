@@ -116,6 +116,7 @@ const english: Record<string, string> = {
   "Normalizovaná odozva nie je dostupná.": "Normalized response is unavailable.", "Čas (s)": "Time (s)",
   "otvoriť ↗": "open ↗", "Detail grafu": "Chart details", "· normalizovaná odozva": "· normalized response",
   "Katalóg testov": "Test catalog", "Každá verzia testu je samostatná, nemenná konfigurácia pre THRUST.": "Each test version is a separate, immutable configuration for THRUST.",
+  "PREHĽAD TESTU": "TEST OVERVIEW", "Vykonania spolu": "Total attempts", "Účastníci s meraním": "Participants tested", "Prvé vykonanie": "First attempt", "Posledné vykonanie": "Last attempt", "Stav testu": "Test status", "Prehľad účasti a počtu vykonaní tohto testu.": "Participation and attempt counts for this test.", "Účasť": "Participation", "Vykonal": "Completed", "Nevykonal": "Not completed",
   "Všetky programy": "All programs", "Všetky testy": "All tests", "Hľadať kód, názov alebo profil…": "Search code, name or profile…",
   "Filteru nezodpovedá žiadna verzia testu.": "No test versions match the filter.", "Žiadne testy": "No tests",
   "Nový merací režim": "New measurement mode", "Vytvor definíciu testu": "Create test definition",
