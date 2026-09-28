@@ -15,8 +15,8 @@ def test_metric_map_reads_simple_and_scope_metrics_and_ignores_non_finite():
             "ELEV": {"metrics": {"overshoot_pct": 3.0}},
         }},
     })
-    assert result == {"simple_error": 1.25, "AILE.rise_time_s": 0.4,
-                      "AILE.step_count": 5.0, "ELEV.overshoot_pct": 3.0}
+    assert result == {"simple_error": 1.25, "LX.rise_time_s": 0.4,
+                      "LX.step_count": 5.0, "LY.overshoot_pct": 3.0}
 
 
 class _Scalars:

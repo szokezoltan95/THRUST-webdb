@@ -183,7 +183,7 @@ export function App() {
   "timeout_s": 5.0,
   "hold_time_s": 1.0,
   "joystick_test_required": true,
-  "axes": ["AILE", "ELEV", "THRO", "RUDD"],
+  "axes": ["LX", "LY", "RY", "RX"],
   "tasks": [],
   "visual": {
     "screen_bg": "#000000",
@@ -1097,8 +1097,12 @@ type StepMetrics = {
   mean_std: number | null;
 };
 
-const RESPONSE_CHANNELS = ["AILE", "ELEV", "THRO", "RUDD"] as const;
-const RESPONSE_COLORS: Record<string, string> = { AILE: "#ff6878", ELEV: "#45d5ff", THRO: "#ffc857", RUDD: "#9d8cff" };
+const RESPONSE_CHANNELS = ["LX", "LY", "RY", "RX"] as const;
+const LEGACY_RESPONSE_CHANNEL: Record<(typeof RESPONSE_CHANNELS)[number], string> = { LX: "AILE", LY: "ELEV", RY: "THRO", RX: "RUDD" };
+const RESPONSE_COLORS: Record<string, string> = { LX: "#ff6878", LY: "#45d5ff", RY: "#ffc857", RX: "#9d8cff" };
+function responseChannel(channels: NormalizedResponse["channels"], axis: (typeof RESPONSE_CHANNELS)[number]) {
+  return channels?.[axis] ?? channels?.[LEGACY_RESPONSE_CHANNEL[axis]];
+}
 
 function calculateStepMetrics(channel: NormalizedChannel | undefined, time: number[]): StepMetrics {
   const values = channel?.mean ?? [];
@@ -1180,7 +1184,7 @@ function AllMeasurementStats({ measurements, mode }: { measurements: Measurement
   const aggregate = RESPONSE_CHANNELS.map((axis) => {
     const values = measurements.flatMap((item) => {
       const response = item.analysis_data?.normalized_step_response as NormalizedResponse | undefined;
-      const channel = response?.channels?.[axis];
+      const channel = responseChannel(response?.channels, axis);
       return channel ? [metricsFor(channel, response?.time_s ?? [])] : [];
     });
     const average = (key: keyof StepMetrics) => {
@@ -1212,9 +1216,9 @@ function AllMeasurementStats({ measurements, mode }: { measurements: Measurement
 function ResponseMetrics({ data }: { data: unknown }) {
   const response = data as NormalizedResponse | null;
   const time = response?.time_s ?? [];
-  const available = RESPONSE_CHANNELS.filter((name) => response?.channels?.[name]?.mean?.length);
+  const available = RESPONSE_CHANNELS.filter((name) => responseChannel(response?.channels, name)?.mean?.length);
   if (!available.length) return null;
-  return <section className="metrics-summary"><div className="eyebrow">{t("VYPOČÍTANÉ UKAZOVATELE")}</div><p className="muted metrics-note">{t("Odhady zo znormalizovanej priemernej odozvy; presné modelové parametre budú doplnené lokálnym THRUST-compute.")}</p><div className="metrics-table"><div className="metrics-head"><span>{t("Osa")}</span><span>{t("Oneskorenie")}</span><span>{t("Náběh 10–90 %")}</span><span>{t("Overshoot")}</span><span>{t("Ustálenie")}</span><span>{t("Chyba")}</span><span>{t("RMSE")}</span><span>{t("Priem. SD")}</span></div>{available.map((name) => { const m = metricsFor(response?.channels?.[name], time); return <div className="metrics-row" key={name}><strong style={{ color: RESPONSE_COLORS[name] }}>{name}</strong><span>{formatMetric(m.reaction_s, " s")}</span><span>{formatMetric(m.rise_s, " s")}</span><span>{formatMetric(m.overshoot_pct, " %")}</span><span>{formatMetric(m.settling_s, " s")}</span><span>{formatMetric(m.steady_state_error_pct, " %")}</span><span>{formatMetric(m.rmse)}</span><span>{formatMetric(m.mean_std)}</span></div>; })}</div></section>;
+  return <section className="metrics-summary"><div className="eyebrow">{t("VYPOČÍTANÉ UKAZOVATELE")}</div><p className="muted metrics-note">{t("Odhady zo znormalizovanej priemernej odozvy; presné modelové parametre budú doplnené lokálnym THRUST-compute.")}</p><div className="metrics-table"><div className="metrics-head"><span>{t("Osa")}</span><span>{t("Oneskorenie")}</span><span>{t("Náběh 10–90 %")}</span><span>{t("Overshoot")}</span><span>{t("Ustálenie")}</span><span>{t("Chyba")}</span><span>{t("RMSE")}</span><span>{t("Priem. SD")}</span></div>{available.map((name) => { const m = metricsFor(responseChannel(response?.channels, name), time); return <div className="metrics-row" key={name}><strong style={{ color: RESPONSE_COLORS[name] }}>{name}</strong><span>{formatMetric(m.reaction_s, " s")}</span><span>{formatMetric(m.rise_s, " s")}</span><span>{formatMetric(m.overshoot_pct, " %")}</span><span>{formatMetric(m.settling_s, " s")}</span><span>{formatMetric(m.steady_state_error_pct, " %")}</span><span>{formatMetric(m.rmse)}</span><span>{formatMetric(m.mean_std)}</span></div>; })}</div></section>;
 }
 
 type SimpleTraceChannel = { mean?: number[]; time_s?: number[] };
@@ -1278,8 +1282,8 @@ function ChartPlot({ name, channel, time, min, max, expanded }: { name: string; 
 function ResponseChart({ data }: { data: unknown }) {
   const response = data as NormalizedResponse | null;
   const time = response?.time_s ?? [];
-  const names: (typeof RESPONSE_CHANNELS[number])[] = RESPONSE_CHANNELS.filter((name) => response?.channels?.[name]?.mean?.length);
-  const series = names.map((name) => ({ name, channel: response?.channels?.[name], count: Math.min(time.length, response?.channels?.[name]?.mean?.length ?? 0) })).filter((item): item is { name: (typeof RESPONSE_CHANNELS)[number]; channel: NormalizedChannel; count: number } => Boolean(item.channel) && item.count > 1);
+  const names: (typeof RESPONSE_CHANNELS[number])[] = RESPONSE_CHANNELS.filter((name) => responseChannel(response?.channels, name)?.mean?.length);
+  const series = names.map((name) => ({ name, channel: responseChannel(response?.channels, name), count: Math.min(time.length, responseChannel(response?.channels, name)?.mean?.length ?? 0) })).filter((item): item is { name: (typeof RESPONSE_CHANNELS)[number]; channel: NormalizedChannel; count: number } => Boolean(item.channel) && item.count > 1);
   const [expandedChannel, setExpandedChannel] = useState<string | null>(null);
   if (!series.length) return <div className="chart-empty">{t("Normalizovaná odozva nie je dostupná.")}</div>;
   const allValues = series.flatMap(({ channel: item, count }) => { const mean = item.mean?.slice(0, count) ?? []; const std = item.std?.slice(0, count) ?? []; return mean.flatMap((value, index) => [Number(value) - (Number(std[index]) || 0), Number(value) + (Number(std[index]) || 0)]); }).filter(Number.isFinite);

@@ -24,6 +24,7 @@ from app.db.session import get_db
 from app.models import Measurement, Participant, ParticipantGroup, TestDefinition
 
 router = APIRouter(prefix="/admin/reports", tags=["reports"])
+LEGACY_CHANNEL_NAMES = {"AILE": "LX", "ELEV": "LY", "THRO": "RY", "RUDD": "RX"}
 
 
 def _metric_map(data: dict | None) -> dict[str, float]:
@@ -41,9 +42,14 @@ def _metric_map(data: dict | None) -> dict[str, float]:
     add("", data.get("parameters"))
     response_data = data.get("normalized_step_response")
     if isinstance(response_data, dict) and isinstance(response_data.get("channels"), dict):
-        for axis, channel in response_data["channels"].items():
+        channels = response_data["channels"]
+        for axis, channel in channels.items():
             if isinstance(channel, dict):
-                add(f"{axis}.", channel.get("metrics"))
+                canonical_axis = LEGACY_CHANNEL_NAMES.get(axis, axis)
+                # When mixed legacy and canonical payloads exist, retain the canonical one.
+                if axis in LEGACY_CHANNEL_NAMES and canonical_axis in channels:
+                    continue
+                add(f"{canonical_axis}.", channel.get("metrics"))
     return result
 
 
