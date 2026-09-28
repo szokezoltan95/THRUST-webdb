@@ -13,7 +13,7 @@ function Brand() {
 
 function FacultyLogo() {
   const { language } = useLanguage();
-  return <img className="faculty-logo" src={language === "sk" ? lfSkLogo : lfEnLogo} alt={language === "sk" ? "Letecká fakulta TUKE" : "Faculty of Aeronautics TUKE"} />;
+  return <div className="faculty-logo-frame"><img className="faculty-logo" src={language === "sk" ? lfSkLogo : lfEnLogo} alt={language === "sk" ? "Letecká fakulta TUKE" : "Faculty of Aeronautics TUKE"} /></div>;
 }
 
 type ConsentDocument = { version: string; text: string; configured?: boolean };
