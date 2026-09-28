@@ -2,6 +2,7 @@
 export type Language = "sk" | "en";
 
 const english: Record<string, string> = {
+  "Úvodná stránka": "Welcome page",
   "LETECKÁ FAKULTA TUKE · VÝSKUM RIADENIA UAV": "FACULTY OF AERONAUTICS TUKE · UAV CONTROL RESEARCH", "Testy": "Tests",
   "Za každým letom je človek.": "Behind every flight is a person.",
   "THRUST skúma, ako piloti reagujú a ovládajú dron. Spája meranie, analýzu a porovnávanie výsledkov, aby sme ľudskému výkonu pri riadení UAV lepšie rozumeli.": "THRUST explores how pilots respond and control a drone. It brings together measurement, analysis and comparison of results to better understand human performance in UAV control.",

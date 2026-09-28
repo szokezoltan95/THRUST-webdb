@@ -69,6 +69,22 @@ archived TSV/GZIP files, saved analysis JSON, CSV tables, and per-measurement PD
 reports with plots. The complete pseudonymous data archive is available only to
 superadmin and is delivered as a ZIP; it excludes login accounts.
 
+## Welcome page editor
+
+The **Welcome page** item in the administrator sidebar is available only to
+admins and superadmins. Content is edited separately in Slovak and English.
+Add or reorder headings, text, banners, uploaded images, public statistics,
+tables, manually entered charts and research result cards. The live preview
+uses the same renderer as the public page. Save a draft, then publish it;
+unsaved drafts and changes to published pages remain private. Until a language
+has been published, visitors see the built-in welcome page for that language.
+Image files are re-encoded before public delivery and stored in the existing
+measurement volume. Charts and research values are editorial content; public
+participant counts continue to respect the minimum group size.
+
+After updating the server, apply migration `0011_welcome_pages` with
+`docker compose -f docker-compose.yml -f docker-compose.https.yml exec backend alembic upgrade head`.
+
 After `git pull`, keep using the same Compose files used to start the server.
 For an HTTP-only local development stack:
 

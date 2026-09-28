@@ -4,6 +4,8 @@ import { ChangeEvent, FormEvent, useEffect, useRef, useState } from "react";
 import thrustLogo from "./img/THRUST_logo_white.svg";
 import lfSkLogo from "./img/lf_sk.svg";
 import lfEnLogo from "./img/lf_en.svg";
+import { WelcomeContent, defaultWelcomeBlocks, type WelcomeBlock } from "./WelcomeContent";
+import { WelcomeEditor } from "./WelcomeEditor";
 
 function Brand() {
   return <div className="brand"><img src={thrustLogo} alt="THRUST" /></div>;
@@ -34,7 +36,7 @@ type AdminAccount = { id: string; username: string; email: string | null; first_
 type TestDefinition = { id: string; test_code: string; name: string; version: string; status: string; analysis_profile: string; configuration: Record<string, unknown>; is_active: boolean };
 type Measurement = { id: string; participant_id: string; test_definition_id: string | null; test_type: string; status: string; started_at: string; source_file_name: string | null; raw_sha256: string | null; raw_size_bytes: number | null; analysis_data: Record<string, unknown> | null };
 type ParticipantDetail = { participant: Participant; measurements: { id: string; test_type: string; status: string; started_at: string; raw_data_available?: boolean; raw_size_bytes?: number | null }[] };
-type AdminSection = "overview" | "participants" | "groups" | "trends" | "reports" | "tests" | "measurements";
+type AdminSection = "overview" | "participants" | "groups" | "trends" | "reports" | "tests" | "measurements" | "welcome";
 type ParticipantGroup = { id: string; name: string; description: string | null; created_at: string; participant_ids: string[]; participant_codes: string[] };
 type StudentMeasurement = { id: string; test_type: string; status: string; started_at: string; raw_size_bytes: number | null; analysis_data: Record<string, unknown> | null };
 type StudentProfile = { username: string; email: string | null; role: string; participant_code: string; first_name: string; last_name: string; created_at: string; birth_date: string | null; pilot_experience: string | null; flight_hours_range: string | null; pilot_certificate: string | null; primary_uav_type: string | null; simulator_experience: string | null; self_rated_skill: number | null; sex?: string | null; dominant_hand?: string | null; vision_correction?: string | null; vision_diopters_left?: number | null; vision_diopters_right?: number | null; rc_experience?: string | null; fpv_experience?: string | null; game_controller_experience?: string | null; video_game_experience?: string | null; }
@@ -164,6 +166,7 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
 export function App() {
   const { language } = useLanguage();
   const [metrics, setMetrics] = useState<PublicMetrics | null>(null);
+  const [publishedWelcome, setPublishedWelcome] = useState<WelcomeBlock[] | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [overview, setOverview] = useState<Overview | null>(null);
   const [participants, setParticipants] = useState<Participant[]>([]);
@@ -276,6 +279,15 @@ export function App() {
     request<ConsentDocuments>(`/api/public/consent-texts?lang=${language}`)
       .then((documents) => { if (active) setConsentTexts(documents); })
       .catch(() => { if (active) setConsentTexts(null); });
+    return () => { active = false; };
+  }, [language]);
+
+  useEffect(() => {
+    let active = true;
+    setPublishedWelcome(null);
+    request<{ blocks: WelcomeBlock[] | null }>(`/api/public/welcome?lang=${language}`)
+      .then((page) => { if (active) setPublishedWelcome(page.blocks); })
+      .catch(() => { if (active) setPublishedWelcome(null); });
     return () => { active = false; };
   }, [language]);
 
@@ -785,12 +797,14 @@ export function App() {
               <button className={activeSection === "reports" ? "nav-item active" : "nav-item"} onClick={() => setActiveSection("reports")}><span>⇩</span>{t("Exporty a reporty")}</button>
               <button className={activeSection === "tests" ? "nav-item active" : "nav-item"} onClick={() => setActiveSection("tests")}><span>▣</span>{t("Testy a konfigurácie")}</button>
               <button className={activeSection === "measurements" ? "nav-item active" : "nav-item"} onClick={() => setActiveSection("measurements")}><span>↗</span>{t("Merania a výsledky")}</button>
+              {(user.role === "admin" || user.role === "superadmin") && <button className={activeSection === "welcome" ? "nav-item active" : "nav-item"} onClick={() => setActiveSection("welcome")}><span>✎</span>{t("Úvodná stránka")}</button>}
             </nav>
             <div className="sidebar-footer"><span>{user.username} · {user.role}</span><button className="quiet" onClick={logout}>{t("Odhlásiť")}</button></div>
           </aside>
           <div className="app-main">
-            <header className="topbar"><div><div className="eyebrow">{t("ADMINISTRÁCIA ·")} {user.role.toUpperCase()}</div><h1>{activeSection === "overview" ? t("Prehľad meraní") : activeSection === "participants" ? t("Účastníci a účty") : activeSection === "groups" ? t("Skupiny") : activeSection === "trends" ? t("Trendy") : activeSection === "reports" ? t("Exporty a reporty") : activeSection === "tests" ? t("Testy a konfigurácie") : t("Merania a výsledky")}</h1></div><div className="header-actions"><LanguageSwitcher /><span className="status-dot">{t("Systém online")}</span></div></header>
+            <header className="topbar"><div><div className="eyebrow">{t("ADMINISTRÁCIA ·")} {user.role.toUpperCase()}</div><h1>{activeSection === "overview" ? t("Prehľad meraní") : activeSection === "participants" ? t("Účastníci a účty") : activeSection === "groups" ? t("Skupiny") : activeSection === "trends" ? t("Trendy") : activeSection === "reports" ? t("Exporty a reporty") : activeSection === "tests" ? t("Testy a konfigurácie") : activeSection === "welcome" ? t("Úvodná stránka") : t("Merania a výsledky")}</h1></div><div className="header-actions"><LanguageSwitcher /><span className="status-dot">{t("Systém online")}</span></div></header>
             <section className="workspace">
+              {activeSection === "welcome" && (user.role === "admin" || user.role === "superadmin") && <WelcomeEditor csrfToken={user.csrf_token} initialLanguage={language} metrics={metrics} />}
               {activeSection === "overview" && <>
                 <div className="stats"><Metric label={t("Účastníci")} value={overview?.participant_count ?? "—"} /><Metric label={t("Merania")} value={overview?.measurement_count ?? "—"} /><Metric label={t("Čakajúce synchronizácie")} value="0" /></div>
                 <div className="empty"><span>01</span><div><h2>{t("Databáza je pripravená")}</h2><p>{t("Vyber sekciu vľavo alebo začni vytvorením účastníka.")}</p></div></div>
@@ -1013,15 +1027,7 @@ export function App() {
           <header className="welcome-header"><div className="welcome-identities"><FacultyLogo /><Brand /></div><div className="actions"><LanguageSwitcher /><button className="quiet" onClick={openRegistration}>{t("Registrácia")}</button><button className="quiet" onClick={() => setLoginOpen(true)}>{t("Prihlásenie")}</button></div></header>
           <section className="public">
           <div className="eyebrow">{t("LETECKÁ FAKULTA TUKE · VÝSKUM RIADENIA UAV")}</div>
-          <h1>{t("Za každým letom je človek.")}</h1>
-          <p className="lead">{t("THRUST skúma, ako piloti reagujú a ovládajú dron. Spája meranie, analýzu a porovnávanie výsledkov, aby sme ľudskému výkonu pri riadení UAV lepšie rozumeli.")}</p>
-          <p className="public-tagline">{t("Od prvého pohybu ovládača až po zmeny výkonu v čase.")}</p>
-          <div className="stats">
-            <Metric label={t("Účastníci")} value={metrics?.participant_count ?? "—"} />
-            <Metric label={t("Merania")} value={metrics?.measurement_count ?? "—"} />
-            <Metric label={t("Testy")} value="SCoPE · SimPLE" />
-          </div>
-          {metrics && !metrics.publishable && <p className="privacy">{t("Verejné štatistiky sa zobrazia po dosiahnutí minimálnej skupiny")} {metrics.minimum_group_size} {t("účastníkov.")}</p>}
+          <WelcomeContent blocks={publishedWelcome ?? defaultWelcomeBlocks(language)} language={language} metrics={metrics} />
           </section>
         </>
       )}
