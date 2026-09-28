@@ -36,7 +36,13 @@ def _metric_map(data: dict | None) -> dict[str, float]:
         if isinstance(value, dict):
             for key, item in value.items():
                 if isinstance(item, (int, float)) and not isinstance(item, bool) and math.isfinite(item):
-                    result[prefix + str(key)] = float(item)
+                    metric_key = str(key)
+                    axis, separator, suffix = metric_key.partition(".")
+                    if separator and axis in LEGACY_CHANNEL_NAMES:
+                        # Legacy values fill a canonical key only when no new value exists.
+                        result.setdefault(prefix + LEGACY_CHANNEL_NAMES[axis] + "." + suffix, float(item))
+                    else:
+                        result[prefix + metric_key] = float(item)
 
     add("", data.get("metrics"))
     add("", data.get("parameters"))
