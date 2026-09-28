@@ -1013,13 +1013,9 @@ export function App() {
           <header className="welcome-header"><div className="welcome-identities"><FacultyLogo /><Brand /></div><div className="actions"><LanguageSwitcher /><button className="quiet" onClick={openRegistration}>{t("Registrácia")}</button><button className="quiet" onClick={() => setLoginOpen(true)}>{t("Prihlásenie")}</button></div></header>
           <section className="public">
           <div className="eyebrow">{t("LETECKÁ FAKULTA TUKE · VÝSKUM RIADENIA UAV")}</div>
-          <h1>{t("Meranie ľudského riadenia UAV.")}</h1>
-          <p className="lead">{t("THRUST je výskumný systém Leteckej fakulty TUKE, ktorý pomáha skúmať, ako človek ovláda bezpilotné lietadlo. Spája meranie, výpočtové vyhodnotenie a sledovanie výsledkov v čase.")}</p>
-          <div className="system-grid">
-            <article className="system-card"><span className="system-card-index">01</span><h2>{t("Meranie")}</h2><p>{t("Lokálna aplikácia zaznamenáva reakcie na zmeny požiadaviek v štyroch osiach testu SCoPE aj priebeh riadenia v úlohe SimPLE. Časové záznamy tvoria základ ďalšej analýzy.")}</p></article>
-            <article className="system-card"><span className="system-card-index">02</span><h2>{t("Vyhodnotenie")}</h2><p>{t("THRUST-compute počíta charakteristiky reakcií a odhaduje parametre modelu človeka podľa Jaloveckého samostatne pre každú os. Grafy umožňujú porovnať nameranú a modelovanú odozvu.")}</p></article>
-            <article className="system-card"><span className="system-card-index">03</span><h2>{t("Vývoj v čase")}</h2><p>{t("WebDB spravuje účastníkov, verzie testov a merania. Výskumníci môžu porovnávať výsledky jednotlivcov a skupín, sledovať trendy medzi testami a exportovať údaje na ďalšie spracovanie.")}</p></article>
-          </div>
+          <h1>{t("Za každým letom je človek.")}</h1>
+          <p className="lead">{t("THRUST skúma, ako piloti reagujú a ovládajú dron. Spája meranie, analýzu a porovnávanie výsledkov, aby sme ľudskému výkonu pri riadení UAV lepšie rozumeli.")}</p>
+          <p className="public-tagline">{t("Od prvého pohybu ovládača až po zmeny výkonu v čase.")}</p>
           <div className="stats">
             <Metric label={t("Účastníci")} value={metrics?.participant_count ?? "—"} />
             <Metric label={t("Merania")} value={metrics?.measurement_count ?? "—"} />

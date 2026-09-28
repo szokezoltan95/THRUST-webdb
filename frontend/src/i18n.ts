@@ -3,12 +3,9 @@ export type Language = "sk" | "en";
 
 const english: Record<string, string> = {
   "LETECKÁ FAKULTA TUKE · VÝSKUM RIADENIA UAV": "FACULTY OF AERONAUTICS TUKE · UAV CONTROL RESEARCH", "Testy": "Tests",
-  "Meranie ľudského riadenia UAV.": "Measuring human control of UAVs.",
-  "THRUST je výskumný systém Leteckej fakulty TUKE, ktorý pomáha skúmať, ako človek ovláda bezpilotné lietadlo. Spája meranie, výpočtové vyhodnotenie a sledovanie výsledkov v čase.": "THRUST is a research system at the Faculty of Aeronautics, TUKE, for studying how people control unmanned aircraft. It brings together measurement, computational analysis and tracking results over time.",
-  "Meranie": "Measurement", "Vyhodnotenie": "Analysis", "Vývoj v čase": "Changes over time",
-  "Lokálna aplikácia zaznamenáva reakcie na zmeny požiadaviek v štyroch osiach testu SCoPE aj priebeh riadenia v úlohe SimPLE. Časové záznamy tvoria základ ďalšej analýzy.": "The local application records responses to changing commands on the four axes of SCoPE and control behavior in the SimPLE task. The resulting time series provide the basis for further analysis.",
-  "THRUST-compute počíta charakteristiky reakcií a odhaduje parametre modelu človeka podľa Jaloveckého samostatne pre každú os. Grafy umožňujú porovnať nameranú a modelovanú odozvu.": "THRUST-compute calculates response characteristics and estimates the parameters of Jalovecký's human operator model separately for each axis. Its plots compare measured and modeled responses.",
-  "WebDB spravuje účastníkov, verzie testov a merania. Výskumníci môžu porovnávať výsledky jednotlivcov a skupín, sledovať trendy medzi testami a exportovať údaje na ďalšie spracovanie.": "WebDB manages participants, test versions and measurements. Researchers can compare individual and group results, follow trends across tests and export data for further analysis.",
+  "Za každým letom je človek.": "Behind every flight is a person.",
+  "THRUST skúma, ako piloti reagujú a ovládajú dron. Spája meranie, analýzu a porovnávanie výsledkov, aby sme ľudskému výkonu pri riadení UAV lepšie rozumeli.": "THRUST explores how pilots respond and control a drone. It brings together measurement, analysis and comparison of results to better understand human performance in UAV control.",
+  "Od prvého pohybu ovládača až po zmeny výkonu v čase.": "From the first movement of the controls to changes in performance over time.",
   "DETAIL KONTA": "ACCOUNT DETAILS", "Meno": "First name", "Priezvisko": "Last name",
   "na serveri": "on the server", "Ukladanie a vyhodnotenie": "Saving and analysis",
   "Vyber meranie": "Select a measurement",
