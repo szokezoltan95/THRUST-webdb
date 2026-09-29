@@ -1,4 +1,4 @@
-"""Researcher exports and server-side trend/report plots."""
+"""Researcher exports and group-level trend reports."""
 from __future__ import annotations
 
 import csv
@@ -12,7 +12,7 @@ from pathlib import Path
 from zipfile import ZIP_DEFLATED, ZIP_STORED, ZipFile
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import FileResponse, Response, StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -24,39 +24,19 @@ from app.db.session import get_db
 from app.models import Measurement, Participant, ParticipantGroup, TestDefinition
 
 router = APIRouter(prefix="/admin/reports", tags=["reports"])
-LEGACY_CHANNEL_NAMES = {"AILE": "LX", "ELEV": "LY", "THRO": "RY", "RUDD": "RX"}
-
-
 def _metric_map(data: dict | None) -> dict[str, float]:
     if not isinstance(data, dict):
         return {}
-    result: dict[str, float] = {}
-
-    def add(prefix: str, value: object) -> None:
-        if isinstance(value, dict):
-            for key, item in value.items():
-                if isinstance(item, (int, float)) and not isinstance(item, bool) and math.isfinite(item):
-                    metric_key = str(key)
-                    axis, separator, suffix = metric_key.partition(".")
-                    if separator and axis in LEGACY_CHANNEL_NAMES:
-                        # Legacy values fill a canonical key only when no new value exists.
-                        result.setdefault(prefix + LEGACY_CHANNEL_NAMES[axis] + "." + suffix, float(item))
-                    else:
-                        result[prefix + metric_key] = float(item)
-
-    add("", data.get("metrics"))
-    add("", data.get("parameters"))
-    response_data = data.get("normalized_step_response")
-    if isinstance(response_data, dict) and isinstance(response_data.get("channels"), dict):
-        channels = response_data["channels"]
-        for axis, channel in channels.items():
-            if isinstance(channel, dict):
-                canonical_axis = LEGACY_CHANNEL_NAMES.get(axis, axis)
-                # When mixed legacy and canonical payloads exist, retain the canonical one.
-                if axis in LEGACY_CHANNEL_NAMES and canonical_axis in channels:
-                    continue
-                add(f"{canonical_axis}.", channel.get("metrics"))
-    return result
+    metrics = data.get("metrics")
+    if not isinstance(metrics, dict):
+        return {}
+    return {
+        str(key): float(value)
+        for key, value in metrics.items()
+        if isinstance(value, (int, float))
+        and not isinstance(value, bool)
+        and math.isfinite(value)
+    }
 
 
 async def _trend_data(
@@ -198,63 +178,6 @@ async def measurement_csv(measurement_ids: list[str] = Query(min_length=1),
             writer.writerow([item.id, item.participant_id, item.test_type, item.started_at.isoformat(), metric, value])
     return StreamingResponse(iter([stream.getvalue()]), media_type="text/csv; charset=utf-8",
                              headers={"Content-Disposition": "attachment; filename=thrust-measurements.csv"})
-
-
-@router.get("/measurements/{measurement_id}.pdf")
-async def measurement_pdf(measurement_id: str, auth: AuthContext = Depends(require_researcher),
-                          db: AsyncSession = Depends(get_db)) -> Response:
-    import matplotlib
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
-    from matplotlib.backends.backend_pdf import PdfPages
-
-    item = await db.get(Measurement, measurement_id)
-    if item is None:
-        raise HTTPException(status_code=404, detail="Measurement not found")
-    data = item.analysis_data or {}
-    output = io.BytesIO()
-    with PdfPages(output) as pdf:
-        response_data = data.get("normalized_step_response") if isinstance(data, dict) else None
-        channels = response_data.get("channels", {}) if isinstance(response_data, dict) else {}
-        if channels:
-            time_values = response_data.get("time_s", response_data.get("time", []))
-            fig, axes = plt.subplots(2, 2, figsize=(11.7, 8.3))
-            for ax, (axis_name, channel) in zip(axes.flat, channels.items()):
-                mean = channel.get("mean", []) if isinstance(channel, dict) else []
-                std = channel.get("std", []) if isinstance(channel, dict) else []
-                n = min(len(time_values), len(mean))
-                if n:
-                    ax.plot(time_values[:n], mean[:n], label="Mean")
-                    if len(std) >= n:
-                        lower = [float(mean[i]) - float(std[i]) for i in range(n)]
-                        upper = [float(mean[i]) + float(std[i]) for i in range(n)]
-                        ax.fill_between(time_values[:n], lower, upper, alpha=.2, label="±SD")
-                    ax.set_title(axis_name)
-                    ax.grid(True, alpha=.25)
-                    ax.set_xlabel("Time (s)")
-                    ax.legend()
-            fig.suptitle(f"{item.test_type} · {item.started_at}")
-            fig.tight_layout()
-            pdf.savefig(fig)
-            plt.close(fig)
-        metrics = _metric_map(data)
-        if metrics:
-            fig, ax = plt.subplots(figsize=(11.7, 8.3))
-            names, values = list(metrics), list(metrics.values())
-            ax.barh(names, values)
-            ax.set_title(f"{item.test_type} · stored analysis metrics")
-            ax.grid(True, axis="x", alpha=.25)
-            fig.tight_layout()
-            pdf.savefig(fig)
-            plt.close(fig)
-        if not channels and not metrics:
-            fig, ax = plt.subplots(figsize=(11.7, 8.3))
-            ax.axis("off")
-            ax.text(.05, .95, f"{item.test_type}\n{item.started_at}\nNo stored numeric analysis is available.\n\n{json.dumps(data, ensure_ascii=False, indent=2)[:8000]}", va="top")
-            pdf.savefig(fig)
-            plt.close(fig)
-    return Response(output.getvalue(), media_type="application/pdf",
-                    headers={"Content-Disposition": f'attachment; filename="thrust-{item.id}.pdf"'})
 
 
 @router.get("/all-data.zip")
