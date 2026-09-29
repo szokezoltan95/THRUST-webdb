@@ -11,8 +11,8 @@ import { WelcomeEditor } from "./WelcomeEditor";
 type AccentTheme = "blue" | "red" | "green" | "purple" | "orange" | "teal" | "pink" | "gold";
 type ColorMode = "dark" | "light";
 const ACCENT_COLORS: Record<AccentTheme, string> = {
-  blue: "#45d5ff", red: "#ed6572", green: "#38bd86", purple: "#9b7bea",
-  orange: "#ed8b3b", teal: "#23aaa8", pink: "#df69a6", gold: "#c49b22",
+  blue: "#54dcff", red: "#ff6578", green: "#44d994", purple: "#b49aff",
+  orange: "#ffa346", teal: "#32d4d0", pink: "#ff79bb", gold: "#f0c44e",
 };
 const ACCENT_LABELS: Record<AccentTheme, string> = {
   blue: "Modrá", red: "Červená", green: "Zelená", purple: "Fialová",
@@ -959,6 +959,8 @@ export function App() {
     if (!user) return;
     await request<void>("/api/auth/logout", { method: "POST", headers: { "X-CSRF-Token": user.csrf_token } });
     setUser(null);
+    setAccentTheme("blue");
+    setColorMode("dark");
     setOverview(null);
   }
 
@@ -1071,7 +1073,7 @@ export function App() {
   </>;
 
   return (
-    <main data-accent-theme={accentTheme} data-color-mode={colorMode}>
+    <main data-accent-theme={user ? accentTheme : "blue"} data-color-mode={user ? colorMode : "dark"}>
       {user ? (
         <div className={sidebarCollapsed ? "app-shell sidebar-collapsed" : "app-shell"}>
           <aside className="sidebar">

@@ -14,6 +14,7 @@
   --border-strong: #31506e;
   --header-bg: rgba(7,16,28,.82);
   --ambient-bg: #102b49;
+  --glow-alpha: .18;
   color-scheme: dark;
 }
 main[data-color-mode="light"] {
@@ -29,26 +30,27 @@ main[data-color-mode="light"] {
   --border-strong: #b7c8d7;
   --header-bg: rgba(255,255,255,.92);
   --ambient-bg: rgba(98,147,186,.15);
+  --glow-alpha: .08;
   color: var(--text-main);
   color-scheme: light;
 }
 body:has(main[data-color-mode="light"]) { background: #f2f6fa; color: #162b3e; }
-main[data-accent-theme="blue"] { --page-bg:#07101c; --surface:#0b1a29; --surface-raised:#102235; --surface-input:#081522; --surface-highlight:#163149; --ambient-bg:#123451; --header-bg:rgba(8,20,33,.94); --accent:#45d5ff; --accent-rgb:69,213,255; }
-main[data-accent-theme="red"] { --page-bg:#190f15; --surface:#24151d; --surface-raised:#301b25; --surface-input:#1d1118; --surface-highlight:#402431; --ambient-bg:#512333; --header-bg:rgba(30,16,23,.94); --accent:#ed6572; --accent-rgb:237,101,114; }
-main[data-accent-theme="green"] { --page-bg:#0b1711; --surface:#112219; --surface-raised:#172d20; --surface-input:#0d1c14; --surface-highlight:#20392a; --ambient-bg:#1a432d; --header-bg:rgba(12,27,18,.94); --accent:#38bd86; --accent-rgb:56,189,134; }
-main[data-accent-theme="purple"] { --page-bg:#130f1c; --surface:#1d1729; --surface-raised:#292039; --surface-input:#171221; --surface-highlight:#36294b; --ambient-bg:#392653; --header-bg:rgba(22,17,32,.94); --accent:#9b7bea; --accent-rgb:155,123,234; }
-main[data-accent-theme="orange"] { --page-bg:#19120c; --surface:#241a11; --surface-raised:#302216; --surface-input:#1d160f; --surface-highlight:#40301d; --ambient-bg:#512f16; --header-bg:rgba(29,20,12,.94); --accent:#ed8b3b; --accent-rgb:237,139,59; }
-main[data-accent-theme="teal"] { --page-bg:#0b1718; --surface:#102122; --surface-raised:#172c2d; --surface-input:#0d1b1c; --surface-highlight:#20393a; --ambient-bg:#164144; --header-bg:rgba(12,27,28,.94); --accent:#23aaa8; --accent-rgb:35,170,168; }
-main[data-accent-theme="pink"] { --page-bg:#1a1118; --surface:#261821; --surface-raised:#33202d; --surface-input:#1e141b; --surface-highlight:#43263a; --ambient-bg:#51233e; --header-bg:rgba(30,18,26,.94); --accent:#df69a6; --accent-rgb:223,105,166; }
-main[data-accent-theme="gold"] { --page-bg:#17150c; --surface:#24200f; --surface-raised:#302a14; --surface-input:#1b190d; --surface-highlight:#40381b; --ambient-bg:#4b3d13; --header-bg:rgba(28,25,13,.94); --accent:#c49b22; --accent-rgb:196,155,34; }
-main[data-color-mode="light"][data-accent-theme="blue"] { --page-bg:#eef5f8; --surface:#ffffff; --surface-raised:#f5fafc; --surface-input:#ffffff; --surface-highlight:#deedf2; --ambient-bg:rgba(47,142,164,.20); --header-bg:rgba(255,255,255,.94); --accent:#007a99; --accent-rgb:0,122,153; }
-main[data-color-mode="light"][data-accent-theme="red"] { --page-bg:#f9eff1; --surface:#ffffff; --surface-raised:#fff8f9; --surface-input:#ffffff; --surface-highlight:#f4dfe3; --ambient-bg:rgba(185,55,72,.15); --header-bg:rgba(255,255,255,.94); --accent:#b93748; --accent-rgb:185,55,72; }
-main[data-color-mode="light"][data-accent-theme="green"] { --page-bg:#eff6f0; --surface:#ffffff; --surface-raised:#f7fbf7; --surface-input:#ffffff; --surface-highlight:#deeee1; --ambient-bg:rgba(22,126,83,.15); --header-bg:rgba(255,255,255,.94); --accent:#167e53; --accent-rgb:22,126,83; }
-main[data-color-mode="light"][data-accent-theme="purple"] { --page-bg:#f3f0f8; --surface:#ffffff; --surface-raised:#faf8fd; --surface-input:#ffffff; --surface-highlight:#e9e1f4; --ambient-bg:rgba(103,69,166,.16); --header-bg:rgba(255,255,255,.94); --accent:#6745a6; --accent-rgb:103,69,166; }
-main[data-color-mode="light"][data-accent-theme="orange"] { --page-bg:#faf2e9; --surface:#ffffff; --surface-raised:#fffaf4; --surface-input:#ffffff; --surface-highlight:#f3e3d1; --ambient-bg:rgba(170,81,0,.15); --header-bg:rgba(255,255,255,.94); --accent:#aa5100; --accent-rgb:170,81,0; }
-main[data-color-mode="light"][data-accent-theme="teal"] { --page-bg:#edf6f5; --surface:#ffffff; --surface-raised:#f6fbfa; --surface-input:#ffffff; --surface-highlight:#dcefed; --ambient-bg:rgba(8,118,116,.15); --header-bg:rgba(255,255,255,.94); --accent:#087674; --accent-rgb:8,118,116; }
-main[data-color-mode="light"][data-accent-theme="pink"] { --page-bg:#f9eff5; --surface:#ffffff; --surface-raised:#fff8fb; --surface-input:#ffffff; --surface-highlight:#f3deea; --ambient-bg:rgba(168,42,106,.14); --header-bg:rgba(255,255,255,.94); --accent:#a82a6a; --accent-rgb:168,42,106; }
-main[data-color-mode="light"][data-accent-theme="gold"] { --page-bg:#f7f4e9; --surface:#ffffff; --surface-raised:#fcfaf3; --surface-input:#ffffff; --surface-highlight:#eee7ce; --ambient-bg:rgba(115,88,0,.14); --header-bg:rgba(255,255,255,.94); --accent:#735800; --accent-rgb:115,88,0; }
+main[data-accent-theme="blue"] { --page-bg:#07101c; --surface:#0b1a29; --surface-raised:#102235; --surface-input:#081522; --surface-highlight:#163149; --ambient-bg:#123451; --header-bg:rgba(8,20,33,.94); --accent:#54dcff; --accent-rgb:84,220,255; }
+main[data-accent-theme="red"] { --page-bg:#190f15; --surface:#24151d; --surface-raised:#301b25; --surface-input:#1d1118; --surface-highlight:#402431; --ambient-bg:#512333; --header-bg:rgba(30,16,23,.94); --accent:#ff6578; --accent-rgb:255,101,120; }
+main[data-accent-theme="green"] { --page-bg:#0b1711; --surface:#112219; --surface-raised:#172d20; --surface-input:#0d1c14; --surface-highlight:#20392a; --ambient-bg:#1a432d; --header-bg:rgba(12,27,18,.94); --accent:#44d994; --accent-rgb:68,217,148; }
+main[data-accent-theme="purple"] { --page-bg:#130f1c; --surface:#1d1729; --surface-raised:#292039; --surface-input:#171221; --surface-highlight:#36294b; --ambient-bg:#392653; --header-bg:rgba(22,17,32,.94); --accent:#b49aff; --accent-rgb:180,154,255; }
+main[data-accent-theme="orange"] { --page-bg:#19120c; --surface:#241a11; --surface-raised:#302216; --surface-input:#1d160f; --surface-highlight:#40301d; --ambient-bg:#512f16; --header-bg:rgba(29,20,12,.94); --accent:#ffa346; --accent-rgb:255,163,70; }
+main[data-accent-theme="teal"] { --page-bg:#0b1718; --surface:#102122; --surface-raised:#172c2d; --surface-input:#0d1b1c; --surface-highlight:#20393a; --ambient-bg:#164144; --header-bg:rgba(12,27,28,.94); --accent:#32d4d0; --accent-rgb:50,212,208; }
+main[data-accent-theme="pink"] { --page-bg:#1a1118; --surface:#261821; --surface-raised:#33202d; --surface-input:#1e141b; --surface-highlight:#43263a; --ambient-bg:#51233e; --header-bg:rgba(30,18,26,.94); --accent:#ff79bb; --accent-rgb:255,121,187; }
+main[data-accent-theme="gold"] { --page-bg:#17150c; --surface:#24200f; --surface-raised:#302a14; --surface-input:#1b190d; --surface-highlight:#40381b; --ambient-bg:#4b3d13; --header-bg:rgba(28,25,13,.94); --accent:#f0c44e; --accent-rgb:240,196,78; }
+main[data-color-mode="light"][data-accent-theme="blue"] { --page-bg:#eef5f8; --surface:#ffffff; --surface-raised:#f5fafc; --surface-input:#ffffff; --surface-highlight:#deedf2; --ambient-bg:rgba(47,142,164,.20); --header-bg:rgba(255,255,255,.94); --accent:#006b8a; --accent-rgb:0,107,138; }
+main[data-color-mode="light"][data-accent-theme="red"] { --page-bg:#f9eff1; --surface:#ffffff; --surface-raised:#fff8f9; --surface-input:#ffffff; --surface-highlight:#f4dfe3; --ambient-bg:rgba(185,55,72,.15); --header-bg:rgba(255,255,255,.94); --accent:#aa233a; --accent-rgb:170,35,58; }
+main[data-color-mode="light"][data-accent-theme="green"] { --page-bg:#eff6f0; --surface:#ffffff; --surface-raised:#f7fbf7; --surface-input:#ffffff; --surface-highlight:#deeee1; --ambient-bg:rgba(22,126,83,.15); --header-bg:rgba(255,255,255,.94); --accent:#116b46; --accent-rgb:17,107,70; }
+main[data-color-mode="light"][data-accent-theme="purple"] { --page-bg:#f3f0f8; --surface:#ffffff; --surface-raised:#faf8fd; --surface-input:#ffffff; --surface-highlight:#e9e1f4; --ambient-bg:rgba(103,69,166,.16); --header-bg:rgba(255,255,255,.94); --accent:#563493; --accent-rgb:86,52,147; }
+main[data-color-mode="light"][data-accent-theme="orange"] { --page-bg:#faf2e9; --surface:#ffffff; --surface-raised:#fffaf4; --surface-input:#ffffff; --surface-highlight:#f3e3d1; --ambient-bg:rgba(170,81,0,.15); --header-bg:rgba(255,255,255,.94); --accent:#9a4700; --accent-rgb:154,71,0; }
+main[data-color-mode="light"][data-accent-theme="teal"] { --page-bg:#edf6f5; --surface:#ffffff; --surface-raised:#f6fbfa; --surface-input:#ffffff; --surface-highlight:#dcefed; --ambient-bg:rgba(8,118,116,.15); --header-bg:rgba(255,255,255,.94); --accent:#006a68; --accent-rgb:0,106,104; }
+main[data-color-mode="light"][data-accent-theme="pink"] { --page-bg:#f9eff5; --surface:#ffffff; --surface-raised:#fff8fb; --surface-input:#ffffff; --surface-highlight:#f3deea; --ambient-bg:rgba(168,42,106,.14); --header-bg:rgba(255,255,255,.94); --accent:#98205d; --accent-rgb:152,32,93; }
+main[data-color-mode="light"][data-accent-theme="gold"] { --page-bg:#f7f4e9; --surface:#ffffff; --surface-raised:#fcfaf3; --surface-input:#ffffff; --surface-highlight:#eee7ce; --ambient-bg:rgba(115,88,0,.14); --header-bg:rgba(255,255,255,.94); --accent:#6b5000; --accent-rgb:107,80,0; }
 :root {
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   color: var(--text-main);
@@ -59,7 +61,7 @@ main[data-color-mode="light"][data-accent-theme="gold"] { --page-bg:#f7f4e9; --s
 body { margin: 0; min-width: 320px; min-height: 100vh; background: radial-gradient(circle at 80% 0%, var(--ambient-bg) 0, transparent 36%), var(--page-bg); }
 button, input { font: inherit; }
 button { cursor: pointer; }
-main { min-height: 100vh; color: var(--text-main); background: var(--page-bg); transition: color .18s ease, background-color .18s ease; }
+main { min-height: 100vh; color: var(--text-main); background-color: var(--page-bg); background-image: radial-gradient(ellipse 68% 62% at 92% 0%, rgba(var(--accent-rgb), var(--glow-alpha)), transparent 72%), radial-gradient(ellipse 55% 52% at 0% 100%, rgba(var(--accent-rgb), calc(var(--glow-alpha) * .62)), transparent 72%); background-repeat: no-repeat; transition: color .18s ease, background-color .18s ease; }
 header { height: 78px; padding: 0 5vw; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); background: var(--header-bg); backdrop-filter: blur(14px); }
 .brand { display: flex; align-items: center; flex: 0 0 auto; }
 .brand img { display: block; width: 158px; height: auto; }
