@@ -64,10 +64,12 @@ the repository and backups that are not access-controlled.
 Researcher and administrator accounts can create pseudonymous participant
 groups, compare any combination of participants and saved groups on the Trends
 page, and view date-based or test-based averages. Python computes the tables and
-Matplotlib creates the downloadable PNG charts. The Reports page downloads
-archived TSV/GZIP files, saved analysis JSON, CSV tables, and per-measurement PDF
-reports with plots. The complete pseudonymous data archive is available only to
-superadmin and is delivered as a ZIP; it excludes login accounts.
+Matplotlib creates downloadable group trend PNG charts. Per-measurement metrics
+and response curves come from the immutable Measure analysis JSON; WebDB stores
+and displays them without recalculating them. The Reports page downloads
+archived TSV/GZIP files, saved analysis JSON, and CSV tables. The complete
+pseudonymous data archive is available only to superadmin and is delivered as
+a ZIP; it excludes login accounts.
 
 ## Welcome page editor
 
