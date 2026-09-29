@@ -2,7 +2,7 @@
 export type Language = "sk" | "en";
 
 const english: Record<string, string> = {
-  "Farebný motív": "Color theme", "Modrá": "Blue", "Červená": "Red", "Zelená": "Green",
+  "Farebný motív": "Color theme", "Nastavenia vzhľadu": "Appearance settings", "Režim zobrazenia": "Display mode", "Modrá": "Blue", "Červená": "Red", "Zelená": "Green",
   "Fialová": "Purple", "Oranžová": "Orange", "Tyrkysová": "Teal", "Ružová": "Pink", "Zlatá": "Gold",
   "Svetlý režim": "Light mode", "Tmavý režim": "Dark mode", "Prepnúť na svetlý režim": "Switch to light mode",
   "Prepnúť na tmavý režim": "Switch to dark mode", "Nastavenie vzhľadu sa nepodarilo uložiť.": "Could not save appearance preferences.",

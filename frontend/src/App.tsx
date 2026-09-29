@@ -23,25 +23,50 @@ function Brand({ colorMode = "dark" }: { colorMode?: ColorMode }) {
   return <div className="brand"><img src={colorMode === "light" ? thrustLogoBlack : thrustLogoWhite} alt="THRUST" /></div>;
 }
 
-function AppearanceControls({ accentTheme, colorMode, onAccentChange, onModeToggle }: {
+function AppearanceControls({ accentTheme, colorMode, onAccentChange, onModeChange }: {
   accentTheme: AccentTheme;
   colorMode: ColorMode;
   onAccentChange: (theme: AccentTheme) => void;
-  onModeToggle: () => void;
+  onModeChange: (mode: ColorMode) => void;
 }) {
-  return <div className="appearance-controls">
-    <label className="appearance-theme-control">
-      <span className="appearance-color-dot" style={{ backgroundColor: ACCENT_COLORS[accentTheme] }} aria-hidden="true" />
-      <span className="visually-hidden">{t("Farebný motív")}</span>
-      <select aria-label={t("Farebný motív")} value={accentTheme} onChange={(event) => onAccentChange(event.target.value as AccentTheme)}>
-        {(Object.keys(ACCENT_COLORS) as AccentTheme[]).map((theme) => <option key={theme} value={theme}>{t(ACCENT_LABELS[theme])}</option>)}
-      </select>
-    </label>
-    <button type="button" className="appearance-mode-toggle" onClick={onModeToggle}
-      aria-label={colorMode === "dark" ? t("Prepnúť na svetlý režim") : t("Prepnúť na tmavý režim")}
-      title={colorMode === "dark" ? t("Svetlý režim") : t("Tmavý režim")}>
-      <span aria-hidden="true">{colorMode === "dark" ? "☼" : "☾"}</span><span className="appearance-mode-label">{colorMode === "dark" ? t("Tmavý režim") : t("Svetlý režim")}</span>
+  const [open, setOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const closeOutside = (event: PointerEvent) => {
+      if (event.target instanceof Node && !menuRef.current?.contains(event.target)) setOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === "Escape") setOpen(false); };
+    document.addEventListener("pointerdown", closeOutside);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOutside);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [open]);
+
+  return <div className="appearance-controls" ref={menuRef}>
+    <button type="button" className="appearance-trigger" aria-label={t("Nastavenia vzhľadu")} title={t("Nastavenia vzhľadu")}
+      aria-expanded={open} aria-haspopup="dialog" onClick={() => setOpen((value) => !value)}>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18h1.1a2.4 2.4 0 0 0 1.7-4.1 1.35 1.35 0 0 1 .95-2.3H18a3 3 0 0 0 3-3c0-4.75-4.03-8.6-9-8.6Z"/><circle cx="7.6" cy="11.2" r="1"/><circle cx="10.5" cy="7.5" r="1"/><circle cx="15" cy="8" r="1"/></svg>
     </button>
+    {open && <div className="appearance-popover" role="dialog" aria-label={t("Nastavenia vzhľadu")}>
+      <div className="appearance-popover-heading">{t("Farebný motív")}</div>
+      <div className="appearance-theme-grid" role="group" aria-label={t("Farebný motív")}>
+        {(Object.keys(ACCENT_COLORS) as AccentTheme[]).map((theme) => <button key={theme} type="button"
+          className={`appearance-swatch${theme === accentTheme ? " active" : ""}`}
+          style={{ "--swatch-color": ACCENT_COLORS[theme] } as React.CSSProperties}
+          aria-label={t(ACCENT_LABELS[theme])} title={t(ACCENT_LABELS[theme])} aria-pressed={theme === accentTheme}
+          onClick={() => { onAccentChange(theme); setOpen(false); }}><span aria-hidden="true" /></button>)}
+      </div>
+      <div className="appearance-popover-heading appearance-mode-heading">{t("Režim zobrazenia")}</div>
+      <div className="appearance-mode-options" role="group" aria-label={t("Režim zobrazenia")}>
+        <button type="button" className={colorMode === "light" ? "active" : ""} aria-pressed={colorMode === "light"}
+          onClick={() => { onModeChange("light"); setOpen(false); }}><span aria-hidden="true">☼</span>{t("Svetlý režim")}</button>
+        <button type="button" className={colorMode === "dark" ? "active" : ""} aria-pressed={colorMode === "dark"}
+          onClick={() => { onModeChange("dark"); setOpen(false); }}><span aria-hidden="true">☾</span>{t("Tmavý režim")}</button>
+      </div>
+    </div>}
   </div>;
 }
 
@@ -1057,7 +1082,7 @@ export function App() {
             <div className="sidebar-footer"><span className="sidebar-user">{user.username} · {user.role}</span><button className="quiet" onClick={logout} title={t("Odhlásiť")}>{sidebarCollapsed ? "↪" : t("Odhlásiť")}</button></div>
           </aside>
           <div className="app-main">
-            <header className="topbar"><div><div className="eyebrow">{t("ADMINISTRÁCIA ·")} {user.role.toUpperCase()}</div><h1>{activeSection === "overview" ? t("Prehľad meraní") : activeSection === "participants" ? t("Účastníci a účty") : activeSection === "groups" ? t("Skupiny") : activeSection === "trends" ? t("Trendy") : activeSection === "reports" ? t("Exporty a reporty") : activeSection === "tests" ? t("Testy a konfigurácie") : activeSection === "welcome" ? t("Úvodná stránka") : t("Merania a výsledky")}</h1></div><div className="header-actions"><AppearanceControls accentTheme={accentTheme} colorMode={colorMode} onAccentChange={(theme) => void saveAppearance(theme, colorMode)} onModeToggle={() => void saveAppearance(accentTheme, colorMode === "dark" ? "light" : "dark")} /><LanguageSwitcher /><span className="status-dot">{t("Systém online")}</span></div></header>
+            <header className="topbar"><div><div className="eyebrow">{t("ADMINISTRÁCIA ·")} {user.role.toUpperCase()}</div><h1>{activeSection === "overview" ? t("Prehľad meraní") : activeSection === "participants" ? t("Účastníci a účty") : activeSection === "groups" ? t("Skupiny") : activeSection === "trends" ? t("Trendy") : activeSection === "reports" ? t("Exporty a reporty") : activeSection === "tests" ? t("Testy a konfigurácie") : activeSection === "welcome" ? t("Úvodná stránka") : t("Merania a výsledky")}</h1></div><div className="header-actions"><AppearanceControls accentTheme={accentTheme} colorMode={colorMode} onAccentChange={(theme) => void saveAppearance(theme, colorMode)} onModeChange={(mode) => void saveAppearance(accentTheme, mode)} /><LanguageSwitcher /><span className="status-dot">{t("Systém online")}</span></div></header>
             <section className="workspace">
               {activeSection === "welcome" && (user.role === "admin" || user.role === "superadmin") && <WelcomeEditor csrfToken={user.csrf_token} initialLanguage={language} metrics={metrics} />}
               {activeSection === "overview" && <>
@@ -1981,7 +2006,7 @@ function StudentPortal({ user, onLogout, accentTheme, colorMode, onAppearanceCha
   const selectedMeasurement = visibleMeasurements.find((item) => item.id === selectedMeasurementId);
 
   return <main className="student-shell" data-accent-theme={accentTheme} data-color-mode={colorMode}>
-    <header><Brand colorMode={colorMode} /><div className="header-actions"><AppearanceControls accentTheme={accentTheme} colorMode={colorMode} onAccentChange={(theme) => onAppearanceChange(theme, colorMode)} onModeToggle={() => onAppearanceChange(accentTheme, colorMode === "dark" ? "light" : "dark")} /><LanguageSwitcher /><button className="quiet" onClick={onLogout}>{t("Odhlásiť")}</button></div></header>
+    <header><Brand colorMode={colorMode} /><div className="header-actions"><AppearanceControls accentTheme={accentTheme} colorMode={colorMode} onAccentChange={(theme) => onAppearanceChange(theme, colorMode)} onModeChange={(mode) => onAppearanceChange(accentTheme, mode)} /><LanguageSwitcher /><button className="quiet" onClick={onLogout}>{t("Odhlásiť")}</button></div></header>
     <section className="public student-content">
       <div className="eyebrow">{t("OSOBNÝ PROFIL")}</div>
       <h1>{t("Ahoj,")} {profile?.first_name || user.first_name || user.username}.</h1>
