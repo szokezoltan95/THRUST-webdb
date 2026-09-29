@@ -1,4 +1,5 @@
 import hashlib
+import math
 from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -12,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.dependencies import AuthContext, require_authenticated, require_user_csrf
 from app.core.config import settings
 from app.core.raw_logs import RawUploadInvalid, RawUploadTooLarge, decode_raw_upload
+from app.core.measurement_results import validate_measurement_result
 from app.db.session import get_db
 from app.models import AdminUser, Measurement, Participant, ResearchConsent, TestDefinition
 from app.schemas.auth import StudentProfileResponse
@@ -131,10 +133,11 @@ def numeric_metrics(analysis_data: dict | None) -> dict[str, float]:
         return {}
     source = analysis_data.get("metrics")
     if not isinstance(source, dict):
-        source = analysis_data.get("summary")
-    if not isinstance(source, dict):
         return {}
-    return {key: float(value) for key, value in source.items() if isinstance(value, (int, float))}
+    return {
+        key: float(value) for key, value in source.items()
+        if isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+    }
 
 
 @router.get("/comparison")
@@ -251,6 +254,9 @@ async def create_measurement(
     except RawUploadInvalid as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     raw_sha256 = hashlib.sha256(raw_bytes).hexdigest() if raw_bytes is not None else None
+    if raw_bytes is None:
+        raise HTTPException(status_code=422, detail="A compressed raw log is required.")
+    validate_measurement_result(payload, test, raw_bytes)
     measurement = Measurement(
         participant_id=participant.id, test_definition_id=test.id,
         test_type=f"{test.test_code} v{test.version}", status=payload.status,
