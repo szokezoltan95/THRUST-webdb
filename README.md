@@ -18,9 +18,13 @@ Central web database for THRUST measurements. The server stores pseudonymous par
 - opaque, server-side sessions in secure cookies;
 - PostgreSQL persistence;
 - participant and measurement foundations;
-- versioned measurement and analysis contracts.
+- a versioned Measure analysis contract and immutable per-measurement results;
+- student measurement upload, personal history, and privacy-aware group statistics.
 
-Student accounts and measurement upload are intentionally deferred until the first data contract is validated against real SCoPE output.
+Measure calculates each result before upload. WebDB validates the artifact and
+raw-log hash, then stores and displays it without recalculating individual
+measurement metrics. It continues to calculate aggregate group and historical
+comparisons.
 
 ## Local development
 
