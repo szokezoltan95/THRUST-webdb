@@ -273,19 +273,6 @@ function parseFormattedDate(value: string): string | null {
   return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
-function parseFormattedDateTime(value: string): string | null {
-  const trimmed = value.trim();
-  const nativeMatch = /^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})$/.exec(trimmed);
-  const displayMatch = /^(\d{4}\/[A-Za-z]{3}\/\d{2})[ T](\d{2}):(\d{2})$/.exec(trimmed);
-  const match = nativeMatch ?? displayMatch;
-  if (!match) return null;
-  const isoDate = parseFormattedDate(match[1]);
-  const hours = Number(match[2]);
-  const minutes = Number(match[3]);
-  if (!isoDate || hours > 23 || minutes > 59) return null;
-  return `${isoDate}T${match[2]}:${match[3]}`;
-}
-
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(url, { credentials: "same-origin", ...options });
   if (!response.ok) {
@@ -337,27 +324,14 @@ export function App() {
   const [reportMeasurementSort, setReportMeasurementSort] = useState<SortState>({ column: "date", direction: "desc" });
   const [tests, setTests] = useState<TestDefinition[]>([]);
   const defaultTestConfiguration = `{
-  "sampling_hz": 100,
   "difficulty": "hard",
-  "timeout_s": 5.0,
-  "hold_time_s": 1.0,
-  "joystick_test_required": true,
-  "axes": ["LX", "LY", "RY", "RX"],
-  "tasks": [],
-  "visual": {
-    "screen_bg": "#000000",
-    "gimbal_bg": "#808080",
-    "stick_outline": "#1e2cff",
-    "stick_fill": "#ffffff",
-    "zone_idle_outline": "#ff0000",
-    "zone_idle_fill": "#ff0000",
-    "zone_ok_outline": "#00cc00",
-    "zone_ok_fill": "#00cc00",
-    "grid": "#ffffff",
-    "label": "#ffffff",
-    "prompt": "#ff0000"
-  }
-}`;
+  "action_timeout_s": 3.0,
+  "hold_time_s": 0.5,
+  "fps": 100,
+  "max_completed_actions": 50,
+  "countdown_s": 3,
+  "stick_max": 1000
+}`
   const [testForm, setTestForm] = useState({ test_code: "", name: "", version: "1.0", analysis_profile: "SCOPE_STEP_RESPONSE_V1", configuration: defaultTestConfiguration });
   const [testMessage, setTestMessage] = useState("");
   const [testSearch, setTestSearch] = useState("");
@@ -586,23 +560,27 @@ export function App() {
     setUploadMessage("");
     const form = new FormData(event.currentTarget);
     const file = form.get("raw_file");
-    const startedAtInput = String(form.get("started_at") || "").trim();
-    const startedAt = parseFormattedDateTime(startedAtInput);
-    if (!startedAt) {
-      setUploadMessage(t("Vyber platný dátum a čas merania."));
-      return;
-    }
     if (!(file instanceof File) || !file.size) {
       setUploadMessage(t("Vyber raw dátový súbor."));
       return;
     }
     const analysisFile = form.get("analysis_file");
     let analysisData: Record<string, unknown> | null = null;
+    if (!(analysisFile instanceof File) || !analysisFile.size) {
+      setUploadMessage(t("Vyber aj JSON analýzy vytvorený THRUST-measure."));
+      return;
+    }
+    const analysisStart = Date.parse(String(analysisData?.started_at ?? ""));
+    if (!Number.isFinite(analysisStart)) {
+      setUploadMessage(t("Súbor analýzy nemá platný čas začiatku merania."));
+      return;
+    }
     if (analysisFile instanceof File && analysisFile.size) {
       try {
         const parsed: unknown = JSON.parse(await analysisFile.text());
         if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error(t("Neplatný JSON analýzy."));
         analysisData = parsed as Record<string, unknown>;
+        if (analysisData.schema_version !== "thrust-analysis-v1") throw new Error(t("Analýza nemá podporovaný formát THRUST-measure."));
         const chosen = tests.find((test) => test.id === form.get("test_definition_id"));
         if (chosen?.analysis_profile.toUpperCase().startsWith("SIMPLE") && analysisData.analysis_type !== "SIMPLE_2D_FLIGHT") {
           throw new Error(t("Zvolený SimPLE test vyžaduje analýzu SimPLE."));
@@ -625,7 +603,7 @@ export function App() {
         body: JSON.stringify({
           participant_id: form.get("participant_id"),
           test_definition_id: form.get("test_definition_id"),
-          started_at: new Date(startedAt).toISOString(),
+          started_at: new Date(analysisStart).toISOString(),
           source_file_name: file.name,
           raw_content_type: file.name.toLowerCase().endsWith(".gz") ? "application/gzip" : "text/tab-separated-values",
           raw_log_base64: btoa(binary),
@@ -635,7 +613,7 @@ export function App() {
       });
       setMeasurements((current) => [uploaded, ...current]);
       setOverview((current) => current ? { ...current, measurement_count: current.measurement_count + 1 } : current);
-      setUploadMessage(analysisData ? t("Raw log a výsledky boli nahrané.") : t("Raw log bol nahraný bez analýzy. Výsledky sa zobrazia až po nahratí analýzy."));
+      setUploadMessage(t("Raw log a nemenné výsledky Measure boli nahrané."));
       event.currentTarget.reset();
     } catch (reason) {
       setUploadMessage(reason instanceof Error ? reason.message : t("Súbor sa nepodarilo nahrať."));
@@ -1230,7 +1208,7 @@ export function App() {
                   }[column as "subject" | "period" | "mean" | "sd" | "participants" | "count"])).map(({ series, point }) => <div className="data-table-row" key={`${series.subject_id}-${point.label}`}><strong>{series.subject}</strong><span>{point.label}</span><span>{point.mean.toPrecision(5)}</span><span>{point.sd_sample?.toPrecision(4) ?? "—"}</span><span>{point.participant_count}</span><span>{point.measurement_count}</span></div>)}</div></section>}
               </>}
               {activeSection === "reports" && <>
-                <section className="browser-panel"><div className="browser-header"><div><div className="eyebrow">{t("EXPORTY A REPORTY")}</div><h2>{t("Stiahnuť analýzy a merania")}</h2><p className="muted">{t("Vyber merania a stiahni ich raw log, uloženú analýzu, tabuľku CSV alebo PDF report s grafmi.")}</p></div></div>
+                <section className="browser-panel"><div className="browser-header"><div><div className="eyebrow">{t("EXPORTY A REPORTY")}</div><h2>{t("Stiahnuť analýzy a merania")}</h2><p className="muted">{t("Vyber merania a stiahni ich raw log, nemennú uloženú analýzu alebo tabuľku CSV.")}</p></div></div>
                   <div className="filters"><ModeSwitch value={resultMode} onChange={changeResultMode} /><label>{t("Účastník")}<select value={measurementParticipantFilter} onChange={(event) => setMeasurementParticipantFilter(event.target.value)}><option value="">{t("Všetci účastníci")}</option>{participants.map((p) => <option key={p.id} value={p.id}>{p.participant_code}</option>)}</select></label><label>{t("Test")}<select value={measurementTestFilter} onChange={(event) => setMeasurementTestFilter(event.target.value)}><option value="">{t("Všetky testy")}</option>{tests.map((test) => <option key={test.id} value={test.id}>{test.name} · v{test.version}</option>)}</select></label><label>{t("Od dátumu")}<input type="date" value={measurementDateFrom} onChange={(event) => setMeasurementDateFrom(event.target.value)} /></label><label>{t("Do dátumu")}<input type="date" value={measurementDateTo} onChange={(event) => setMeasurementDateTo(event.target.value)} /></label></div>
                   <div className="selection-toolbar"><label><input type="checkbox" checked={filteredMeasurements().length > 0 && filteredMeasurements().every((m) => reportMeasurementIds.includes(m.id))} onChange={() => setReportMeasurementIds(filteredMeasurements().every((m) => reportMeasurementIds.includes(m.id)) ? [] : filteredMeasurements().map((m) => m.id))} /> {t("Vybrať filtrované")}</label><span>{reportMeasurementIds.length} {t("vybraných")}</span></div>
                   <div className="measurement-list report-measurement-list">
@@ -1243,7 +1221,7 @@ export function App() {
                       <strong>{participantCodeFor(m.participant_id)}</strong><span>{m.test_type}</span><span>{formatDateTime(m.started_at)}</span><small>{m.analysis_data ? t("Analýza uložená") : t("Bez uloženej analýzy")}</small>
                     </label>)}
                   </div>
-                  <div className="actions report-actions"><button className="quiet" disabled={!reportMeasurementIds.length} onClick={() => void downloadProtectedFile(`/api/admin/reports/measurements.csv?${reportMeasurementIds.map((id) => `measurement_ids=${encodeURIComponent(id)}`).join("&")}`, "thrust-measurements.csv")}>{t("Stiahnuť tabuľku CSV")}</button>{reportMeasurementIds.length === 1 && (() => { const id = reportMeasurementIds[0]; const selected = measurements.find((m) => m.id === id); return <><a className="quiet" href={`/api/admin/measurements/${id}/raw`}>{t("Stiahnuť raw TSV/GZIP")}</a><a className="quiet" href={`/api/admin/reports/measurements/${id}.pdf`}>{t("PDF report + graf")}</a><button className="quiet" onClick={() => { if (selected) { const blob = new Blob([JSON.stringify(selected, null, 2)], { type: "application/json" }); const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = `measurement-${id}.json`; link.click(); URL.revokeObjectURL(link.href); } }}>{t("Stiahnuť JSON analýzy")}</button></>; })()}</div>
+                  <div className="actions report-actions"><button className="quiet" disabled={!reportMeasurementIds.length} onClick={() => void downloadProtectedFile(`/api/admin/reports/measurements.csv?${reportMeasurementIds.map((id) => `measurement_ids=${encodeURIComponent(id)}`).join("&")}`, "thrust-measurements.csv")}>{t("Stiahnuť tabuľku CSV")}</button>{reportMeasurementIds.length === 1 && (() => { const id = reportMeasurementIds[0]; const selected = measurements.find((m) => m.id === id); return <><a className="quiet" href={`/api/admin/measurements/${id}/raw`}>{t("Stiahnuť raw TSV/GZIP")}</a><button className="quiet" onClick={() => { if (selected) { const blob = new Blob([JSON.stringify(selected, null, 2)], { type: "application/json" }); const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = `measurement-${id}.json`; link.click(); URL.revokeObjectURL(link.href); } }}>{t("Stiahnuť JSON analýzy")}</button></>; })()}</div>
                 </section>
                 {user.role === "superadmin" && <section className="panel quick-panel"><div className="eyebrow">{t("SUPERADMIN · KOMPLETNÝ EXPORT")}</div><h2>{t("Všetky pseudonymné dáta WebDB")}</h2><p className="muted">{t("ZIP obsahuje profily účastníkov, skupiny, definície testov, analýzy a všetky dostupné raw logy. Neobsahuje prihlasovacie účty.")}</p><button className="primary" onClick={() => void downloadProtectedFile("/api/admin/reports/all-data.zip", "thrust-webdb-full-export.zip", user.csrf_token)}>{t("Stiahnuť kompletný ZIP")}</button></section>}
               </>}
@@ -1328,7 +1306,7 @@ export function App() {
                     {(() => { const selected = measurements.find((item) => item.id === selectedMeasurementId); return selected ? <MeasurementDetailBody measurement={selected} tests={tests} onClose={() => setSelectedMeasurementId(null)} /> : <div className="empty-list"><h2>{t("Vyber meranie")}</h2><p className="muted">{t("V ľavom paneli vyber meranie, ktoré chceš preskúmať.")}</p></div>; })()}
                   </section>
                 </div>
-                {manualUploadOpen && <div className="backdrop" onMouseDown={() => setManualUploadOpen(false)}><section className="login upload-dialog" onMouseDown={(event) => event.stopPropagation()}><div className="eyebrow">{t("NÚDZOVÁ SYNCHRONIZÁCIA")}</div><h2>{t("Manuálne nahrať dátový súbor")}</h2><p className="muted">{t("Použi iba vtedy, ak upload počas sessionu zlyhal.")}</p><form className="measurement-form modal-form" onSubmit={async (event) => { await uploadMeasurement(event); setManualUploadOpen(false); }}><label>{t("Účastník")}<select name="participant_id" required><option value="">{t("Vyber účastníka")}</option>{participants.map((participant) => <option key={participant.id} value={participant.id}>{participant.participant_code}</option>)}</select></label><label>{t("Test")}<select name="test_definition_id" required><option value="">{t("Vyber test")}</option>{tests.filter((test) => test.is_active && test.analysis_profile.toUpperCase().startsWith(resultMode)).map((test) => <option key={test.id} value={test.id}>{test.name} {t("· v")}{test.version}</option>)}</select></label><label>{t("Dátum a čas")}<input name="started_at" type="datetime-local" step="60" required /></label><label>{t("Raw log · SCoPE alebo SimPLE")}<input name="raw_file" type="file" accept=".tsv,.tsv.gz,.gz,.txt,text/plain,application/gzip" required /></label><label>{t("Analýza merania · JSON (nepovinné)")}<input name="analysis_file" type="file" accept=".json,application/json" /></label><div className="actions"><button type="button" className="quiet" onClick={() => setManualUploadOpen(false)}>{t("Zrušiť")}</button><button className="primary" type="submit">{t("Nahrať dáta")}</button></div></form>{uploadMessage && <p className="notice">{uploadMessage}</p>}</section></div>}
+                {manualUploadOpen && <div className="backdrop" onMouseDown={() => setManualUploadOpen(false)}><section className="login upload-dialog" onMouseDown={(event) => event.stopPropagation()}><div className="eyebrow">{t("NÚDZOVÁ SYNCHRONIZÁCIA")}</div><h2>{t("Manuálne nahrať dátový súbor")}</h2><p className="muted">{t("Použi iba vtedy, ak upload počas sessionu zlyhal. Nahraj raw log a jeho zodpovedajúci súbor analýzy.")}</p><form className="measurement-form modal-form" onSubmit={async (event) => { await uploadMeasurement(event); setManualUploadOpen(false); }}><label>{t("Účastník")}<select name="participant_id" required><option value="">{t("Vyber účastníka")}</option>{participants.map((participant) => <option key={participant.id} value={participant.id}>{participant.participant_code}</option>)}</select></label><label>{t("Test")}<select name="test_definition_id" required><option value="">{t("Vyber test")}</option>{tests.filter((test) => test.is_active && test.analysis_profile.toUpperCase().startsWith(resultMode)).map((test) => <option key={test.id} value={test.id}>{test.name} {t("· v")}{test.version}</option>)}</select></label><label>{t("Raw log · SCoPE alebo SimPLE")}<input name="raw_file" type="file" accept=".tsv,.tsv.gz,.gz,.txt,text/plain,application/gzip" required /></label><label>{t("Výsledky THRUST-measure · JSON")}<input name="analysis_file" type="file" accept=".json,application/json" required /></label><div className="actions"><button type="button" className="quiet" onClick={() => setManualUploadOpen(false)}>{t("Zrušiť")}</button><button className="primary" type="submit">{t("Nahrať dáta")}</button></div></form>{uploadMessage && <p className="notice">{uploadMessage}</p>}</section></div>}
               </>}
 
             </section>
@@ -1400,13 +1378,8 @@ type NormalizedChannel = { mean?: number[]; median?: number[]; std?: number[]; m
 type NormalizedResponse = { time_s?: number[]; channels?: Record<string, NormalizedChannel> };
 
 type StepMetrics = {
-  reaction_s: number | null;
-  rise_s: number | null;
-  overshoot_pct: number | null;
-  settling_s: number | null;
-  steady_state_error_pct: number | null;
-  rmse: number | null;
-  mean_std: number | null;
+  reaction_s: number | null; rise_s: number | null; overshoot_pct: number | null;
+  settling_s: number | null; steady_state_error_pct: number | null; rmse: number | null; mean_std: number | null;
 };
 
 const RESPONSE_CHANNELS = ["LX", "LY", "RY", "RX"] as const;
@@ -1416,53 +1389,19 @@ function responseChannel(channels: NormalizedResponse["channels"], axis: (typeof
   return channels?.[axis] ?? channels?.[LEGACY_RESPONSE_CHANNEL[axis]];
 }
 
-function calculateStepMetrics(channel: NormalizedChannel | undefined, time: number[]): StepMetrics {
-  const values = channel?.mean ?? [];
-  const count = Math.min(time.length, values.length);
-  const empty = { reaction_s: null, rise_s: null, overshoot_pct: null, settling_s: null, steady_state_error_pct: null, rmse: null, mean_std: null };
-  if (count < 3) return empty;
-  const ys = values.slice(0, count).map(Number);
-  const edgeCount = Math.max(1, Math.floor(count * .1));
-  const baseline = ys.slice(0, edgeCount).reduce((sum, value) => sum + value, 0) / edgeCount;
-  const final = ys.slice(count - edgeCount).reduce((sum, value) => sum + value, 0) / edgeCount;
-  const amplitude = final - baseline;
-  if (!Number.isFinite(amplitude) || Math.abs(amplitude) < 1e-9) return empty;
-  const normalized = ys.map((value) => (value - baseline) / amplitude);
-  const crossing = (level: number) => { const index = normalized.findIndex((value) => value >= level); return index >= 0 ? time[index] : null; };
-  const t10 = crossing(.1);
-  const t90 = crossing(.9);
-  const peak = Math.max(...normalized);
-  let lastOutside = -1;
-  normalized.forEach((value, index) => { if (Math.abs(value - 1) > .05) lastOutside = index; });
-  const stdValues = (channel?.std ?? []).slice(0, count).map(Number).filter(Number.isFinite);
+function formatMetric(value: number | null | undefined, unit = "") { return value == null || !Number.isFinite(value) ? "—" : value.toFixed(3) + unit; }
+function metricsFor(channel: NormalizedChannel | undefined): StepMetrics {
+  const raw = channel?.metrics;
+  if (!raw || typeof raw.step_count !== "number" || raw.step_count <= 0) {
+    return { reaction_s: null, rise_s: null, overshoot_pct: null, settling_s: null, steady_state_error_pct: null, rmse: null, mean_std: null };
+  }
   return {
-    reaction_s: t10,
-    rise_s: t10 !== null && t90 !== null ? Math.max(0, t90 - t10) : null,
-    overshoot_pct: Number.isFinite(peak) ? Math.max(0, (peak - 1) * 100) : null,
-    settling_s: lastOutside >= 0 && lastOutside < count - 1 ? time[lastOutside] : null,
-    steady_state_error_pct: Number.isFinite(normalized[count - 1]) ? Math.abs(1 - normalized[count - 1]) * 100 : null,
-    rmse: Math.sqrt(normalized.reduce((sum, value) => sum + ((value - 1) ** 2), 0) / count),
-    mean_std: stdValues.length ? stdValues.reduce((sum, value) => sum + value, 0) / stdValues.length : null,
+    reaction_s: raw.reaction_delay_s ?? null, rise_s: raw.rise_time_s ?? null,
+    overshoot_pct: raw.overshoot_pct ?? null, settling_s: raw.settling_time_s ?? null,
+    steady_state_error_pct: raw.steady_state_error_pct ?? null,
+    rmse: raw.tracking_rmse ?? null, mean_std: raw.mean_std ?? null,
   };
 }
-
-function formatMetric(value: number | null, unit = "") { return value === null || !Number.isFinite(value) ? "—" : value.toFixed(3) + unit; }
-function metricsFor(channel: NormalizedChannel | undefined, time: number[]): StepMetrics {
-  const raw = channel?.metrics;
-  if (raw && typeof raw.step_count === "number" && raw.step_count > 0) {
-    return {
-      reaction_s: raw.reaction_delay_s ?? null,
-      rise_s: raw.rise_time_s ?? null,
-      overshoot_pct: raw.overshoot_pct ?? null,
-      settling_s: raw.settling_time_s ?? null,
-      steady_state_error_pct: raw.steady_state_error_pct ?? null,
-      rmse: raw.tracking_rmse ?? null,
-      mean_std: raw.mean_std ?? null,
-    };
-  }
-  return calculateStepMetrics(channel, time);
-}
-
 
 function AllMeasurementStats({ measurements, mode }: { measurements: Measurement[]; mode: MeasurementMode }) {
   if (mode === "SIMPLE") {
@@ -1497,7 +1436,7 @@ function AllMeasurementStats({ measurements, mode }: { measurements: Measurement
     const values = measurements.flatMap((item) => {
       const response = item.analysis_data?.normalized_step_response as NormalizedResponse | undefined;
       const channel = responseChannel(response?.channels, axis);
-      return channel ? [metricsFor(channel, response?.time_s ?? [])] : [];
+      return channel ? [metricsFor(channel)] : [];
     });
     const average = (key: keyof StepMetrics) => {
       const numbers = values.map((value) => value[key]).filter((value): value is number => typeof value === "number" && Number.isFinite(value));
@@ -1530,7 +1469,7 @@ function ResponseMetrics({ data }: { data: unknown }) {
   const time = response?.time_s ?? [];
   const available = RESPONSE_CHANNELS.filter((name) => responseChannel(response?.channels, name)?.mean?.length);
   if (!available.length) return null;
-  return <section className="metrics-summary"><div className="eyebrow">{t("VYPOČÍTANÉ UKAZOVATELE")}</div><p className="muted metrics-note">{t("Odhady zo znormalizovanej priemernej odozvy; presné modelové parametre budú doplnené lokálnym THRUST-compute.")}</p><div className="metrics-table"><div className="metrics-head"><span>{t("Osa")}</span><span>{t("Oneskorenie")}</span><span>{t("Náběh 10–90 %")}</span><span>{t("Overshoot")}</span><span>{t("Ustálenie")}</span><span>{t("Chyba")}</span><span>{t("RMSE")}</span><span>{t("Priem. SD")}</span></div>{available.map((name) => { const m = metricsFor(responseChannel(response?.channels, name), time); return <div className="metrics-row" key={name}><strong style={{ color: RESPONSE_COLORS[name] }}>{name}</strong><span>{formatMetric(m.reaction_s, " s")}</span><span>{formatMetric(m.rise_s, " s")}</span><span>{formatMetric(m.overshoot_pct, " %")}</span><span>{formatMetric(m.settling_s, " s")}</span><span>{formatMetric(m.steady_state_error_pct, " %")}</span><span>{formatMetric(m.rmse)}</span><span>{formatMetric(m.mean_std)}</span></div>; })}</div></section>;
+  return <section className="metrics-summary"><div className="eyebrow">{t("VYPOČÍTANÉ UKAZOVATELE")}</div><p className="muted metrics-note">{t("Základné ukazovatele vypočítané THRUST-measure a uložené spolu s meraním.")}</p><div className="metrics-table"><div className="metrics-head"><span>{t("Osa")}</span><span>{t("Oneskorenie")}</span><span>{t("Náběh 10–90 %")}</span><span>{t("Overshoot")}</span><span>{t("Ustálenie")}</span><span>{t("Chyba")}</span><span>{t("RMSE")}</span><span>{t("Priem. SD")}</span></div>{available.map((name) => { const m = metricsFor(responseChannel(response?.channels, name)); return <div className="metrics-row" key={name}><strong style={{ color: RESPONSE_COLORS[name] }}>{name}</strong><span>{formatMetric(m.reaction_s, " s")}</span><span>{formatMetric(m.rise_s, " s")}</span><span>{formatMetric(m.overshoot_pct, " %")}</span><span>{formatMetric(m.settling_s, " s")}</span><span>{formatMetric(m.steady_state_error_pct, " %")}</span><span>{formatMetric(m.rmse)}</span><span>{formatMetric(m.mean_std)}</span></div>; })}</div></section>;
 }
 
 type SimpleTraceChannel = { mean?: number[]; time_s?: number[] };
@@ -1551,11 +1490,11 @@ function SimpleTrace({ name, channel, color }: { name: string; channel?: SimpleT
 }
 
 function SimpleAnalysisView({ analysis }: { analysis: Record<string, unknown> }) {
-  if (!analysis.metrics || typeof analysis.metrics !== "object" || !analysis.step_response) {
+  if (!analysis.metrics || typeof analysis.metrics !== "object" || !analysis.normalized_step_response) {
     return <section className="simple-analysis-view"><div className="eyebrow">{t("SIMULOVANÝ LET")}</div><h3>{t("Analýza SimPLE nie je dostupná")}</h3><p className="muted">{t("K tomuto meraniu je uložený iba raw log. Pri núdzovom nahratí prilož aj súbor analýzy JSON vytvorený lokálnym THRUSTom.")}</p></section>;
   }
   const rawMetrics = analysis.metrics && typeof analysis.metrics === "object" ? analysis.metrics as Record<string, unknown> : {};
-  const response = analysis.step_response && typeof analysis.step_response === "object" ? analysis.step_response as { channels?: Record<string, SimpleTraceChannel> } : {};
+  const response = analysis.normalized_step_response && typeof analysis.normalized_step_response === "object" ? analysis.normalized_step_response as { channels?: Record<string, SimpleTraceChannel> } : {};
   const metrics: [string, string, string][] = [
     [t("Akcie"), "simple_action_count", ""],
     [t("Priemerná chyba cieľa"), "simple_mean_target_error_m", " m"],
@@ -1621,8 +1560,7 @@ type ScopeConfiguration = {
 const initialScopeConfiguration: ScopeConfiguration = {
   debug_output: false, difficulty: "hard", action_timeout_s: 3, hold_time_s: 0.5, fps: 100, stick_max: 1000,
   max_completed_actions: 50, countdown_s: 3, seed: null,
-  fullscreen: true, topmost: true, save_raw_log: true, save_action_log: true,
-  save_step_file: true, save_graph_pdf: true, auto_open_graph: true, run_evaluation: true,
+  fullscreen: true, topmost: true,
   gui_gimbal_size: 500, gui_stick_zone: 200, gui_stick_radius: 20,
   gui_stick_outline_width: 6, gui_zone_outline_width: 8, gui_gimbal_border_width: 12, gui_gimbal_cross_width: 6,
   screen_background: "#000000", gimbal_background: "#808080", stick_outline: "#1e2cff", stick_fill: "#ffffff",
@@ -1861,7 +1799,7 @@ function TestEditor({ test, onClose, onSaved }: { test: TestDefinition; onClose:
 <section className="config-card"><div className="eyebrow">{t("VZHĽAD")}</div><h3>{t("Farby a geometria")}</h3><div className="selected-color"><span>{colorFields.find(([key]) => key === selectedColor)?.[1] ?? selectedColor}</span><input ref={colorInput} type="color" value={String(configuration[selectedColor])} onChange={(event) => setValue(selectedColor, event.target.value)} /><code>{String(configuration[selectedColor])}</code></div><div className="color-list">{colorFields.map(([key, label]) => <button type="button" className={selectedColor === key ? "color-item selected" : "color-item"} key={key} onClick={() => pickColor(key)}><span>{label}</span><i style={{ background: String(configuration[key]) }} /><code>{String(configuration[key])}</code></button>)}</div><div className="field-grid geometry-fields"><label>{t("Veľkosť gimbalu")}<input type="number" min="150" value={String(configuration.gui_gimbal_size)} onChange={(event) => setValue("gui_gimbal_size", Number(event.target.value))} /></label><label>{t("Polomer zóny")}<input type="number" min="10" value={String(configuration.gui_stick_zone)} onChange={(event) => setValue("gui_stick_zone", Number(event.target.value))} /></label><label>{t("Polomer páčky")}<input type="number" min="1" value={String(configuration.gui_stick_radius)} onChange={(event) => setValue("gui_stick_radius", Number(event.target.value))} /></label><label>{t("Obrys páčky")}<input type="number" min="1" value={String(configuration.gui_stick_outline_width)} onChange={(event) => setValue("gui_stick_outline_width", Number(event.target.value))} /></label><label>{t("Obrys zóny")}<input type="number" min="1" value={String(configuration.gui_zone_outline_width)} onChange={(event) => setValue("gui_zone_outline_width", Number(event.target.value))} /></label><label>{t("Obrys gimbalu")}<input type="number" min="1" value={String(configuration.gui_gimbal_border_width)} onChange={(event) => setValue("gui_gimbal_border_width", Number(event.target.value))} /></label><label>{t("Šírka stredových značiek")}<input type="number" min="1" value={String(configuration.gui_gimbal_cross_width)} onChange={(event) => setValue("gui_gimbal_cross_width", Number(event.target.value))} /></label></div></section>
       <section className="config-card"><div className="eyebrow">{t("EXPERIMENT")}</div><h3>{t("Základné parametre")}</h3><div className="field-grid"><label>{t("Obtiažnosť")}<select value={String(configuration.difficulty)} onChange={(event) => setValue("difficulty", event.target.value)}><option value="easy">{t("Ľahká")}</option><option value="medium">{t("Stredná")}</option><option value="hard">{t("Ťažká")}</option><option value="ultra">{t("Ultra")}</option></select></label><label>{t("Vzorkovacia frekvencia (Hz)")}<input type="number" min="10" value={String(configuration.fps)} onChange={(event) => setValue("fps", Number(event.target.value))} /></label><label>{t("Počet dokončených akcií")}<input type="number" min="1" value={String(configuration.max_completed_actions)} onChange={(event) => setValue("max_completed_actions", Number(event.target.value))} /></label><label>{t("Timeout akcie (s)")}<input type="number" min=".1" step=".1" value={String(configuration.action_timeout_s)} onChange={(event) => setValue("action_timeout_s", Number(event.target.value))} /></label><label>{t("Čas podržania (s)")}<input type="number" min=".1" step=".1" value={String(configuration.hold_time_s)} onChange={(event) => setValue("hold_time_s", Number(event.target.value))} /></label><label>{t("Odpočet pred štartom (s)")}<input type="number" min="0" value={String(configuration.countdown_s)} onChange={(event) => setValue("countdown_s", Number(event.target.value))} /></label><label>{t("Maximálna hodnota páčky")}<input type="number" min="100" value={String(configuration.stick_max)} onChange={(event) => setValue("stick_max", Number(event.target.value))} /></label><label>{t("Náhodný seed")}<input value={configuration.seed == null ? "" : String(configuration.seed)} onChange={(event) => setValue("seed", event.target.value.trim() === "" ? null : Number(event.target.value))} placeholder={t("automaticky")} /></label></div><div className="toggle-row"><label><input type="checkbox" checked={Boolean(configuration.debug_output)} onChange={(event) => setValue("debug_output", event.target.checked)} /> {t("Debug výstup")}</label></div></section>
       <section className="config-card"><div className="eyebrow">{t("RUNTIME")}</div><h3>{t("Správanie okna")}</h3><div className="toggle-row"><label><input type="checkbox" checked={Boolean(configuration.fullscreen)} onChange={(event) => setValue("fullscreen", event.target.checked)} /> {t("Celá obrazovka")}</label><label><input type="checkbox" checked={Boolean(configuration.topmost)} onChange={(event) => setValue("topmost", event.target.checked)} /> {t("Vždy navrchu")}</label></div></section>
-      <section className="config-card"><div className="eyebrow">{t("VÝSTUP")}</div><h3>{t("Ukladanie a vyhodnotenie")}</h3><p className="config-note">{t("Raw log je povinný, pretože z neho THRUST vytvorí objekt merania pre WebDB. Lokálny priečinok a názov súboru určuje klient podľa verzie testu.")}</p><div className="toggle-grid"><label><input type="checkbox" checked={true} disabled /> {t("Raw log · povinné pre WebDB")}</label><label><input type="checkbox" checked={Boolean(configuration.save_action_log)} onChange={(event) => setValue("save_action_log", event.target.checked)} /> {t("Action log · voliteľný")}</label><label><input type="checkbox" checked={Boolean(configuration.run_evaluation) ? true : Boolean(configuration.save_step_file)} disabled={Boolean(configuration.run_evaluation)} onChange={(event) => setValue("save_step_file", event.target.checked)} /> {t("Step súbor")}{Boolean(configuration.run_evaluation) ? t(" · povinný pri vyhodnotení") : ""}</label><label><input type="checkbox" checked={Boolean(configuration.save_graph_pdf)} disabled={!Boolean(configuration.run_evaluation)} onChange={(event) => setValue("save_graph_pdf", event.target.checked)} /> {t("Graf PDF")}</label><label><input type="checkbox" checked={Boolean(configuration.auto_open_graph)} disabled={!Boolean(configuration.run_evaluation) || !Boolean(configuration.save_graph_pdf)} onChange={(event) => setValue("auto_open_graph", event.target.checked)} /> {t("Otvoriť graf po uložení")}</label><label><input type="checkbox" checked={Boolean(configuration.run_evaluation)} onChange={(event) => setValue("run_evaluation", event.target.checked)} /> {t("Spustiť vyhodnotenie")}</label></div></section>
+      <section className="config-card"><div className="eyebrow">{t("VÝSTUP")}</div><h3>{t("Súbory merania")}</h3><p className="config-note">{t("THRUST-measure vždy uloží raw log a súbor JSON s verziovanými štatistikami a bodmi grafov.")}</p></section>
     </div>
     <div className="editor-preview"><div className="eyebrow">{t("ŽIVÝ NÁHĽAD")}</div><h3>{t("SCoPE obrazovka")}</h3><GimbalPreview configuration={configuration} onPick={pickColor} /><details className="json-disclosure"><summary>{t("Rozšírený JSON náhľad")}</summary><pre className="config-preview live">{JSON.stringify({ ...configuration, difficulty: String(configuration.difficulty).toLowerCase() }, null, 2)}</pre></details></div>
   </div><footer className="editor-footer"><button type="button" className="quiet" onClick={onClose}>{t("Zrušiť")}</button><button className="primary" onClick={save}>{t("Uložiť nastavenia")}</button>{message && <span className="notice">{message}</span>}</footer></section></div>;
