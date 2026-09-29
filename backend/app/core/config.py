@@ -16,12 +16,6 @@ class Settings(BaseSettings):
     max_raw_upload_bytes: int = 50_000_000
     superadmin_identifiers: str = ""
     researcher_registration_key: str = ""
-    smtp_host: str = ""
-    smtp_port: int = 587
-    smtp_username: str = ""
-    smtp_password: str = ""
-    smtp_from: str = ""
-    smtp_starttls: bool = True
     data_controller_name: str = ""
     data_controller_address: str = ""
     data_controller_email: str = ""

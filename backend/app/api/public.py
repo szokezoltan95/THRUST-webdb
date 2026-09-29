@@ -12,7 +12,7 @@ router = APIRouter(prefix="/public", tags=["public"])
 
 @router.get("/metrics")
 async def public_metrics(db: AsyncSession = Depends(get_db)) -> dict:
-    participants = await db.scalar(select(func.count()).select_from(Participant).where(Participant.is_test_account.is_(False))) or 0
+    participants = await db.scalar(select(func.count()).select_from(Participant)) or 0
     measurements = await db.scalar(select(func.count()).select_from(Measurement)) or 0
     publishable = participants >= settings.public_min_group_size
     return {

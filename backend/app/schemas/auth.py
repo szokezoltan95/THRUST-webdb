@@ -10,21 +10,10 @@ class LoginRequest(BaseModel):
     password: str = Field(min_length=1, max_length=1024)
 
 
-class RegistrationStart(BaseModel):
-    email: EmailStr
-    password: str = Field(min_length=10, max_length=1024)
-
-
-class RegistrationVerify(BaseModel):
-    email: EmailStr
-    code: str = Field(pattern=r"^[0-9]{6}$")
-
-
 class RegistrationRequest(BaseModel):
     consent_language: Literal["sk", "en"] = "sk"
     email: EmailStr
     password: str = Field(min_length=10, max_length=1024)
-    verification_token: str = Field(min_length=32, max_length=128)
     first_name: str = Field(min_length=1, max_length=120)
     last_name: str = Field(min_length=1, max_length=120)
     research_consent: bool
@@ -68,7 +57,6 @@ class ResearcherRegistrationRequest(BaseModel):
     consent_language: Literal["sk", "en"] = "sk"
     email: EmailStr
     password: str = Field(min_length=10, max_length=1024)
-    verification_token: str = Field(min_length=32, max_length=128)
     first_name: str = Field(min_length=1, max_length=120)
     last_name: str = Field(min_length=1, max_length=120)
     registration_key: str = Field(min_length=1, max_length=64)

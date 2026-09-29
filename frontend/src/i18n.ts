@@ -2,23 +2,6 @@
 export type Language = "sk" | "en";
 
 const english: Record<string, string> = {
-  "Krok": "Step", "E-mail a heslo": "Email and password", "Potvrdenie e-mailu": "Email verification",
-  "Osobné údaje": "Personal details", "OSOBNÉ ÚDAJE": "PERSONAL DETAILS",
-  "Poslať overovací kód": "Send verification code", "Šesťmiestny kód sme poslali na": "We sent a six-digit code to",
-  "Platí 15 minút.": "It is valid for 15 minutes.", "Overovací kód": "Verification code",
-  "Potvrdiť e-mail": "Verify email", "Overenie zlyhalo.": "Verification failed.",
-  "Zmeniť e-mail alebo poslať nový kód": "Change email or request a new code",
-  "TESTOVACÍ POUŽÍVATELIA": "TEST USERS", "Vytvoriť študentský účet": "Create student account",
-  "Vyžadovať potvrdenie e-mailu": "Require email verification", "Pokračovať": "Continue",
-  "Kód bol odoslaný. Používateľ dokončí registráciu na registračnej stránke; účet a ID ešte nevznikli.": "Code sent. The user completes registration on the registration page; the account and ID have not been created yet.",
-  "Testovací účet bol vytvorený. Participant ID:": "Test account created. Participant ID:",
-  "Účet sa nepodarilo vytvoriť.": "Could not create the account.",
-  "Odosielanie overovacích e-mailov nie je nakonfigurované.": "Verification email is not configured.",
-  "Overovací e-mail sa nepodarilo odoslať.": "Could not send the verification email.",
-  "Pred ďalším odoslaním kódu počkajte jednu minútu.": "Wait one minute before requesting another code.",
-  "Kód expiroval. Požiadajte o nový.": "The code has expired. Request a new code.",
-  "Nesprávny overovací kód.": "Incorrect verification code.",
-  "Najprv potvrďte e-mail; overenie môže byť neplatné alebo expirované.": "Verify your email first; verification may be invalid or expired.",
   "Farebný motív": "Color theme", "Nastavenia vzhľadu": "Appearance settings", "Režim zobrazenia": "Display mode", "Modrá": "Blue", "Červená": "Red", "Zelená": "Green",
   "Fialová": "Purple", "Oranžová": "Orange", "Tyrkysová": "Teal", "Ružová": "Pink", "Zlatá": "Gold",
   "Svetlý režim": "Light mode", "Tmavý režim": "Dark mode", "Prepnúť na svetlý režim": "Switch to light mode",

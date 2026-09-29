@@ -172,10 +172,7 @@ async def comparison(
             )
         )
     )
-    cohort_result = await db.scalars(
-        select(Measurement).join(Participant, Participant.id == Measurement.participant_id)
-        .where(Measurement.status.in_(["completed", "recorded"]), Participant.is_test_account.is_(False))
-    )
+    cohort_result = await db.scalars(select(Measurement).where(Measurement.status.in_(["completed", "recorded"])))
     cohort = [
         item for item in cohort_result
         if item.participant_id not in revoked_participant_ids and belongs_to_mode(item)
