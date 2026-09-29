@@ -2,6 +2,7 @@ import hashlib
 import secrets
 import string
 from pathlib import Path
+from pydantic import BaseModel, EmailStr, Field
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import FileResponse
@@ -16,11 +17,48 @@ from app.models import AdminSession, AdminUser, Measurement, Participant, TestDe
 from app.schemas.participant_group import ParticipantGroupCreate, ParticipantGroupUpdate
 from app.schemas.participant import ParticipantCreate, ParticipantResponse, ParticipantUpdate, RegisteredStudentResponse
 from app.schemas.user_admin import AccountPasswordReset, AccountRoleUpdate, AdminAccountResponse
-from app.core.security import hash_password
+from app.core.security import hash_password, new_participant_code
 from app.schemas.measurement import MeasurementCreate, MeasurementResponse
 from app.schemas.test_definition import TestDefinitionCreate, TestDefinitionResponse, TestDefinitionUpdate
 
 router = APIRouter(prefix="/admin", tags=["administration"])
+
+
+class TestStudentCreate(BaseModel):
+    email: EmailStr
+    password: str = Field(min_length=10, max_length=1024)
+    first_name: str = Field(min_length=1, max_length=120)
+    last_name: str = Field(min_length=1, max_length=120)
+    require_email_verification: bool = True
+
+
+@router.post("/test-users", status_code=status.HTTP_201_CREATED)
+async def create_test_user(
+    payload: TestStudentCreate,
+    auth: AuthContext = Depends(require_superadmin_csrf),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    if payload.require_email_verification:
+        raise HTTPException(status_code=422, detail="S potvrdením e-mailu použite trojkrokovú registráciu.")
+    email = str(payload.email).strip().lower()
+    if await db.scalar(select(AdminUser.id).where(AdminUser.email == email)):
+        raise HTTPException(status_code=409, detail="Účet s týmto e-mailom už existuje.")
+    for _ in range(30):
+        code = new_participant_code()
+        if await db.scalar(select(Participant.id).where(Participant.participant_code == code)) is None:
+            break
+    else:
+        raise HTTPException(status_code=503, detail="Participant ID sa nepodarilo vygenerovať.")
+    participant = Participant(participant_code=code, is_test_account=True)
+    db.add(participant)
+    await db.flush()
+    db.add(AdminUser(
+        username=email, email=email, password_hash=hash_password(payload.password),
+        role="student", first_name=payload.first_name.strip(),
+        last_name=payload.last_name.strip(), participant_id=participant.id,
+    ))
+    await db.commit()
+    return {"participant_id": participant.id, "participant_code": code, "email": email}
 
 
 def _group_response(group: ParticipantGroup) -> dict:

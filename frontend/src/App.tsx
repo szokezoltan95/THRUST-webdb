@@ -327,6 +327,7 @@ export function App() {
   const [accountMessage, setAccountMessage] = useState("");
   const [participantCode, setParticipantCode] = useState("");
   const [participantMessage, setParticipantMessage] = useState("");
+  const [testUserMessage, setTestUserMessage] = useState("");
   const [participantSearch, setParticipantSearch] = useState("");
   const [participantSort, setParticipantSort] = useState<SortState>({ column: "code", direction: "asc" });
   const [testSort, setTestSort] = useState<SortState>({ column: "code", direction: "asc" });
@@ -395,6 +396,10 @@ export function App() {
   const [manualUploadOpen, setManualUploadOpen] = useState(false);
   const [loginOpen, setLoginOpen] = useState(false);
   const [isRegisterPage, setIsRegisterPage] = useState(() => window.location.pathname.replace(/\/+$/, "") === "/register");
+  const [registrationStep, setRegistrationStep] = useState<1 | 2 | 3>(1);
+  const [registrationEmail, setRegistrationEmail] = useState("");
+  const [registrationPassword, setRegistrationPassword] = useState("");
+  const [verificationToken, setVerificationToken] = useState("");
   const [isResearcherRegisterPage, setIsResearcherRegisterPage] = useState(() => window.location.pathname.replace(/\/+$/, "") === "/register/researcher");
   const [consentTexts, setConsentTexts] = useState<ConsentDocuments | null>(null);
   const [consentDialog, setConsentDialog] = useState<ConsentKind | null>(null);
@@ -760,11 +765,44 @@ export function App() {
     }
   }
 
+  async function createTestUser(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setTestUserMessage("");
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    const requireEmailVerification = data.get("require_email_verification") === "on";
+    const payload = {
+      email: data.get("email"), password: data.get("password"),
+      first_name: data.get("first_name"), last_name: data.get("last_name"),
+      require_email_verification: requireEmailVerification,
+    };
+    try {
+      if (requireEmailVerification) {
+        await request("/api/auth/register/start", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: payload.email, password: payload.password }),
+        });
+        setTestUserMessage(t("Kód bol odoslaný. Používateľ dokončí registráciu na registračnej stránke; účet a ID ešte nevznikli."));
+      } else {
+        const created = await request<{ participant_code: string }>("/api/admin/test-users", {
+          method: "POST", headers: { "Content-Type": "application/json", "X-CSRF-Token": user!.csrf_token },
+          body: JSON.stringify(payload),
+        });
+        setTestUserMessage(t("Testovací účet bol vytvorený. Participant ID:") + " " + created.participant_code);
+        const refreshed = await request<Participant[]>("/api/admin/participants");
+        setParticipants(refreshed);
+        setOverview((current) => current ? { ...current, participant_count: current.participant_count + 1 } : current);
+      }
+      form.reset();
+    } catch (reason) { setTestUserMessage(reason instanceof Error ? reason.message : t("Účet sa nepodarilo vytvoriť.")); }
+  }
+
   function openRegistration() {
     window.history.pushState({}, "", "/register");
     setIsRegisterPage(true);
     setIsResearcherRegisterPage(false);
     setError("");
+    setRegistrationStep(1);
     window.scrollTo(0, 0);
   }
 
@@ -773,6 +811,7 @@ export function App() {
     setIsRegisterPage(false);
     setIsResearcherRegisterPage(true);
     setError("");
+    setRegistrationStep(1);
     window.scrollTo(0, 0);
   }
 
@@ -781,7 +820,43 @@ export function App() {
     setIsRegisterPage(false);
     setIsResearcherRegisterPage(false);
     setError("");
+    setRegistrationStep(1);
+    setRegistrationPassword("");
+    setVerificationToken("");
     window.scrollTo(0, 0);
+  }
+
+  async function startRegistration(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError("");
+    const data = new FormData(event.currentTarget);
+    if (data.get("password") !== data.get("password_confirmation")) {
+      setError(t("Heslá sa nezhodujú.")); return;
+    }
+    const email = String(data.get("email") || "").trim().toLowerCase();
+    const password = String(data.get("password") || "");
+    try {
+      await request("/api/auth/register/start", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+      setRegistrationEmail(email);
+      setRegistrationPassword(password);
+      setRegistrationStep(2);
+    } catch (reason) { setError(reason instanceof Error ? reason.message : t("Registrácia zlyhala.")); }
+  }
+
+  async function verifyRegistration(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError("");
+    try {
+      const result = await request<{ verification_token: string }>("/api/auth/register/verify", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: registrationEmail, code: new FormData(event.currentTarget).get("code") }),
+      });
+      setVerificationToken(result.verification_token);
+      setRegistrationStep(3);
+    } catch (reason) { setError(reason instanceof Error ? reason.message : t("Overenie zlyhalo.")); }
   }
 
   async function register(event: FormEvent<HTMLFormElement>) {
@@ -789,10 +864,6 @@ export function App() {
     setError("");
     if (!consentTexts) { setError(t("Texty súhlasov sa nepodarilo načítať.")); return; }
     const data = new FormData(event.currentTarget);
-    if (data.get("password") !== data.get("password_confirmation")) {
-      setError(t("Heslá sa nezhodujú."));
-      return;
-    }
     const birthDateInput = String(data.get("birth_date") || "").trim();
     const birthDate = birthDateInput ? parseFormattedDate(birthDateInput) : null;
     if (birthDateInput && !birthDate) {
@@ -804,8 +875,8 @@ export function App() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          email: data.get("email"), first_name: data.get("first_name"), last_name: data.get("last_name"),
-          password: data.get("password"), research_consent: data.get("research_consent") === "on",
+          email: registrationEmail, first_name: data.get("first_name"), last_name: data.get("last_name"),
+          password: registrationPassword, verification_token: verificationToken, research_consent: data.get("research_consent") === "on",
           gdpr_consent: data.get("gdpr_consent") === "on",
           birth_date: birthDate,
           sex: data.get("sex") || null,
@@ -837,10 +908,6 @@ export function App() {
     setError("");
     if (!consentTexts) { setError(t("Texty súhlasov sa nepodarilo načítať.")); return; }
     const data = new FormData(event.currentTarget);
-    if (data.get("password") !== data.get("password_confirmation")) {
-      setError(t("Heslá sa nezhodujú."));
-      return;
-    }
     try {
       const signedIn = await request<User>("/api/auth/register/researcher", {
         method: "POST",
@@ -848,8 +915,9 @@ export function App() {
         body: JSON.stringify({
           first_name: data.get("first_name"),
           last_name: data.get("last_name"),
-          email: data.get("email"),
-          password: data.get("password"),
+          email: registrationEmail,
+          password: registrationPassword,
+          verification_token: verificationToken,
           registration_key: data.get("registration_key"),
           gdpr_consent: data.get("gdpr_consent") === "on",
           gdpr_consent_version: consentTexts?.gdpr.version || "gdpr-v3",
@@ -1065,11 +1133,11 @@ export function App() {
 
   if (user?.role === "student") return <StudentPortal user={user} onLogout={logout} accentTheme={accentTheme} colorMode={colorMode} onAppearanceChange={(theme, mode) => void saveAppearance(theme, mode)} />;
   if (isRegisterPage && !user) return <>
-    <RegistrationPage onSubmit={register} onBack={leaveRegistration} onLogin={() => { leaveRegistration(); setLoginOpen(true); }} onResearcherRegister={openResearcherRegistration} error={error} consentTexts={consentTexts} onOpenConsent={setConsentDialog} />
+    <RegistrationPage step={registrationStep} email={registrationEmail} onRestart={() => { setRegistrationStep(1); setError(""); }} onStart={startRegistration} onVerify={verifyRegistration} onSubmit={register} onBack={leaveRegistration} onLogin={() => { leaveRegistration(); setLoginOpen(true); }} onResearcherRegister={openResearcherRegistration} error={error} consentTexts={consentTexts} onOpenConsent={setConsentDialog} />
     {consentDialog && consentTexts && <ConsentTextDialog kind={consentDialog} document={activeConsentDocument || consentTexts[consentDialog]} onClose={() => { setConsentDialog(null); setActiveConsentDocument(null); }} />}
   </>;
   if (isResearcherRegisterPage && !user) return <>
-    <ResearcherRegistrationPage onSubmit={registerResearcher} onBack={leaveRegistration} onStudentRegister={openRegistration} onLogin={() => { leaveRegistration(); setLoginOpen(true); }} error={error} consentTexts={consentTexts} onOpenConsent={setConsentDialog} />
+    <ResearcherRegistrationPage step={registrationStep} email={registrationEmail} onRestart={() => { setRegistrationStep(1); setError(""); }} onStart={startRegistration} onVerify={verifyRegistration} onSubmit={registerResearcher} onBack={leaveRegistration} onStudentRegister={openRegistration} onLogin={() => { leaveRegistration(); setLoginOpen(true); }} error={error} consentTexts={consentTexts} onOpenConsent={setConsentDialog} />
     {consentDialog && consentTexts && <ConsentTextDialog kind={consentDialog} document={activeConsentDocument || consentTexts[consentDialog]} onClose={() => { setConsentDialog(null); setActiveConsentDocument(null); }} />}
   </>;
 
@@ -1122,6 +1190,14 @@ export function App() {
                   {filteredParticipants().length === 0 && visibleAccountOnlyRows().length === 0 && <div className="empty-list"><h2>{t("Žiadni účastníci")}</h2><p className="muted">{t("Filteru nezodpovedá žiadny záznam.")}</p></div>}
                 </section>
                 {(user.role === "admin" || user.role === "superadmin") && <section className="participant-create-strip"><div><div className="eyebrow">{t("NOVÝ ÚČASTNÍK")}</div><strong>{t("Vytvoriť anonymné ID")}</strong></div><form className="inline-create-form" onSubmit={createParticipant}><input id="new-participant-code" value={participantCode} onChange={(event) => setParticipantCode(event.target.value.toUpperCase())} maxLength={5} pattern="[A-Za-z0-9]{5}" placeholder={t("ABCDE")} required /><button type="button" className="quiet compact" onClick={generateParticipantCode}>{t("Generovať")}</button><button type="submit" className="primary compact">{t("Vytvoriť")}</button></form>{participantMessage && <span className="notice">{participantMessage}</span>}</section>}
+                {user.role === "superadmin" && <section className="participant-create-strip"><div><div className="eyebrow">{t("TESTOVACÍ POUŽÍVATELIA")}</div><strong>{t("Vytvoriť študentský účet")}</strong></div>
+                  <form className="registration-form" onSubmit={createTestUser}>
+                    <div className="form-grid"><label>{t("Meno")}<input name="first_name" required /></label><label>{t("Priezvisko")}<input name="last_name" required /></label></div>
+                    <div className="form-grid"><label>{t("E-mail")}<input name="email" type="email" required /></label><label>{t("Heslo")}<input name="password" type="password" minLength={10} required /></label></div>
+                    <label className="consent"><input name="require_email_verification" type="checkbox" defaultChecked /> {t("Vyžadovať potvrdenie e-mailu")}</label>
+                    <button type="submit" className="primary compact">{t("Pokračovať")}</button>
+                  </form>{testUserMessage && <span className="notice">{testUserMessage}</span>}
+                </section>}
                 {selectedParticipant && participantDialog && (() => {
                   const participant = selectedParticipant.participant;
                   const linkedAccount = adminAccounts.find((item) => item.participant_id === participant.id) || null;
@@ -1350,7 +1426,12 @@ export function App() {
 }
 
 
-function RegistrationPage({ onSubmit, onBack, onLogin, onResearcherRegister, error, consentTexts, onOpenConsent }: {
+function RegistrationPage({ step, email, onRestart, onStart, onVerify, onSubmit, onBack, onLogin, onResearcherRegister, error, consentTexts, onOpenConsent }: {
+  step: 1 | 2 | 3;
+  email: string;
+  onRestart: () => void;
+  onStart: (event: FormEvent<HTMLFormElement>) => void;
+  onVerify: (event: FormEvent<HTMLFormElement>) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onBack: () => void;
   onLogin: () => void;
@@ -1366,12 +1447,30 @@ function RegistrationPage({ onSubmit, onBack, onLogin, onResearcherRegister, err
     </header>
     <section className="registration-content">
       <div className="registration-heading"><div className="eyebrow">{t("NOVÝ ŠTUDENTSKÝ ÚČET")}</div><h1>{t("Vytvor si účet")}</h1><p className="lead">{t("Po registrácii dostaneš svoje Participant ID. Výskumník ho použije pri meraní v lokálnom THRUSTe.")}</p></div>
-      <form className="registration-form" onSubmit={onSubmit}>
+      <p className="muted">{t("Krok")} {step}/3 · {step === 1 ? t("E-mail a heslo") : step === 2 ? t("Potvrdenie e-mailu") : t("Osobné údaje")}</p>
+      {step === 1 && <form className="registration-form" onSubmit={onStart}>
         <section className="registration-card registration-account-fields">
           <div className="eyebrow">{t("PRIHLASOVACIE ÚDAJE")}</div><h2>{t("Účet")}</h2><p className="muted">{t("Účet má na začiatku rolu študenta. Oprávnenia môže zmeniť iba superadmin.")}</p>
-          <div className="form-grid"><label>{t("Meno")}<input name="first_name" autoComplete="given-name" required /></label><label>{t("Priezvisko")}<input name="last_name" autoComplete="family-name" required /></label></div>
           <label>{t("E-mail")}<input name="email" type="email" autoComplete="email" required /></label>
           <div className="form-grid"><label>{t("Heslo")}<input name="password" type="password" minLength={10} autoComplete="new-password" required /></label><label>{t("Zopakovať heslo")}<input name="password_confirmation" type="password" minLength={10} autoComplete="new-password" required /></label></div>
+          {error && <p className="error">{error}</p>}
+          <button type="submit" className="primary">{t("Poslať overovací kód")}</button>
+        </section>
+      </form>}
+      {step === 2 && <form className="registration-form" onSubmit={onVerify}>
+        <section className="registration-card">
+          <h2>{t("Potvrdenie e-mailu")}</h2>
+          <p className="muted">{t("Šesťmiestny kód sme poslali na")} {email}. {t("Platí 15 minút.")}</p>
+          <label>{t("Overovací kód")}<input name="code" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} required /></label>
+          {error && <p className="error">{error}</p>}
+          <button type="submit" className="primary">{t("Potvrdiť e-mail")}</button>
+          <button type="button" className="quiet" onClick={onRestart}>{t("Zmeniť e-mail alebo poslať nový kód")}</button>
+        </section>
+      </form>}
+      {step === 3 && <form className="registration-form" onSubmit={onSubmit}>
+        <section className="registration-card">
+          <div className="eyebrow">{t("OSOBNÉ ÚDAJE")}</div>
+          <div className="form-grid"><label>{t("Meno")}<input name="first_name" autoComplete="given-name" required /></label><label>{t("Priezvisko")}<input name="last_name" autoComplete="family-name" required /></label></div>
         </section>
         <section className="registration-card profile-questionnaire">
           <div><div className="eyebrow">{t("PROFIL PILOTA · NEPOVINNÉ")}</div><h2>{t("Skúsenosti a zručnosti")}</h2><p className="muted">{t("Všetky odpovede sú nepovinné. Použijú sa na štatistické vyhodnotenie; môžeš ich preskočiť.")}</p></div>
@@ -1391,7 +1490,7 @@ function RegistrationPage({ onSubmit, onBack, onLogin, onResearcherRegister, err
           {error && <p className="error">{error}</p>}
           <div className="registration-actions"><span className="muted">{t("Profilové otázky sú nepovinné. Oba súhlasy sú potrebné na registráciu.")}</span><button type="submit" className="primary" disabled={!consentTexts}>{t("Vytvoriť účet")}</button></div>
         </section>
-      </form>
+      </form>}
     </section>
   </main>;
 }
@@ -1867,7 +1966,12 @@ function TestEditor({ test, onClose, onSaved }: { test: TestDefinition; onClose:
   </div><footer className="editor-footer"><button type="button" className="quiet" onClick={onClose}>{t("Zrušiť")}</button><button className="primary" onClick={save}>{t("Uložiť nastavenia")}</button>{message && <span className="notice">{message}</span>}</footer></section></div>;
 }
 
-function ResearcherRegistrationPage({ onSubmit, onBack, onStudentRegister, onLogin, error, consentTexts, onOpenConsent }: {
+function ResearcherRegistrationPage({ step, email, onRestart, onStart, onVerify, onSubmit, onBack, onStudentRegister, onLogin, error, consentTexts, onOpenConsent }: {
+  step: 1 | 2 | 3;
+  email: string;
+  onRestart: () => void;
+  onStart: (event: FormEvent<HTMLFormElement>) => void;
+  onVerify: (event: FormEvent<HTMLFormElement>) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onBack: () => void;
   onStudentRegister: () => void;
@@ -1883,12 +1987,28 @@ function ResearcherRegistrationPage({ onSubmit, onBack, onStudentRegister, onLog
     </header>
     <section className="registration-content">
       <div className="registration-heading"><div className="eyebrow">{t("VÝSKUMNÝ ÚČET")}</div><h1>{t("Registrácia výskumníka")}</h1><p className="lead">{t("Účet získa rolu researcher a nebude mať Participant ID. Na registráciu potrebuješ pozývací kľúč od správcu systému.")}</p></div>
-      <form className="registration-form researcher-registration-form" onSubmit={onSubmit}>
+      <p className="muted">{t("Krok")} {step}/3 · {step === 1 ? t("E-mail a heslo") : step === 2 ? t("Potvrdenie e-mailu") : t("Osobné údaje")}</p>
+      {step === 1 && <form className="registration-form" onSubmit={onStart}>
         <section className="registration-card registration-account-fields">
           <div className="eyebrow">{t("ÚDAJE ÚČTU")}</div><h2>{t("Prístup pre výskumníka")}</h2>
-          <div className="form-grid"><label>{t("Meno")}<input name="first_name" autoComplete="given-name" required /></label><label>{t("Priezvisko")}<input name="last_name" autoComplete="family-name" required /></label></div>
           <label>{t("E-mail")}<input name="email" type="email" autoComplete="email" required /></label>
           <div className="form-grid"><label>{t("Heslo")}<input name="password" type="password" minLength={10} autoComplete="new-password" required /></label><label>{t("Zopakovať heslo")}<input name="password_confirmation" type="password" minLength={10} autoComplete="new-password" required /></label></div>
+          {error && <p className="error">{error}</p>}
+          <button type="submit" className="primary">{t("Poslať overovací kód")}</button>
+        </section>
+      </form>}
+      {step === 2 && <form className="registration-form" onSubmit={onVerify}>
+        <section className="registration-card"><h2>{t("Potvrdenie e-mailu")}</h2>
+          <p className="muted">{t("Šesťmiestny kód sme poslali na")} {email}. {t("Platí 15 minút.")}</p>
+          <label>{t("Overovací kód")}<input name="code" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} required /></label>
+          {error && <p className="error">{error}</p>}
+          <button type="submit" className="primary">{t("Potvrdiť e-mail")}</button>
+          <button type="button" className="quiet" onClick={onRestart}>{t("Zmeniť e-mail alebo poslať nový kód")}</button>
+        </section>
+      </form>}
+      {step === 3 && <form className="registration-form researcher-registration-form" onSubmit={onSubmit}>
+        <section className="registration-card"><div className="eyebrow">{t("OSOBNÉ ÚDAJE")}</div>
+          <div className="form-grid"><label>{t("Meno")}<input name="first_name" autoComplete="given-name" required /></label><label>{t("Priezvisko")}<input name="last_name" autoComplete="family-name" required /></label></div>
         </section>
         <section className="registration-card researcher-key-card">
           <div><div className="eyebrow">{t("OVERENIE PRÍSTUPU")}</div><h2>{t("Registračné heslo")}</h2><p className="muted">{t("Zadaj krátke spoločné heslo, ktoré ti poskytol správca. Umožní vytvoriť účet výskumníka.")}</p></div>
@@ -1897,7 +2017,7 @@ function ResearcherRegistrationPage({ onSubmit, onBack, onStudentRegister, onLog
           {error && <p className="error">{error}</p>}
           <div className="registration-actions"><span className="muted">{t("Výskumný súhlas účastníka merania sa na tento účet nevzťahuje.")}</span><button className="primary" type="submit" disabled={!consentTexts}>{t("Vytvoriť účet výskumníka")}</button></div>
         </section>
-      </form>
+      </form>}
     </section>
   </main>;
 }
