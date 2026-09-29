@@ -570,17 +570,13 @@ export function App() {
       setUploadMessage(t("Vyber aj JSON analýzy vytvorený THRUST-measure."));
       return;
     }
-    const analysisStart = Date.parse(String(analysisData?.started_at ?? ""));
-    if (!Number.isFinite(analysisStart)) {
-      setUploadMessage(t("Súbor analýzy nemá platný čas začiatku merania."));
-      return;
-    }
     if (analysisFile instanceof File && analysisFile.size) {
       try {
         const parsed: unknown = JSON.parse(await analysisFile.text());
         if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error(t("Neplatný JSON analýzy."));
         analysisData = parsed as Record<string, unknown>;
         if (analysisData.schema_version !== "thrust-analysis-v1") throw new Error(t("Analýza nemá podporovaný formát THRUST-measure."));
+        if (!Number.isFinite(Date.parse(String(analysisData.started_at ?? "")))) throw new Error(t("Súbor analýzy nemá platný čas začiatku merania."));
         const chosen = tests.find((test) => test.id === form.get("test_definition_id"));
         if (chosen?.analysis_profile.toUpperCase().startsWith("SIMPLE") && analysisData.analysis_type !== "SIMPLE_2D_FLIGHT") {
           throw new Error(t("Zvolený SimPLE test vyžaduje analýzu SimPLE."));
@@ -593,6 +589,7 @@ export function App() {
         return;
       }
     }
+    const analysisStart = Date.parse(String(analysisData?.started_at ?? ""));
     const buffer = await file.arrayBuffer();
     let binary = "";
     for (const byte of new Uint8Array(buffer)) binary += String.fromCharCode(byte);
