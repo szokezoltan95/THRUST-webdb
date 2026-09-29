@@ -1,5 +1,11 @@
 from datetime import datetime, timedelta, timezone
+import asyncio
+import hashlib
 import hmac
+import secrets
+import smtplib
+import ssl
+from email.message import EmailMessage
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import delete, select
@@ -17,10 +23,93 @@ from app.core.security import (
     verify_password,
 )
 from app.db.session import get_db
-from app.models import AdminSession, AdminUser, Participant, ResearchConsent
-from app.schemas.auth import AppearancePreferences, LoginRequest, RegistrationRequest, ResearcherRegistrationRequest, UserResponse
+from app.models import AdminSession, AdminUser, Participant, PendingRegistration, ResearchConsent
+from app.schemas.auth import AppearancePreferences, LoginRequest, RegistrationRequest, RegistrationStart, RegistrationVerify, ResearcherRegistrationRequest, UserResponse
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
+
+
+def _digest(secret: str) -> str:
+    return hashlib.sha256(secret.encode("utf-8")).hexdigest()
+
+
+def _code_digest(password_hash: str, code: str) -> str:
+    return hmac.new(password_hash.encode("utf-8"), code.encode("ascii"), hashlib.sha256).hexdigest()
+
+
+def _is_reserved_superadmin_email(email: str) -> bool:
+    return email in {value.strip().lower() for value in settings.superadmin_identifiers.split(",") if value.strip()}
+
+
+def _send_verification_email(email: str, code: str) -> None:
+    message = EmailMessage()
+    message["From"] = settings.smtp_from
+    message["To"] = email
+    message["Subject"] = "THRUST – potvrdenie e-mailu / e-mail verification"
+    message.set_content(
+        f"Overovací kód pre registráciu THRUST: {code}\n"
+        f"THRUST registration verification code: {code}\n\n"
+        "Kód platí 15 minút. Ak ste o registráciu nežiadali, správu ignorujte.\n"
+    )
+    with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=10) as smtp:
+        smtp.ehlo()
+        if settings.smtp_starttls:
+            smtp.starttls(context=ssl.create_default_context())
+            smtp.ehlo()
+        if settings.smtp_username:
+            smtp.login(settings.smtp_username, settings.smtp_password)
+        smtp.send_message(message)
+
+
+@router.post("/register/start", status_code=status.HTTP_202_ACCEPTED)
+async def start_registration(payload: RegistrationStart, db: AsyncSession = Depends(get_db)) -> dict:
+    if not settings.smtp_host or not settings.smtp_from:
+        raise HTTPException(status_code=503, detail="Odosielanie overovacích e-mailov nie je nakonfigurované.")
+    email = str(payload.email).strip().lower()
+    if _is_reserved_superadmin_email(email):
+        raise HTTPException(status_code=409, detail="Tento e-mail je vyhradený pre superadmin účet.")
+    if await db.scalar(select(AdminUser.id).where(AdminUser.email == email)):
+        raise HTTPException(status_code=409, detail="Účet s týmto e-mailom už existuje.")
+    now = datetime.now(timezone.utc)
+    pending = await db.scalar(select(PendingRegistration).where(PendingRegistration.email == email).with_for_update())
+    if pending and pending.sent_at.replace(tzinfo=timezone.utc) + timedelta(seconds=60) > now:
+        raise HTTPException(status_code=429, detail="Pred ďalším odoslaním kódu počkajte jednu minútu.")
+    code = f"{secrets.randbelow(1_000_000):06d}"
+    # Send before committing. An SMTP error never creates a usable pending registration.
+    try:
+        await asyncio.to_thread(_send_verification_email, email, code)
+    except (OSError, smtplib.SMTPException) as exc:
+        raise HTTPException(status_code=503, detail="Overovací e-mail sa nepodarilo odoslať.") from exc
+    if pending is None:
+        pending = PendingRegistration(email=email)
+        db.add(pending)
+    pending.password_hash = hash_password(payload.password)
+    pending.code_hash = _code_digest(pending.password_hash, code)
+    pending.token_hash = None
+    pending.attempts = 0
+    pending.sent_at = now
+    pending.expires_at = now + timedelta(minutes=15)
+    await db.commit()
+    return {"message": "Overovací kód bol odoslaný.", "expires_in_seconds": 900}
+
+
+@router.post("/register/verify")
+async def verify_registration(payload: RegistrationVerify, db: AsyncSession = Depends(get_db)) -> dict:
+    email = str(payload.email).strip().lower()
+    pending = await db.scalar(select(PendingRegistration).where(PendingRegistration.email == email).with_for_update())
+    now = datetime.now(timezone.utc)
+    if not pending or pending.expires_at.replace(tzinfo=timezone.utc) <= now or pending.attempts >= 5:
+        raise HTTPException(status_code=400, detail="Kód expiroval. Požiadajte o nový.")
+    pending.attempts += 1
+    if not hmac.compare_digest(pending.code_hash, _code_digest(pending.password_hash, payload.code)):
+        await db.commit()
+        raise HTTPException(status_code=400, detail="Nesprávny overovací kód.")
+    token = secrets.token_urlsafe(32)
+    pending.token_hash = _digest(token)
+    pending.code_hash = _digest(secrets.token_urlsafe(32))
+    pending.expires_at = now + timedelta(minutes=30)
+    await db.commit()
+    return {"verification_token": token}
 
 def response_for_user(user: AdminUser, csrf_token: str, participant_code: str | None = None) -> UserResponse:
     return UserResponse(
@@ -69,6 +158,14 @@ async def register(
         raise HTTPException(status_code=400, detail="Na registráciu sú potrebné oba samostatné súhlasy.")
 
     email = str(payload.email).strip().lower()
+    if _is_reserved_superadmin_email(email):
+        raise HTTPException(status_code=409, detail="Tento e-mail je vyhradený pre superadmin účet.")
+    pending = await db.scalar(select(PendingRegistration).where(PendingRegistration.email == email).with_for_update())
+    if (not pending or not pending.token_hash
+            or pending.expires_at.replace(tzinfo=timezone.utc) <= datetime.now(timezone.utc)
+            or not hmac.compare_digest(pending.token_hash, _digest(payload.verification_token))
+            or not verify_password(payload.password, pending.password_hash)):
+        raise HTTPException(status_code=400, detail="Najprv potvrďte e-mail; overenie môže byť neplatné alebo expirované.")
     if await db.scalar(select(AdminUser.id).where(AdminUser.email == email)):
         raise HTTPException(status_code=409, detail="Účet s týmto e-mailom už existuje.")
 
@@ -127,6 +224,7 @@ async def register(
             text_snapshot=gdpr_consent_text(payload.consent_language),
         ),
     ])
+    await db.delete(pending)
     await db.commit()
     return await create_session(user, response, db)
 
@@ -147,11 +245,19 @@ async def register_researcher(
         raise HTTPException(status_code=403, detail="Pozývací kľúč výskumníka nie je platný.")
 
     email = str(payload.email).strip().lower()
+    if _is_reserved_superadmin_email(email):
+        raise HTTPException(status_code=409, detail="Tento e-mail je vyhradený pre superadmin účet.")
     superadmin_identifiers = {
         item.strip().lower() for item in settings.superadmin_identifiers.split(",") if item.strip()
     }
     if email in superadmin_identifiers:
         raise HTTPException(status_code=409, detail="Tento e-mail je vyhradený pre superadmin účet.")
+    pending = await db.scalar(select(PendingRegistration).where(PendingRegistration.email == email).with_for_update())
+    if (not pending or not pending.token_hash
+            or pending.expires_at.replace(tzinfo=timezone.utc) <= datetime.now(timezone.utc)
+            or not hmac.compare_digest(pending.token_hash, _digest(payload.verification_token))
+            or not verify_password(payload.password, pending.password_hash)):
+        raise HTTPException(status_code=400, detail="Najprv potvrďte e-mail; overenie môže byť neplatné alebo expirované.")
     if await db.scalar(select(AdminUser.id).where((AdminUser.email == email) | (AdminUser.username == email))):
         raise HTTPException(status_code=409, detail="Účet s týmto e-mailom už existuje.")
 
@@ -172,6 +278,7 @@ async def register_researcher(
         version=payload.gdpr_consent_version or GDPR_CONSENT_VERSION,
         text_snapshot=gdpr_consent_text(payload.consent_language),
     ))
+    await db.delete(pending)
     await db.commit()
     return await create_session(user, response, db)
 
