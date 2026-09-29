@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://thrust.local/contracts/thrust-analysis-v1.schema.json",
+  "title": "THRUST Measure analysis artifact",
+  "type": "object",
+  "required": [
+    "schema_version", "algorithm_version", "analysis_type", "started_at",
+    "sample_count", "duration_s", "estimated_sampling_hz", "metrics",
+    "quality", "events", "normalized_step_response", "producer", "raw_log",
+    "test", "parameters", "runtime", "session_summary"
+  ],
+  "properties": {
+    "schema_version": { "const": "thrust-analysis-v1" },
+    "algorithm_version": { "type": "string", "minLength": 1 },
+    "analysis_type": { "enum": ["SCOPE_STEP_RESPONSE", "SIMPLE_2D_FLIGHT"] },
+    "started_at": { "type": "string", "format": "date-time" },
+    "sample_count": { "type": "integer", "minimum": 2 },
+    "duration_s": { "type": "number", "minimum": 0 },
+    "estimated_sampling_hz": { "type": "number", "exclusiveMinimum": 0 },
+    "metrics": { "type": "object" },
+    "quality": { "type": "object" },
+    "events": { "type": "array" },
+    "normalized_step_response": { "type": "object" },
+    "producer": { "type": "object" },
+    "raw_log": {
+      "type": "object",
+      "required": ["file_name", "sha256", "size_bytes", "content_type"],
+      "properties": {
+        "file_name": { "type": "string" },
+        "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "size_bytes": { "type": "integer", "minimum": 0 },
+        "content_type": { "type": "string" }
+      }
+    },
+    "test": { "type": "object" },
+    "parameters": { "type": "object" },
+    "runtime": { "type": "object" },
+    "session_summary": { "type": "object" }
+  }
+}
