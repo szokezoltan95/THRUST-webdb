@@ -41,6 +41,8 @@ async def create_test_user(
     if payload.require_email_verification:
         raise HTTPException(status_code=422, detail="S potvrdením e-mailu použite trojkrokovú registráciu.")
     email = str(payload.email).strip().lower()
+    if email in {value.strip().lower() for value in settings.superadmin_identifiers.split(",") if value.strip()}:
+        raise HTTPException(status_code=409, detail="Tento e-mail je vyhradený pre superadmin účet.")
     if await db.scalar(select(AdminUser.id).where(AdminUser.email == email)):
         raise HTTPException(status_code=409, detail="Účet s týmto e-mailom už existuje.")
     for _ in range(30):

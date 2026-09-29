@@ -33,6 +33,14 @@ def _digest(secret: str) -> str:
     return hashlib.sha256(secret.encode("utf-8")).hexdigest()
 
 
+def _code_digest(password_hash: str, code: str) -> str:
+    return hmac.new(password_hash.encode("utf-8"), code.encode("ascii"), hashlib.sha256).hexdigest()
+
+
+def _is_reserved_superadmin_email(email: str) -> bool:
+    return email in {value.strip().lower() for value in settings.superadmin_identifiers.split(",") if value.strip()}
+
+
 def _send_verification_email(email: str, code: str) -> None:
     message = EmailMessage()
     message["From"] = settings.smtp_from
@@ -58,6 +66,8 @@ async def start_registration(payload: RegistrationStart, db: AsyncSession = Depe
     if not settings.smtp_host or not settings.smtp_from:
         raise HTTPException(status_code=503, detail="Odosielanie overovacích e-mailov nie je nakonfigurované.")
     email = str(payload.email).strip().lower()
+    if _is_reserved_superadmin_email(email):
+        raise HTTPException(status_code=409, detail="Tento e-mail je vyhradený pre superadmin účet.")
     if await db.scalar(select(AdminUser.id).where(AdminUser.email == email)):
         raise HTTPException(status_code=409, detail="Účet s týmto e-mailom už existuje.")
     now = datetime.now(timezone.utc)
@@ -74,7 +84,7 @@ async def start_registration(payload: RegistrationStart, db: AsyncSession = Depe
         pending = PendingRegistration(email=email)
         db.add(pending)
     pending.password_hash = hash_password(payload.password)
-    pending.code_hash = _digest(code)
+    pending.code_hash = _code_digest(pending.password_hash, code)
     pending.token_hash = None
     pending.attempts = 0
     pending.sent_at = now
@@ -91,7 +101,7 @@ async def verify_registration(payload: RegistrationVerify, db: AsyncSession = De
     if not pending or pending.expires_at.replace(tzinfo=timezone.utc) <= now or pending.attempts >= 5:
         raise HTTPException(status_code=400, detail="Kód expiroval. Požiadajte o nový.")
     pending.attempts += 1
-    if not hmac.compare_digest(pending.code_hash, _digest(payload.code)):
+    if not hmac.compare_digest(pending.code_hash, _code_digest(pending.password_hash, payload.code)):
         await db.commit()
         raise HTTPException(status_code=400, detail="Nesprávny overovací kód.")
     token = secrets.token_urlsafe(32)
@@ -148,6 +158,8 @@ async def register(
         raise HTTPException(status_code=400, detail="Na registráciu sú potrebné oba samostatné súhlasy.")
 
     email = str(payload.email).strip().lower()
+    if _is_reserved_superadmin_email(email):
+        raise HTTPException(status_code=409, detail="Tento e-mail je vyhradený pre superadmin účet.")
     pending = await db.scalar(select(PendingRegistration).where(PendingRegistration.email == email).with_for_update())
     if (not pending or not pending.token_hash
             or pending.expires_at.replace(tzinfo=timezone.utc) <= datetime.now(timezone.utc)
@@ -233,6 +245,8 @@ async def register_researcher(
         raise HTTPException(status_code=403, detail="Pozývací kľúč výskumníka nie je platný.")
 
     email = str(payload.email).strip().lower()
+    if _is_reserved_superadmin_email(email):
+        raise HTTPException(status_code=409, detail="Tento e-mail je vyhradený pre superadmin účet.")
     superadmin_identifiers = {
         item.strip().lower() for item in settings.superadmin_identifiers.split(",") if item.strip()
     }
