@@ -1312,3 +1312,91 @@ main[data-color-mode="light"] .status-dot,
 main[data-color-mode="light"] .measurement-item .measurement-status,
 main[data-color-mode="light"] .consent-active { color: #167e53; }
 main[data-color-mode="light"] .test-attendance.completed { color: #167e53; background: rgba(22,126,83,.1); }
+
+/* Responsive application shell, navigation and data surfaces. */
+.mobile-menu-toggle, .mobile-menu-close, .mobile-nav-backdrop { display: none; }
+.topbar-title { min-width: 0; }
+.topbar-title h1 { overflow-wrap: anywhere; }
+.app-main, .workspace, .panel, .browser-panel, .browser-detail, .metrics-summary { min-width: 0; }
+.table-wrap, .test-participant-table-wrap, .metrics-table, .participant-table, .test-table, .trend-data-table { max-width: 100%; overscroll-behavior-x: contain; }
+.table-wrap, .test-participant-table-wrap { overflow-x: auto; }
+.table-wrap table { min-width: 620px; }
+
+@media (max-width: 800px) {
+  .app-shell { position: relative; flex-direction: row; }
+  .sidebar, .sidebar-collapsed .sidebar {
+    position: fixed; z-index: 1200; inset: 0 auto 0 0; width: min(86vw, 320px); height: 100dvh; max-height: none;
+    flex: none; padding: max(14px, env(safe-area-inset-top)) 14px max(14px, env(safe-area-inset-bottom));
+    border: 0; border-right: 1px solid var(--line); transform: translateX(-105%); transition: transform 220ms ease;
+    box-shadow: 16px 0 48px rgba(0,0,0,.28);
+  }
+  .mobile-nav-open .sidebar { transform: translateX(0); }
+  .mobile-nav-backdrop { display: block; position: fixed; z-index: 1190; inset: 0; border: 0; background: rgba(0,0,0,.52); backdrop-filter: blur(2px); }
+  .sidebar-brand-row, .sidebar-collapsed .sidebar-brand-row { flex-direction: row; justify-content: space-between; padding: 4px 2px 18px; }
+  .sidebar .brand img, .sidebar-collapsed .sidebar .brand img { display: block; width: 142px; height: auto; object-fit: contain; }
+  .sidebar-toggle { display: none; }
+  .mobile-menu-close { display: grid; place-items: center; flex: 0 0 40px; width: 40px; height: 40px; border: 1px solid var(--line); border-radius: 7px; color: var(--text-main); background: var(--surface-raised); font-size: 26px; line-height: 1; }
+  .side-nav { display: grid; grid-template-columns: 1fr; gap: 5px; overflow-y: auto; }
+  .nav-item, .sidebar-collapsed .nav-item { justify-content: flex-start; flex-direction: row; gap: 12px; min-height: 46px; padding: 10px 12px; font-size: .9rem; text-align: left; }
+  .sidebar-collapsed .nav-label, .sidebar-collapsed .sidebar-user { display: inline; }
+  .sidebar-footer, .sidebar-collapsed .sidebar-footer { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; margin-top: auto; padding: 14px 4px 0; }
+  .sidebar-footer .sidebar-user { overflow-wrap: anywhere; }
+  .app-main { width: 100%; }
+  .app-main > .topbar { display: flex; min-height: 64px; gap: 12px; padding: 8px 14px; }
+  .mobile-menu-toggle { display: flex; flex: 0 0 40px; width: 40px; height: 40px; flex-direction: column; align-items: center; justify-content: center; gap: 5px; border: 1px solid var(--line); border-radius: 7px; color: var(--text-main); background: var(--surface); }
+  .mobile-menu-toggle span { display: block; width: 18px; height: 2px; border-radius: 2px; background: currentColor; }
+  .app-main > .topbar .topbar-title { flex: 1; }
+  .app-main > .topbar h1 { font-size: clamp(19px, 4vw, 26px); }
+  .header-actions { flex: 0 0 auto; gap: 8px; }
+  .header-actions .status-dot { display: none; }
+  .app-main > .workspace { padding: 16px clamp(12px, 3vw, 22px) 24px; }
+  .data-table, .participant-table, .test-table, .trend-data-table { display: block; width: 100%; overflow-x: auto; }
+  .data-table-head, .data-table-row { width: max-content; min-width: 720px; }
+}
+
+@media (max-width: 560px) {
+  .app-main > .topbar { gap: 8px; padding-inline: 10px; }
+  .mobile-menu-toggle { flex-basis: 36px; width: 36px; height: 36px; }
+  .app-main > .topbar .eyebrow { font-size: 8px; letter-spacing: .06em; }
+  .app-main > .topbar h1 { font-size: clamp(17px, 4.8vw, 22px); }
+  .header-actions { gap: 5px; }
+  .appearance-trigger { width: 34px; height: 34px; }
+  .language-switch button { padding: 5px 6px; font-size: 10px; }
+  .app-main > .workspace { padding: 12px 10px 20px; }
+  .panel, .browser-panel, .browser-detail { padding: 12px; }
+  .browser-header, .detail-header, .workbench-header { display: flex; flex-direction: column; align-items: stretch; gap: 10px; }
+  .browser-header > .actions, .browser-header .actions { justify-content: flex-start; flex-wrap: wrap; }
+  .actions, .welcome-editor-actions { flex-wrap: wrap; }
+  .actions > button { max-width: 100%; }
+  .browser-toolbar { flex-wrap: wrap; }
+  .browser-toolbar input, .browser-toolbar select { flex: 1 1 100%; width: 100%; }
+  .filters, .modal-form, .form-grid, .registration-form, .detail-grid, .consent-status-grid { grid-template-columns: minmax(0, 1fr) !important; }
+  .modal-form label:last-of-type { grid-column: auto; }
+  .stats { grid-template-columns: minmax(0, 1fr); }
+  .account-row { grid-template-columns: minmax(0, 1fr); padding: 12px; }
+  .account-actions { justify-content: flex-start; }
+  .participant-create-strip, .account-management-panel, .participant-purge-row { align-items: stretch; flex-direction: column; gap: 10px; }
+  .inline-create-form { width: 100%; margin-left: 0; flex-wrap: wrap; }
+  .inline-create-form input { flex: 1 1 100px; }
+  .welcome-editor-toolbar { flex-direction: column; }
+  .welcome-editor-grid { grid-template-columns: minmax(0, 1fr); }
+  .welcome-properties { grid-column: 1; }
+  .welcome-editor-preview { min-height: 300px; padding: 14px; }
+  .chart-toolbar label { flex-wrap: wrap; }
+  .login, .consent-dialog, .account-dialog { width: calc(100vw - 20px); max-height: calc(100dvh - 24px); padding: 20px; overflow: auto; }
+  .backdrop { padding: 12px 8px; }
+  .detail-modal-open { inset: 8px !important; max-height: calc(100dvh - 16px); }
+  .table-wrap, .test-participant-table-wrap, .metrics-table { width: 100%; overflow-x: auto; }
+  .table-wrap table, .test-participant-table { min-width: 620px; }
+  .data-table, .participant-table, .test-table, .trend-data-table { max-width: calc(100vw - 22px); }
+  .data-table-head, .data-table-row { min-width: 680px; }
+  .test-participant-table { font-size: .76rem; }
+  .test-participant-table th, .test-participant-table td { padding: 9px 10px; }
+  .response-chart { padding: 4px; }
+}
+
+@media (orientation: landscape) and (max-height: 520px) and (max-width: 900px) {
+  .app-main > .topbar { min-height: 52px; }
+  .sidebar { padding-block: 8px; }
+  .sidebar-brand-row { padding-bottom: 8px; }
+}
