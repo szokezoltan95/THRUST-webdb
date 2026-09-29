@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.dependencies import AuthContext, effective_role, require_admin, require_csrf, require_researcher, require_researcher_csrf, require_superadmin_csrf
 from app.core.config import settings
 from app.core.raw_logs import RawUploadInvalid, RawUploadTooLarge, decode_raw_upload
+from app.core.measurement_results import validate_measurement_result
 from app.db.session import get_db
 from app.models import AdminSession, AdminUser, Measurement, Participant, TestDefinition, ParticipantGroup
 from app.schemas.participant_group import ParticipantGroupCreate, ParticipantGroupUpdate
@@ -109,15 +110,6 @@ def normalize_test_configuration(source: dict, analysis_profile: str = "SCOPE_ST
     if profile.startswith("SCOPE"):
         if isinstance(configuration.get("difficulty"), str):
             configuration["difficulty"] = configuration["difficulty"].lower()
-        # SCoPE measurements require a raw source log for WebDB archival.
-        configuration["save_raw_log"] = True
-        if configuration.get("run_evaluation", False):
-            configuration["save_step_file"] = True
-        if not configuration.get("run_evaluation", False):
-            configuration["auto_open_graph"] = False
-            configuration["show_graph"] = False
-        if not configuration.get("save_graph_pdf", False):
-            configuration["auto_open_graph"] = False
     elif profile.startswith("SIMPLE"):
         # Each image is kept in the persistent measurement volume, never as a server path in JSON.
         for key in ("visual", "gui_gimbal_size", "gui_stick_size", "target_zone_radius_px", "sampling_hz", "zoom_px_per_m"):
@@ -546,6 +538,9 @@ async def create_measurement(
     except RawUploadInvalid as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     raw_sha256 = hashlib.sha256(raw_bytes).hexdigest() if raw_bytes is not None else None
+    if raw_bytes is None:
+        raise HTTPException(status_code=422, detail="A compressed raw log is required.")
+    validate_measurement_result(payload, test, raw_bytes)
     measurement = Measurement(
         participant_id=participant.id,
         test_definition_id=test.id,
