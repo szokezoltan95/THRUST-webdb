@@ -1,10 +1,10 @@
 """Merge the parallel appearance preference and welcome page migrations.
 
-Revision ID: 0012_merge_appearance_and_welcome
+Revision ID: 0012_merge_heads
 Revises: 0011_user_appearance_preferences, 0011_welcome_pages
 """
 
-revision = "0012_merge_appearance_and_welcome"
+revision = "0012_merge_heads"
 down_revision = ("0011_user_appearance_preferences", "0011_welcome_pages")
 branch_labels = None
 depends_on = None
