@@ -1441,3 +1441,21 @@ main[data-color-mode="light"] .test-attendance.completed { color: #167e53; backg
   .client-monitor-card-head { flex-direction: column; }
   .client-monitor-fields { grid-template-columns: 1fr; }
 }
+
+/* Connected clients: color-coded origin with a large, scannable activity strip. */
+.client-monitor-card { border-left: 4px solid var(--line); }
+.client-monitor-card.client-web { border-left-color: #43b8e8; }
+.client-monitor-card.client-measure { border-left-color: #aa82f5; }
+.client-monitor-card.client-compute { border-left-color: #e2b84d; }
+.client-type-pill { display: inline-flex; align-items: center; margin-right: 8px; padding: 4px 8px; border-radius: 999px; font-size: 12px; font-weight: 700; }
+.client-type-pill.web { color: #72d2f7; background: color-mix(in srgb, #43b8e8 18%, transparent); }
+.client-type-pill.measure { color: #c5a9ff; background: color-mix(in srgb, #aa82f5 20%, transparent); }
+.client-type-pill.compute { color: #f2d27b; background: color-mix(in srgb, #e2b84d 20%, transparent); }
+.client-role { color: var(--text-muted); font-size: 13px; }
+.client-activity { display: flex; align-items: center; gap: 10px; min-height: 48px; margin-top: 17px; padding: 10px 13px; border-radius: 12px; }
+.client-activity.idle { color: var(--text-main); background: color-mix(in srgb, var(--line) 35%, transparent); }
+.client-activity.measuring { color: #b7f5d8; background: color-mix(in srgb, #24aa72 26%, transparent); outline: 1px solid color-mix(in srgb, #24aa72 55%, transparent); }
+.client-activity-indicator { flex: 0 0 auto; width: 12px; height: 12px; border-radius: 50%; background: #8c98a5; }
+.client-activity.measuring .client-activity-indicator { background: #32db91; box-shadow: 0 0 0 5px color-mix(in srgb, #32db91 18%, transparent); }
+.client-activity strong { font-size: 16px; }
+.client-activity-detail { margin-left: auto; text-align: right; font-weight: 650; overflow-wrap: anywhere; }
