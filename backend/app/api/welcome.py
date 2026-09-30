@@ -110,15 +110,23 @@ def _histogram(measurements: list[Measurement], metric: str, bins: int, test_def
         return {"publishable": False, "bins": []}
     low, high = min(values), max(values)
     if low == high:
-        edges, bin_count = [low - 0.5, high + 0.5], 1
+        width = max(abs(low) * 0.1, 1.0)
+        start = math.floor((low - width / 2) / width) * width
+        edges, bin_count = [start, start + width], 1
     else:
-        bin_count = bins
-        width = (high - low) / bin_count
-        edges = [low + index * width for index in range(bin_count + 1)]
-        edges[-1] = high
+        raw_width = (high - low) / bins
+        scale = 10 ** math.floor(math.log10(raw_width))
+        ratio = raw_width / scale
+        nice_factor = 1 if ratio <= 1 else 2 if ratio <= 2 else 5 if ratio <= 5 else 10
+        width = nice_factor * scale
+        start = math.floor(low / width) * width
+        end = math.ceil(high / width) * width
+        bin_count = max(1, int(round((end - start) / width)))
+        edges = [start + index * width for index in range(bin_count + 1)]
     counts = [0] * bin_count
+    width = edges[1] - edges[0]
     for value in values:
-        index = min(bin_count - 1, int((value - low) / (high - low) * bin_count)) if high > low else 0
+        index = min(bin_count - 1, max(0, int((value - edges[0]) / width)))
         counts[index] += 1
     minimum = settings.public_min_group_size
     return {"publishable": True, "bins": [
