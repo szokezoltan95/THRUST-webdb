@@ -640,6 +640,21 @@ const english: Record<string, string> = {
   "· v": "· v",
   "a všetkých": "and all",
   "a jej merania boli odstránené.": "and their measurements were deleted.",
+  "Pripojení klienti": "Connected clients",
+  "Pripojených klientov sa nepodarilo načítať.": "Could not load connected clients.",
+  "MONITOR KLIENTOV": "CLIENT MONITOR",
+  "Monitor pripojených klientov": "Connected client monitor",
+  "Stav sa priebežne obnovuje.": "Status refreshes automatically.",
+  "Nečinný": "Idle",
+  "Vykonáva meranie": "Measuring",
+  "Pripojený": "Connected for",
+  "IP adresa": "IP address",
+  "Aktuálny účastník": "Current participant",
+  "Testová verzia": "Test version",
+  "Žiadni klienti nie sú pripojení.": "No clients are connected.",
+  "Posledná aktivita": "Last activity",
+  "dozadu": "ago",
+  "Načítavam klientov…": "Loading clients…",
 };
 
 const STORAGE_KEY = "thrust-webdb-language";
