@@ -1949,7 +1949,7 @@ function TestEditor({ test, onClose, onSaved }: { test: TestDefinition; onClose:
               <label><span className="sr-only">{tf("{0} maximum", axis)}</span><input aria-label={tf("{0} maximum", axis)} type="number" min="-1" max="1" step=".05" value={actionSettings.intervals[axis][1]} onChange={(event) => setAxisBound(axis, 1, Number(event.target.value))} /></label>
             </div>)}
           </div>
-          <p className="muted">{t("Osi LX/LY patria k ľavému gimbalu, RY/RX k pravému. Keď sa mení iba jeden gimbal, cieľ druhého zostane na predošlej hodnote.")}</p>
+          <p className="muted">{t("Osi LX/LY patria k ľavému gimbalu, RY/RX k pravému. Pri jednej meniacej sa osi zostáva druhý gimbal bez zmeny; pravdepodobnosť jedného gimbalu sa uplatní pri výbere dvoch osí.")}</p>
         </section>}
         {selectedPanel === "colors" && <section className="config-card">
           <div className="eyebrow">{t("VZHĽAD")}</div><h3>{t("Farby prvkov")}</h3>
