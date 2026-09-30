@@ -40,14 +40,14 @@ async def live_events(
 
     async def stream():
         try:
-            yield "event: connected\\ndata: {}\\n\\n"
+            yield "event: connected\ndata: {}\n\n"
             while not await request.is_disconnected():
                 try:
                     event_name = await asyncio.wait_for(queue.get(), timeout=20)
                 except asyncio.TimeoutError:
-                    yield ": keep-alive\\n\\n"
+                    yield ": keep-alive\n\n"
                     continue
-                yield f"event: {event_name}\\ndata: {{}}\\n\\n"
+                yield f"event: {event_name}\ndata: {{}}\n\n"
         finally:
             unsubscribe(queue)
             unregister_client(connection_id)
@@ -70,7 +70,7 @@ async def live_clients(
 
 
 class MeasurePresenceUpdate(BaseModel):
-    status: Literal["idle", "measuring"]
+    status: Literal["idle", "measuring", "disconnected"]
     participant_id: str | None = None
     test_definition_id: str | None = None
 
@@ -82,6 +82,11 @@ async def update_measure_presence(
     auth: AuthContext = Depends(require_user_csrf),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, str]:
+    client_id = f"measure:{auth.session.token_hash}"
+    if payload.status == "disconnected":
+        unregister_client(client_id)
+        return {"status": "disconnected"}
+
     role = effective_role(auth.user)
     participant_code = None
     test_label = None
@@ -103,7 +108,7 @@ async def update_measure_presence(
         test_label = f"{test.test_code} v{test.version}"
 
     update_measure_client(
-        client_id=f"measure:{auth.session.token_hash}",
+        client_id=client_id,
         username=auth.user.username,
         role=role,
         ip_address=_client_ip(request),
