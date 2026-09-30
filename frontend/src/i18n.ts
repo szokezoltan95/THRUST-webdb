@@ -2,6 +2,28 @@
 export type Language = "sk" | "en";
 
 const english: Record<string, string> = {
+  "Základné nastavenia": "Basic settings", "Vzorkovanie, priebeh a okno merania": "Sampling, session flow and window",
+  "Nastavenie akcií": "Action settings", "Intervaly, hustota bodov a zmeny osí": "Intervals, point density and axis changes",
+  "Farby prvkov": "Element colors", "PRIEBEH MERANIA": "MEASUREMENT FLOW",
+  "Základné parametre": "Basic parameters", "Vzorkovacia frekvencia (Hz)": "Sampling frequency (Hz)",
+  "Počet cieľov": "Number of targets", "Timeout cieľa (s)": "Target timeout (s)",
+  "Čas podržania v zóne (s)": "Time to hold in zone (s)", "Odpočet pred štartom (s)": "Countdown before start (s)",
+  "Maximálna hodnota páčky": "Maximum stick value", "Náhodný seed": "Random seed", "automaticky": "automatic",
+  "Celá obrazovka": "Fullscreen", "Vždy navrchu": "Always on top", "Debug výstup": "Debug output",
+  "Veľkosť gimbalu": "Gimbal size", "Polomer cieľovej zóny": "Target zone radius",
+  "Polomer páčky": "Stick radius", "Obrys páčky": "Stick outline", "Obrys zóny": "Zone outline",
+  "Obrys gimbalu": "Gimbal guides", "Šírka stredových značiek": "Centre tick width",
+  "NÁHODNÝ GENERÁTOR CIEĽOV": "RANDOM TARGET GENERATOR", "Množina cieľových bodov a prechody": "Target point set and transitions",
+  "Z každej osi sa vytvorí rovnomerná množina bodov v zadanom intervale. Následne sa náhodne mení 1 až nastavený maximálny počet súradníc oproti predchádzajúcemu cieľu. Nula je bežný bod; automatický návrat do stredu sa nevkladá.": "Each axis gets an evenly spaced set of points in its interval. A random next target changes between one and the configured maximum number of coordinates relative to the previous target. Zero is a regular point; no automatic return to centre is inserted.",
+  "Počet možných bodov na každej osi": "Possible points per axis", "Minimum meniacich sa osí": "Minimum axes changing",
+  "Maximum meniacich sa osí": "Maximum axes changing", "Pravdepodobnosť zmeny iba jedného gimbalu (%)": "Probability that only one gimbal changes (%)",
+  "Os": "Axis", "Minimum": "Minimum", "Maximum": "Maximum",
+  "Osi LX/LY patria k ľavému gimbalu, RY/RX k pravému. Keď sa mení iba jeden gimbal, cieľ druhého zostane na predošlej hodnote.": "LX/LY belong to the left gimbal and RY/RX to the right. When only one gimbal changes, the other gimbal keeps its previous target.",
+  "Počet bodov na osi musí byť celé číslo od 2 do 101.": "Points per axis must be an integer from 2 to 101.",
+  "Rozsah počtu meniacich sa osí musí byť od 1 do 4 a minimum nesmie prekročiť maximum.": "The changed-axis range must be from 1 to 4, and the minimum cannot exceed the maximum.",
+  "Pravdepodobnosť zmeny jedného gimbalu musí byť od 0 do 100 %.": "Single-gimbal change probability must be from 0% to 100%.",
+  "Interval osi {0} musí spĺňať −1 ≤ minimum < maximum ≤ 1.": "The interval for axis {0} must satisfy −1 ≤ minimum < maximum ≤ 1.",
+
   "Farebný motív": "Color theme", "Nastavenia vzhľadu": "Appearance settings", "Režim zobrazenia": "Display mode", "Modrá": "Blue", "Červená": "Red", "Zelená": "Green",
   "Fialová": "Purple", "Oranžová": "Orange", "Tyrkysová": "Teal", "Ružová": "Pink", "Zlatá": "Gold",
   "Svetlý režim": "Light mode", "Tmavý režim": "Dark mode", "Prepnúť na svetlý režim": "Switch to light mode",
