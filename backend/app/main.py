@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 
-from app.api import admin, auth, backgrounds, public, student, reports, welcome
+from app.api import admin, auth, backgrounds, public, student, reports, welcome, live
 from app.core.config import settings
 
 app = FastAPI(title=settings.app_name, docs_url=None, redoc_url=None)
@@ -17,6 +17,7 @@ app.include_router(reports.router, prefix="/api")
 app.include_router(student.router, prefix="/api")
 app.include_router(backgrounds.router, prefix="/api")
 app.include_router(welcome.router, prefix="/api")
+app.include_router(live.router, prefix="/api")
 
 
 @app.get("/api/health")
