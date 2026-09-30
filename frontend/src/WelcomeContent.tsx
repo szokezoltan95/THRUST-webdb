@@ -64,7 +64,7 @@ function WelcomeHistogram({ title, unit, bins, publishable, language }: { title:
 }
 
 function WelcomeResponseCurve({ title, test, channel, points, language }: { title: string; test: string; channel: string; points: NonNullable<WelcomeData[string]["response_points"]>; language: Language }) {
-  const valid = points.filter((point) => Number.isFinite(point.value));
+  const valid = points.filter((point) => typeof point.value === "number" && Number.isFinite(point.value));
   if (valid.length < 2) return <div className="welcome-chart"><strong>{title}</strong><p className="muted">{language === "sk" ? "Priemerná odozva sa zobrazí po získaní dostatočného počtu meraní." : "The average response appears when enough measurements are available."}</p></div>;
   const low = Math.min(0, ...valid.map((point) => point.value as number)), high = Math.max(1, ...valid.map((point) => point.value as number));
   const y = (value: number) => 178 - (value - low) / Math.max(high - low, 0.01) * 144, x = (time: number) => 50 + time / 1.5 * 680;
