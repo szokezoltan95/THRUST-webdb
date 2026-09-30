@@ -59,6 +59,21 @@ class DataChart(Block):
     style: Literal["line", "bar"] = "line"
 
 
+class Histogram(Block):
+    type: Literal["histogram"]
+    title: str = Field(max_length=180)
+    metric: str = Field(max_length=100, pattern=r"^[a-zA-Z0-9_.-]*$")
+    bins: int = Field(default=8, ge=3, le=20)
+    test_definition_id: str | None = Field(default=None, max_length=64)
+
+
+class AverageResponse(Block):
+    type: Literal["average_response"]
+    title: str = Field(max_length=180)
+    test_definition_id: str = Field(max_length=64)
+    channel: Literal["LX", "LY", "RX", "RY"] = "LX"
+
+
 class DataTable(Block):
     type: Literal["data_table"]
     title: str = Field(max_length=180)
@@ -91,7 +106,7 @@ class Paper(Block):
 
 
 WelcomeBlock = Annotated[
-    Eyebrow | Heading | Paragraph | Banner | ImageBlock | Metrics | DataChart | DataTable | Paper,
+    Eyebrow | Heading | Paragraph | Banner | ImageBlock | Metrics | DataChart | DataTable | Histogram | AverageResponse | Paper,
     Field(discriminator="type"),
 ]
 
