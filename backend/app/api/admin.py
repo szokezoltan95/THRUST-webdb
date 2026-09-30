@@ -12,6 +12,7 @@ from app.api.dependencies import AuthContext, effective_role, require_admin, req
 from app.core.config import settings
 from app.core.raw_logs import RawUploadInvalid, RawUploadTooLarge, decode_raw_upload
 from app.core.measurement_results import validate_measurement_result
+from app.core.live_updates import publish_measurements_updated
 from app.db.session import get_db
 from app.models import AdminSession, AdminUser, Measurement, Participant, TestDefinition, ParticipantGroup
 from app.schemas.participant_group import ParticipantGroupCreate, ParticipantGroupUpdate
@@ -570,6 +571,7 @@ async def create_measurement(
         }
 
     await db.commit()
+    publish_measurements_updated()
     await db.refresh(measurement)
     return measurement
 
