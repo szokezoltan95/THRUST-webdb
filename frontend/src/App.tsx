@@ -1866,6 +1866,10 @@ function TestEditor({ test, onClose, onSaved }: { test: TestDefinition; onClose:
       const [low, high] = actionSettings.intervals[axis];
       if (!Number.isFinite(low) || !Number.isFinite(high) || low < -1 || high > 1 || low >= high)
         return tf("Interval osi {0} musí spĺňať −1 ≤ minimum < maximum ≤ 1.", axis);
+      const quantized = new Set(Array.from({ length: actionSettings.points_per_axis }, (_, index) =>
+        Math.round((low + (high - low) * index / (actionSettings.points_per_axis - 1)) * configuration.stick_max)));
+      if (quantized.size !== actionSettings.points_per_axis)
+        return tf("Interval osi {0} vytvára duplicitné hodnoty. Rozšír interval, zníž počet bodov alebo zvýš maximálnu hodnotu páčky.", axis);
     }
     return null;
   }
