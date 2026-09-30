@@ -1995,7 +1995,7 @@ type ConnectedClient = {
   client_id: string;
   username: string;
   role: string;
-  client_type: "web" | "measure";
+  client_type: "web" | "measure" | "compute";
   ip_address: string | null;
   connected_for_seconds: number;
   last_seen_seconds: number;
@@ -2005,10 +2005,7 @@ type ConnectedClient = {
 };
 
 function formatDuration(seconds: number): string {
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  const remaining = seconds % 60;
-  return hours > 0 ? `${hours} h ${minutes} min` : minutes > 0 ? `${minutes} min ${remaining} s` : `${remaining} s`;
+  return `${Math.floor(seconds / 60)} min`;
 }
 
 function ClientMonitor() {
@@ -2051,13 +2048,13 @@ function ClientMonitor() {
     </div>
     {error && <div className="notice error">{error}</div>}
     {loading ? <div className="empty">{t("Načítavam klientov…")}</div> : clients.length === 0 ? <div className="empty">{t("Žiadni klienti nie sú pripojení.")}</div> :
-      <div className="client-monitor-grid">{clients.map((client) => <article className="client-monitor-card" key={client.client_id}>
-        <div className="client-monitor-card-head"><div><h3>{client.username}</h3><span className="muted">{client.role} · {client.client_type === "measure" ? "THRUST-measure" : "WebDB browser"}</span></div>
-          <span className={`client-state ${client.status}`}><i />{client.status === "measuring" ? t("Vykonáva meranie") : t("Nečinný")}</span></div>
+      <div className="client-monitor-grid">{clients.map((client) => <article className={`client-monitor-card client-${client.client_type}`} key={client.client_id}>
+        <div className="client-monitor-card-head"><div><h3>{client.username}</h3><span className={`client-type-pill ${client.client_type}`}>{client.client_type === "measure" ? "THRUST-measure" : client.client_type === "compute" ? "THRUST-compute" : "WebDB browser"}</span><span className="client-role">{client.role}</span></div></div>
+        <div className={`client-activity ${client.status}`}><span className="client-activity-indicator" aria-hidden="true" /><strong>{client.status === "measuring" ? t("Vykonáva meranie") : t("Nečinný")}</strong>
+          {client.status === "measuring" && <span className="client-activity-detail">{client.participant_code || "—"} · {client.test || "—"}</span>}</div>
         <dl className="client-monitor-fields">
           <div><dt>{t("Pripojený")}</dt><dd>{formatDuration(client.connected_for_seconds)}</dd></div>
           <div><dt>{t("IP adresa")}</dt><dd>{client.ip_address || "—"}</dd></div>
-          {client.status === "measuring" && <><div><dt>{t("Aktuálny účastník")}</dt><dd>{client.participant_code || "—"}</dd></div><div><dt>{t("Testová verzia")}</dt><dd>{client.test || "—"}</dd></div></>}
           <div><dt>{t("Posledná aktivita")}</dt><dd>{client.last_seen_seconds} s {t("dozadu")}</dd></div>
         </dl>
       </article>)}</div>}
