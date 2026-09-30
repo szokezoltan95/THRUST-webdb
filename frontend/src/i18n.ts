@@ -155,19 +155,19 @@ const english: Record<string, string> = {
   "Vyber program": "Choose program", "Vyber test": "Choose test", "Vyber účastníka": "Choose participant",
   "Kód": "Code", "Názov": "Name", "Názov testu": "Test name", "Verzia": "Version",
   "Konfigurácia testu": "Test configuration", "Editor testu · rozpracovaná verzia": "Test editor · draft version",
-  "SIMPLE · NASTAVENIE TESTU": "SIMPLE · TEST SETTINGS", "Základné parametre": "Basic parameters",
+  "SIMPLE · NASTAVENIE TESTU": "SIMPLE · TEST SETTINGS"
   "Farby a geometria": "Colors and geometry", "Pozadie a náhľad": "Background and preview",
   "Nastavenia": "Settings", "Uložiť nastavenia": "Save settings", "Zrušiť": "Cancel", "Zrušiť úpravy": "Discard edits",
   "Obtiažnosť": "Difficulty", "Ľahká": "Easy", "Stredná": "Medium", "Ťažká": "Hard", "Ultra": "Ultra",
   "Čas podržania (s)": "Hold time (s)", "Timeout akcie (s)": "Action timeout (s)",
-  "Vzorkovacia frekvencia (Hz)": "Sampling frequency (Hz)", "Maximálna hodnota páčky": "Maximum stick value",
-  "Počet dokončených akcií": "Number of completed actions", "Odpočet pred štartom (s)": "Countdown before start (s)",
-  "Odpočítavanie [s]": "Countdown [s]", "Náhodný seed": "Random seed", "automaticky": "automatic",
-  "Celá obrazovka": "Fullscreen", "Vždy navrchu": "Always on top", "Debug výstup": "Debug output",
+
+  "Počet dokončených akcií": "Number of completed actions"
+  "Odpočítavanie [s]": "Countdown [s]"
+
   "Správanie okna": "Window behavior", "SCoPE obrazovka": "SCoPE screen",
-  "Veľkosť gimbalu": "Gimbal size", "Polomer páčky": "Stick radius", "Polomer zóny": "Zone radius",
-  "Šírka stredových značiek": "Center marker width", "Obrys gimbalu": "Gimbal outline",
-  "Obrys páčky": "Stick outline", "Výplň páčky": "Stick fill", "Obrys zóny": "Zone outline",
+"Polomer zóny": "Zone radius",
+
+"Výplň páčky": "Stick fill"
   "Obrys neaktívnej zóny": "Inactive zone outline", "Výplň neaktívnej zóny": "Inactive zone fill",
   "Obrys OK zóny": "OK zone outline", "Výplň OK zóny": "OK zone fill",
   "Okraje a stredové značky": "Borders and center marks", "Pozadie gimbalu": "Gimbal background",
