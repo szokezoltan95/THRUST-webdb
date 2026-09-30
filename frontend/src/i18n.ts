@@ -1,7 +1,7 @@
 /** Slovak source strings are the translation keys; API identifiers are never translated. */
 export type Language = "sk" | "en";
 
-const english: Record<string, string> = {
+const english: Record<string, string> = {,
   "Základné nastavenia": "Basic settings", "Vzorkovanie, priebeh a okno merania": "Sampling, session flow and window",
   "Nastavenie akcií": "Action settings", "Intervaly, hustota bodov a zmeny osí": "Intervals, point density and axis changes",
   "Farby prvkov": "Element colors", "PRIEBEH MERANIA": "MEASUREMENT FLOW",
@@ -155,19 +155,19 @@ const english: Record<string, string> = {
   "Vyber program": "Choose program", "Vyber test": "Choose test", "Vyber účastníka": "Choose participant",
   "Kód": "Code", "Názov": "Name", "Názov testu": "Test name", "Verzia": "Version",
   "Konfigurácia testu": "Test configuration", "Editor testu · rozpracovaná verzia": "Test editor · draft version",
-  "SIMPLE · NASTAVENIE TESTU": "SIMPLE · TEST SETTINGS"
+  "SIMPLE · NASTAVENIE TESTU": "SIMPLE · TEST SETTINGS",
   "Farby a geometria": "Colors and geometry", "Pozadie a náhľad": "Background and preview",
   "Nastavenia": "Settings", "Uložiť nastavenia": "Save settings", "Zrušiť": "Cancel", "Zrušiť úpravy": "Discard edits",
   "Obtiažnosť": "Difficulty", "Ľahká": "Easy", "Stredná": "Medium", "Ťažká": "Hard", "Ultra": "Ultra",
   "Čas podržania (s)": "Hold time (s)", "Timeout akcie (s)": "Action timeout (s)",
 
-  "Počet dokončených akcií": "Number of completed actions"
-  "Odpočítavanie [s]": "Countdown [s]"
+  "Počet dokončených akcií": "Number of completed actions",
+  "Odpočítavanie [s]": "Countdown [s]",
 
   "Správanie okna": "Window behavior", "SCoPE obrazovka": "SCoPE screen",
 "Polomer zóny": "Zone radius",
 
-"Výplň páčky": "Stick fill"
+"Výplň páčky": "Stick fill",
   "Obrys neaktívnej zóny": "Inactive zone outline", "Výplň neaktívnej zóny": "Inactive zone fill",
   "Obrys OK zóny": "OK zone outline", "Výplň OK zóny": "OK zone fill",
   "Okraje a stredové značky": "Borders and center marks", "Pozadie gimbalu": "Gimbal background",
