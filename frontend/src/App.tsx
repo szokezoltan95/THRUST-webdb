@@ -502,15 +502,6 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    const refreshStudentResults = () => {
-      request<StudentMeasurement[]>("/api/student/measurements").then(setMeasurements).catch(() => undefined);
-      request<StudentComparison>(`/api/student/comparison?mode=${mode}`).then(setComparison).catch(() => undefined);
-    };
-    window.addEventListener("thrust:data-updated", refreshStudentResults);
-    return () => window.removeEventListener("thrust:data-updated", refreshStudentResults);
-  }, [mode]);
-
-  useEffect(() => {
     let active = true;
     setConsentTexts(null);
     request<ConsentDocuments>(`/api/public/consent-texts?lang=${language}`)
@@ -2118,6 +2109,15 @@ function StudentPortal({ user, onLogout, accentTheme, colorMode, onAppearanceCha
       setError(errors.filter((message): message is string => message !== null).join(" "));
     });
   }, []);
+
+  useEffect(() => {
+    const refreshStudentResults = () => {
+      request<StudentMeasurement[]>("/api/student/measurements").then(setMeasurements).catch(() => undefined);
+      request<StudentComparison>(`/api/student/comparison?mode=${mode}`).then(setComparison).catch(() => undefined);
+    };
+    window.addEventListener("thrust:data-updated", refreshStudentResults);
+    return () => window.removeEventListener("thrust:data-updated", refreshStudentResults);
+  }, [mode]);
 
   useEffect(() => {
     let active = true;
