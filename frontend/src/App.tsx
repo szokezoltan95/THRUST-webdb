@@ -95,7 +95,7 @@ type AdminAccount = { id: string; username: string; email: string | null; first_
 type TestDefinition = { id: string; test_code: string; name: string; version: string; status: string; analysis_profile: string; configuration: Record<string, unknown>; is_active: boolean };
 type Measurement = { id: string; participant_id: string; test_definition_id: string | null; test_type: string; status: string; started_at: string; source_file_name: string | null; raw_sha256: string | null; raw_size_bytes: number | null; analysis_data: Record<string, unknown> | null };
 type ParticipantDetail = { participant: Participant; measurements: { id: string; test_type: string; status: string; started_at: string; raw_data_available?: boolean; raw_size_bytes?: number | null }[] };
-type AdminSection = "overview" | "participants" | "groups" | "trends" | "reports" | "tests" | "measurements" | "welcome";
+type AdminSection = "overview" | "participants" | "groups" | "trends" | "reports" | "tests" | "measurements" | "welcome" | "clients";
 type ParticipantGroup = { id: string; name: string; description: string | null; created_at: string; participant_ids: string[]; participant_codes: string[] };
 type StudentMeasurement = { id: string; test_type: string; status: string; started_at: string; raw_size_bytes: number | null; analysis_data: Record<string, unknown> | null };
 type StudentProfile = { username: string; email: string | null; role: string; participant_code: string; first_name: string; last_name: string; created_at: string; birth_date: string | null; pilot_experience: string | null; flight_hours_range: string | null; pilot_certificate: string | null; primary_uav_type: string | null; simulator_experience: string | null; self_rated_skill: number | null; sex?: string | null; dominant_hand?: string | null; vision_correction?: string | null; vision_diopters_left?: number | null; vision_diopters_right?: number | null; rc_experience?: string | null; fpv_experience?: string | null; game_controller_experience?: string | null; video_game_experience?: string | null; }
@@ -387,10 +387,10 @@ export function App() {
   const [navOrder, setNavOrder] = useState<AdminSection[]>(() => {
     try {
       const stored = JSON.parse(localStorage.getItem("thrust-webdb-nav-order") || "[]") as AdminSection[];
-      const allowed: AdminSection[] = ["overview", "participants", "groups", "trends", "reports", "tests", "measurements", "welcome"];
+      const allowed: AdminSection[] = ["overview", "participants", "groups", "trends", "reports", "tests", "measurements", "welcome", "clients"];
       const uniqueStored = [...new Set(stored)].filter((item) => allowed.includes(item));
       return [...uniqueStored, ...allowed.filter((item) => !uniqueStored.includes(item))];
-    } catch { return ["overview", "participants", "groups", "trends", "reports", "tests", "measurements", "welcome"]; }
+    } catch { return ["overview", "participants", "groups", "trends", "reports", "tests", "measurements", "welcome", "clients"]; }
   });
   const [draggedNavItem, setDraggedNavItem] = useState<AdminSection | null>(null);
   const [dropTargetNavItem, setDropTargetNavItem] = useState<AdminSection | null>(null);
@@ -1051,8 +1051,9 @@ export function App() {
     { id: "tests", icon: "▣", label: t("Testy a konfigurácie") },
     { id: "measurements", icon: "↗", label: t("Merania a výsledky") },
     { id: "welcome", icon: "✎", label: t("Úvodná stránka") },
+    { id: "clients", icon: "◉", label: t("Pripojení klienti") },
   ];
-  const visibleNavItems = navOrder.map((id) => navItems.find((item) => item.id === id)!).filter((item) => item.id !== "welcome" || user?.role === "admin" || user?.role === "superadmin");
+  const visibleNavItems = navOrder.map((id) => navItems.find((item) => item.id === id)!).filter((item) => (item.id !== "welcome" && item.id !== "clients") || user?.role === "admin" || user?.role === "superadmin");
   function moveNavItem(target: AdminSection) {
     if (!draggedNavItem || draggedNavItem === target) return;
     const nav = navListRef.current;
@@ -1092,9 +1093,10 @@ export function App() {
             <div className="sidebar-footer"><span className="sidebar-user">{user.username} · {user.role}</span><button className="quiet" onClick={logout} title={t("Odhlásiť")}>{sidebarCollapsed ? "↪" : t("Odhlásiť")}</button></div>
           </aside>
           <div className="app-main">
-            <header className="topbar"><button type="button" className="mobile-menu-toggle" aria-label={mobileNavOpen ? t("Zavrieť menu") : t("Otvoriť menu")} aria-expanded={mobileNavOpen} onClick={() => setMobileNavOpen((open) => !open)}><span /><span /><span /></button><div className="topbar-title"><div className="eyebrow">{t("ADMINISTRÁCIA ·")} {user.role.toUpperCase()}</div><h1>{activeSection === "overview" ? t("Prehľad meraní") : activeSection === "participants" ? t("Účastníci a účty") : activeSection === "groups" ? t("Skupiny") : activeSection === "trends" ? t("Trendy") : activeSection === "reports" ? t("Exporty a reporty") : activeSection === "tests" ? t("Testy a konfigurácie") : activeSection === "welcome" ? t("Úvodná stránka") : t("Merania a výsledky")}</h1></div><div className="header-actions"><AppearanceControls accentTheme={accentTheme} colorMode={colorMode} onAccentChange={(theme) => void saveAppearance(theme, colorMode)} onModeChange={(mode) => void saveAppearance(accentTheme, mode)} /><LanguageSwitcher /><span className="status-dot">{t("Systém online")}</span></div></header>
+            <header className="topbar"><button type="button" className="mobile-menu-toggle" aria-label={mobileNavOpen ? t("Zavrieť menu") : t("Otvoriť menu")} aria-expanded={mobileNavOpen} onClick={() => setMobileNavOpen((open) => !open)}><span /><span /><span /></button><div className="topbar-title"><div className="eyebrow">{t("ADMINISTRÁCIA ·")} {user.role.toUpperCase()}</div><h1>{activeSection === "overview" ? t("Prehľad meraní") : activeSection === "participants" ? t("Účastníci a účty") : activeSection === "groups" ? t("Skupiny") : activeSection === "trends" ? t("Trendy") : activeSection === "reports" ? t("Exporty a reporty") : activeSection === "tests" ? t("Testy a konfigurácie") : activeSection === "welcome" ? t("Úvodná stránka") : activeSection === "clients" ? t("Pripojení klienti") : t("Merania a výsledky")}</h1></div><div className="header-actions"><AppearanceControls accentTheme={accentTheme} colorMode={colorMode} onAccentChange={(theme) => void saveAppearance(theme, colorMode)} onModeChange={(mode) => void saveAppearance(accentTheme, mode)} /><LanguageSwitcher /><span className="status-dot">{t("Systém online")}</span></div></header>
             <section className="workspace">
               {activeSection === "welcome" && (user.role === "admin" || user.role === "superadmin") && <WelcomeEditor csrfToken={user.csrf_token} initialLanguage={language} metrics={metrics} />}
+              {activeSection === "clients" && (user.role === "admin" || user.role === "superadmin") && <ClientMonitor />}
               {activeSection === "overview" && <>
                 <div className="stats"><Metric label={t("Účastníci")} value={overview?.participant_count ?? "—"} /><Metric label={t("Merania")} value={overview?.measurement_count ?? "—"} /><Metric label={t("Čakajúce synchronizácie")} value="0" /></div>
                 <div className="empty"><span>01</span><div><h2>{t("Databáza je pripravená")}</h2><p>{t("Vyber sekciu vľavo alebo začni vytvorením účastníka.")}</p></div></div>
@@ -1987,6 +1989,79 @@ function TestEditor({ test, onClose, onSaved }: { test: TestDefinition; onClose:
     </div>
     <footer className="editor-footer"><button type="button" className="quiet" onClick={onClose}>{t("Zrušiť")}</button><button className="primary" onClick={save}>{t("Uložiť nastavenia")}</button>{message && <span className="notice">{message}</span>}</footer>
   </section></div>;
+}
+
+type ConnectedClient = {
+  client_id: string;
+  username: string;
+  role: string;
+  client_type: "web" | "measure";
+  ip_address: string | null;
+  connected_for_seconds: number;
+  last_seen_seconds: number;
+  status: "idle" | "measuring";
+  participant_code: string | null;
+  test: string | null;
+};
+
+function formatDuration(seconds: number): string {
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const remaining = seconds % 60;
+  return hours > 0 ? `${hours} h ${minutes} min` : minutes > 0 ? `${minutes} min ${remaining} s` : `${remaining} s`;
+}
+
+function ClientMonitor() {
+  const [clients, setClients] = useState<ConnectedClient[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    let active = true;
+    let inFlight = false;
+    const refresh = async () => {
+      if (inFlight || document.visibilityState !== "visible") return;
+      inFlight = true;
+      try {
+        const data = await request<ConnectedClient[]>("/api/admin/clients");
+        if (active) { setClients(data); setError(""); }
+      } catch (reason) {
+        if (active) setError(reason instanceof Error ? reason.message : t("Pripojených klientov sa nepodarilo načítať."));
+      } finally {
+        inFlight = false;
+        if (active) setLoading(false);
+      }
+    };
+    void refresh();
+    const timer = window.setInterval(() => void refresh(), 5000);
+    const onVisible = () => { if (document.visibilityState === "visible") void refresh(); };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
+    };
+  }, []);
+
+  return <section className="client-monitor">
+    <div className="client-monitor-heading">
+      <div><div className="eyebrow">{t("MONITOR KLIENTOV")}</div><h2>{t("Monitor pripojených klientov")}</h2><p className="muted">{t("Stav sa priebežne obnovuje.")}</p></div>
+      <span className="client-count">{clients.length}</span>
+    </div>
+    {error && <div className="notice error">{error}</div>}
+    {loading ? <div className="empty">{t("Načítavam klientov…")}</div> : clients.length === 0 ? <div className="empty">{t("Žiadni klienti nie sú pripojení.")}</div> :
+      <div className="client-monitor-grid">{clients.map((client) => <article className="client-monitor-card" key={client.client_id}>
+        <div className="client-monitor-card-head"><div><h3>{client.username}</h3><span className="muted">{client.role} · {client.client_type === "measure" ? "THRUST-measure" : "WebDB browser"}</span></div>
+          <span className={`client-state ${client.status}`}><i />{client.status === "measuring" ? t("Vykonáva meranie") : t("Nečinný")}</span></div>
+        <dl className="client-monitor-fields">
+          <div><dt>{t("Pripojený")}</dt><dd>{formatDuration(client.connected_for_seconds)}</dd></div>
+          <div><dt>{t("IP adresa")}</dt><dd>{client.ip_address || "—"}</dd></div>
+          {client.status === "measuring" && <><div><dt>{t("Aktuálny účastník")}</dt><dd>{client.participant_code || "—"}</dd></div><div><dt>{t("Testová verzia")}</dt><dd>{client.test || "—"}</dd></div></>}
+          <div><dt>{t("Posledná aktivita")}</dt><dd>{client.last_seen_seconds} s {t("dozadu")}</dd></div>
+        </dl>
+      </article>)}</div>}
+  </section>;
 }
 
 function ResearcherRegistrationPage({ onSubmit, onBack, onStudentRegister, onLogin, error, consentTexts, onOpenConsent }: {
