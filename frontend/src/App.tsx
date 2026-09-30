@@ -338,7 +338,7 @@ export function App() {
     "max_changed_axes": 2,
     "single_gimbal_probability": 0.5
   }
-}`
+}`;
   const [testForm, setTestForm] = useState({ test_code: "", name: "", version: "1.0", analysis_profile: "SCOPE_STEP_RESPONSE_V1", configuration: defaultTestConfiguration });
   const [testMessage, setTestMessage] = useState("");
   const [testSearch, setTestSearch] = useState("");
