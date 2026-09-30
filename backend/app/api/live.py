@@ -18,14 +18,14 @@ async def live_events(
 
     async def stream():
         try:
-            yield "event: connected\\ndata: {}\\n\\n"
+            yield "event: connected\ndata: {}\n\n"
             while not await request.is_disconnected():
                 try:
                     event_name = await asyncio.wait_for(queue.get(), timeout=20)
                 except asyncio.TimeoutError:
-                    yield ": keep-alive\\n\\n"
+                    yield ": keep-alive\n\n"
                     continue
-                yield f"event: {event_name}\\ndata: {{}}\\n\\n"
+                yield f"event: {event_name}\ndata: {{}}\n\n"
         finally:
             unsubscribe(queue)
 
