@@ -53,14 +53,11 @@ def update_measure_client(
     username: str,
     role: str,
     ip_address: str | None,
-    connected_at: datetime,
     status: str,
     participant_code: str | None,
     test: str | None,
 ) -> None:
     now = _utcnow()
-    if connected_at.tzinfo is None:
-        connected_at = connected_at.replace(tzinfo=timezone.utc)
     existing = _clients.get(client_id)
     _clients[client_id] = {
         "client_id": client_id,
@@ -68,7 +65,7 @@ def update_measure_client(
         "role": role,
         "client_type": "measure",
         "ip_address": ip_address,
-        "connected_at": existing["connected_at"] if existing else connected_at,
+        "connected_at": existing["connected_at"] if existing else now,
         "last_seen_at": now,
         "status": status,
         "participant_code": participant_code if status == "measuring" else None,
