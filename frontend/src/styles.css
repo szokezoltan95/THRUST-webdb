@@ -1400,3 +1400,23 @@ main[data-color-mode="light"] .test-attendance.completed { color: #167e53; backg
   .sidebar { padding-block: 8px; }
   .sidebar-brand-row { padding-bottom: 8px; }
 }
+
+
+/* SCoPE editor: three card-like panels */
+.editor-panel-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.editor-panel-card { display: grid; gap: 5px; min-height: 76px; padding: 12px; border: 1px solid var(--line); background: var(--surface); color: var(--text-soft); text-align: left; cursor: pointer; }
+.editor-panel-card:hover, .editor-panel-card.selected { border-color: var(--accent); background: var(--surface-highlight); color: var(--text-main); }
+.editor-panel-card strong { font-size: .82rem; }
+.editor-panel-card span { color: var(--text-muted); font-size: .7rem; line-height: 1.35; }
+.action-settings-card .config-note { margin-bottom: 14px; }
+.action-global-fields { margin-bottom: 18px; }
+.action-axis-table { display: grid; gap: 6px; }
+.action-axis-heading, .action-axis-row { display: grid; grid-template-columns: 70px minmax(0, 1fr) minmax(0, 1fr); gap: 10px; align-items: center; }
+.action-axis-heading { color: var(--text-muted); font-size: .7rem; }
+.action-axis-row { padding: 7px 0; border-top: 1px solid var(--line); }
+.action-axis-row strong { color: var(--text-main); font-size: .82rem; }
+.action-axis-row input { width: 100%; min-width: 0; box-sizing: border-box; padding: 8px; border: 1px solid var(--line); background: var(--surface-input); color: var(--text-main); font: inherit; }
+@media (max-width: 760px) {
+  .editor-panel-cards { grid-template-columns: 1fr; }
+  .editor-panel-card { min-height: 0; }
+}
