@@ -176,7 +176,7 @@ def _average_response(measurements: list[Measurement], tests: dict[str, TestDefi
     points = []
     for index, time_s in enumerate(time_grid):
         values = [curve[index] for curve in averaged_by_participant if curve[index] is not None]
-        points.append({"time_s": time_s, "value": statistics.fmean(values) if values else None})
+        points.append({"time_s": time_s, "value": statistics.fmean(values) if len(values) >= settings.public_min_group_size else None})
     return {"publishable": True, "response_points": points, "test": f"{test.name} v{test.version}", "channel": channel}
 
 
