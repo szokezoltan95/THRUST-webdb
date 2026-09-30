@@ -1420,3 +1420,24 @@ main[data-color-mode="light"] .test-attendance.completed { color: #167e53; backg
   .editor-panel-cards { grid-template-columns: 1fr; }
   .editor-panel-card { min-height: 0; }
 }
+
+.client-monitor { display: grid; gap: 20px; }
+.client-monitor-heading { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+.client-monitor-heading h2 { margin: 6px 0; }
+.client-count { display: grid; place-items: center; min-width: 48px; height: 48px; border: 1px solid var(--line); border-radius: 50%; color: var(--accent); font-size: 20px; font-weight: 700; }
+.client-monitor-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 14px; }
+.client-monitor-card { min-width: 0; padding: 18px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); }
+.client-monitor-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.client-monitor-card-head h3 { margin: 0 0 5px; overflow-wrap: anywhere; }
+.client-state { display: inline-flex; align-items: center; gap: 7px; flex: 0 0 auto; padding: 6px 9px; border-radius: 999px; font-size: 12px; font-weight: 650; }
+.client-state i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.client-state.idle { color: var(--text-muted); background: color-mix(in srgb, var(--line) 35%, transparent); }
+.client-state.measuring { color: var(--success, #34c98b); background: color-mix(in srgb, var(--success, #34c98b) 14%, transparent); }
+.client-monitor-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 18px; margin: 20px 0 0; }
+.client-monitor-fields div { min-width: 0; }
+.client-monitor-fields dt { color: var(--text-muted); font-size: 12px; }
+.client-monitor-fields dd { margin: 4px 0 0; overflow-wrap: anywhere; font-weight: 600; }
+@media (max-width: 540px) {
+  .client-monitor-card-head { flex-direction: column; }
+  .client-monitor-fields { grid-template-columns: 1fr; }
+}
