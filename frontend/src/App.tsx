@@ -2055,7 +2055,7 @@ function ClientMonitor() {
         <dl className="client-monitor-fields">
           <div><dt>{t("Pripojený")}</dt><dd>{formatDuration(client.connected_for_seconds)}</dd></div>
           <div><dt>{t("IP adresa")}</dt><dd>{client.ip_address || "—"}</dd></div>
-          <div><dt>{t("Posledná aktivita")}</dt><dd>{client.last_seen_seconds} s {t("dozadu")}</dd></div>
+          <div><dt>{t("Posledná aktivita")}</dt><dd>{formatDuration(client.last_seen_seconds)} {t("dozadu")}</dd></div>
         </dl>
       </article>)}</div>}
   </section>;
