@@ -112,7 +112,6 @@ async def update_measure_presence(
         username=auth.user.username,
         role=role,
         ip_address=_client_ip(request),
-        connected_at=auth.session.created_at,
         status=payload.status,
         participant_code=participant_code,
         test=test_label,
