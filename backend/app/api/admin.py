@@ -13,6 +13,7 @@ from app.core.config import settings
 from app.core.raw_logs import RawUploadInvalid, RawUploadTooLarge, decode_raw_upload
 from app.core.measurement_results import validate_measurement_result
 from app.core.live_updates import publish_measurements_updated
+from app.core.live_updates import connected_clients_snapshot
 from app.db.session import get_db
 from app.models import AdminSession, AdminUser, Measurement, Participant, TestDefinition, ParticipantGroup
 from app.schemas.participant_group import ParticipantGroupCreate, ParticipantGroupUpdate
@@ -633,6 +634,13 @@ async def delete_measurement(
             raise HTTPException(status_code=500, detail="Raw súbor sa nepodarilo odstrániť.") from exc
     await db.delete(measurement)
     await db.commit()
+
+
+@router.get("/clients")
+async def connected_clients(
+    auth: AuthContext = Depends(require_admin),
+) -> list[dict]:
+    return connected_clients_snapshot()
 
 
 @router.get("/overview")
