@@ -111,8 +111,8 @@ def _histogram(measurements: list[Measurement], metric: str, bins: int, test_def
     low, high = min(values), max(values)
     if low == high:
         width = max(abs(low) * 0.1, 1.0)
-        start = math.floor((low - width / 2) / width) * width
-        edges, bin_count = [start, start + width], 1
+        start = math.floor(low / width) * width - width
+        edges, bin_count = [start, start + 2 * width], 1
     else:
         raw_width = (high - low) / bins
         scale = 10 ** math.floor(math.log10(raw_width))
