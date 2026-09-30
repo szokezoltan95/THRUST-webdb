@@ -18,7 +18,7 @@ const english: Record<string, string> = {
   "Počet možných bodov na každej osi": "Possible points per axis", "Minimum meniacich sa osí": "Minimum axes changing",
   "Maximum meniacich sa osí": "Maximum axes changing", "Pravdepodobnosť zmeny iba jedného gimbalu (%)": "Probability that only one gimbal changes (%)",
   "Os": "Axis", "Minimum": "Minimum", "Maximum": "Maximum",
-  "Osi LX/LY patria k ľavému gimbalu, RY/RX k pravému. Keď sa mení iba jeden gimbal, cieľ druhého zostane na predošlej hodnote.": "LX/LY belong to the left gimbal and RY/RX to the right. When only one gimbal changes, the other gimbal keeps its previous target.",
+  "Osi LX/LY patria k ľavému gimbalu, RY/RX k pravému. Pri jednej meniacej sa osi zostáva druhý gimbal bez zmeny; pravdepodobnosť jedného gimbalu sa uplatní pri výbere dvoch osí.": "LX/LY belong to the left gimbal and RY/RX to the right. With one changing axis the other gimbal stays unchanged; the single-gimbal probability applies when two axes are selected.",
   "Počet bodov na osi musí byť celé číslo od 2 do 101.": "Points per axis must be an integer from 2 to 101.",
   "Interval osi {0} vytvára duplicitné hodnoty. Rozšír interval, zníž počet bodov alebo zvýš maximálnu hodnotu páčky.": "The interval for axis {0} creates duplicate values. Widen it, reduce the number of points or increase the maximum stick value.",
   "Rozsah počtu meniacich sa osí musí byť od 1 do 4 a minimum nesmie prekročiť maximum.": "The changed-axis range must be from 1 to 4, and the minimum cannot exceed the maximum.",
