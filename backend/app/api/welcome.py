@@ -4,6 +4,7 @@ from __future__ import annotations
 import base64
 import binascii
 import io
+import math
 import statistics
 from datetime import datetime, timezone
 from pathlib import Path
@@ -96,92 +97,6 @@ def _series(measurements: list[Measurement], tests: dict[str, TestDefinition], m
     return points
 
 
-def _histogram(measurements: list[Measurement], metric: str, bins: int, test_definition_id: str | None) -> dict:
-    per_participant: dict[str, list[float]] = {}
-    for item in measurements:
-        if test_definition_id and item.test_definition_id != test_definition_id:
-            continue
-        value = _metric_map(item.analysis_data).get(metric)
-        if value is not None:
-            per_participant.setdefault(item.participant_id, []).append(value)
-    values = [statistics.fmean(items) for items in per_participant.values()]
-    if len(values) < settings.public_min_group_size:
-        return {"publishable": False, "bins": []}
-    low, high = min(values), max(values)
-    if low == high:
-        edges, bin_count = [low - 0.5, high + 0.5], 1
-    else:
-        bin_count = bins
-        width = (high - low) / bin_count
-        edges = [low + index * width for index in range(bin_count + 1)]
-        edges[-1] = high
-    counts = [0] * bin_count
-    for value in values:
-        index = min(bin_count - 1, int((value - low) / (high - low) * bin_count)) if high > low else 0
-        counts[index] += 1
-    minimum = settings.public_min_group_size
-    return {
-        "publishable": True,
-        "bins": [
-            {"start": edges[index], "end": edges[index + 1],
-             "count": count if count == 0 or count >= minimum else None,
-             "suppressed": 0 < count < minimum}
-            for index, count in enumerate(counts)
-        ],
-    }
-
-
-def _average_response(measurements: list[Measurement], tests: dict[str, TestDefinition], test_id: str, channel: str) -> dict:
-    test = tests.get(test_id)
-    if not test:
-        return {"publishable": False, "response_points": []}
-    participant_curves: dict[str, list[list[float | None]]] = {}
-    time_grid = [index * 0.05 for index in range(31)]
-    for item in measurements:
-        if item.test_definition_id != test_id or not isinstance(item.analysis_data, dict):
-            continue
-        normalized = item.analysis_data.get("normalized_step_response")
-        channels = normalized.get("channels") if isinstance(normalized, dict) else None
-        source = channels.get(channel) if isinstance(channels, dict) else None
-        times = source.get("time_s") if isinstance(source, dict) else None
-        values = source.get("mean") if isinstance(source, dict) else None
-        if not isinstance(times, list) or not isinstance(values, list) or len(times) < 2 or len(values) != len(times):
-            continue
-        try:
-            points_source = [(float(t), float(v)) for t, v in zip(times, values)]
-            if any(not math.isfinite(t) or not math.isfinite(v) for t, v in points_source):
-                continue
-        except (TypeError, ValueError):
-            continue
-        curve: list[float | None] = []
-        cursor = 0
-        for target in time_grid:
-            while cursor + 1 < len(points_source) and points_source[cursor + 1][0] < target:
-                cursor += 1
-            if target < points_source[0][0] or target > points_source[-1][0]:
-                curve.append(None)
-            elif cursor + 1 >= len(points_source):
-                curve.append(points_source[-1][1])
-            else:
-                t0, v0 = points_source[cursor]
-                t1, v1 = points_source[cursor + 1]
-                fraction = 0.0 if t1 == t0 else (target - t0) / (t1 - t0)
-                curve.append(v0 + fraction * (v1 - v0))
-        participant_curves.setdefault(item.participant_id, []).append(curve)
-    if len(participant_curves) < settings.public_min_group_size:
-        return {"publishable": False, "response_points": [], "test": f"{test.name} v{test.version}", "channel": channel}
-    averaged_by_participant = [
-        [statistics.fmean(value for value in values if value is not None) if any(value is not None for value in values) else None
-         for values in zip(*curves)]
-        for curves in participant_curves.values()
-    ]
-    points = []
-    for index, time_s in enumerate(time_grid):
-        values = [curve[index] for curve in averaged_by_participant if curve[index] is not None]
-        points.append({"time_s": time_s, "value": statistics.fmean(values) if values else None})
-    return {"publishable": True, "response_points": points, "test": f"{test.name} v{test.version}", "channel": channel}
-
-
 async def _page_data(blocks: list[dict], db: AsyncSession) -> dict:
     measurements, tests = await _source_records(db)
     participant_total = await db.scalar(select(func.count()).select_from(Participant)) or 0
@@ -206,15 +121,6 @@ async def _page_data(blocks: list[dict], db: AsyncSession) -> dict:
         elif kind == "data_chart":
             result[block["id"]] = {"metric": block["metric"], "unit": _unit(block["metric"]),
                                     "points": _series(measurements, tests, block["metric"], block["axis"], block["statistic"])}
-        elif kind == "histogram":
-            result[block["id"]] = {
-                "metric": block["metric"], "unit": _unit(block["metric"]),
-                **_histogram(measurements, block["metric"], block.get("bins", 8), block.get("test_definition_id")),
-            }
-        elif kind == "average_response":
-            result[block["id"]] = _average_response(
-                measurements, tests, block["test_definition_id"], block["channel"]
-            )
         elif kind == "data_table":
             metrics = block["metrics"]
             columns = [{"key": key, "label": key.replace("_", " ").replace(".", " · "), "unit": _unit(key)} for key in metrics]
@@ -288,11 +194,8 @@ async def admin_welcome(lang: str = "sk", auth: AuthContext = Depends(require_ad
 
 @router.get("/admin/welcome/catalog")
 async def welcome_catalog(auth: AuthContext = Depends(require_admin), db: AsyncSession = Depends(get_db)) -> dict:
-    measurements, tests = await _source_records(db)
-    return {
-        "metrics": _metric_catalog(measurements),
-        "tests": [{"id": test.id, "label": f"{test.name} v{test.version}"} for test in sorted(tests.values(), key=lambda item: (item.name, item.version)) if test.is_active],
-    }
+    measurements, _ = await _source_records(db)
+    return {"metrics": _metric_catalog(measurements)}
 
 
 @router.post("/admin/welcome/preview-data")
