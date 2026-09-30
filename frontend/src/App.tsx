@@ -1544,19 +1544,41 @@ function ResponseChart({ data }: { data: unknown }) {
 
 
 
+type AxisKey = "LX" | "LY" | "RY" | "RX";
+type ActionSettings = {
+  generator_version: number;
+  intervals: Record<AxisKey, [number, number]>;
+  points_per_axis: number;
+  min_changed_axes: number;
+  max_changed_axes: number;
+  single_gimbal_probability: number;
+};
 type ScopeConfiguration = {
   [key: string]: unknown;
-  difficulty: string; action_timeout_s: number; hold_time_s: number; fps: number; stick_max: number;
+  action_timeout_s: number; hold_time_s: number; fps: number; stick_max: number;
   max_completed_actions: number; countdown_s: number; fullscreen: boolean; topmost: boolean;
-  gui_gimbal_size: number; gui_stick_zone: number;
+  action_settings: ActionSettings;
+  gui_gimbal_size: number; gui_stick_zone: number; gui_stick_radius: number;
+  gui_stick_outline_width: number; gui_zone_outline_width: number;
+  gui_gimbal_border_width: number; gui_gimbal_cross_width: number;
   screen_background: string; gimbal_background: string; stick_outline: string; stick_fill: string;
   zone_idle_outline: string; zone_idle_fill: string; zone_ok_outline: string; zone_ok_fill: string;
   grid_color: string; label_color: string; prompt_color: string;
 };
 
+const AXIS_KEYS: AxisKey[] = ["LX", "LY", "RY", "RX"];
+const makeDefaultActionSettings = (): ActionSettings => ({
+  generator_version: 1,
+  intervals: { LX: [-0.8, 0.8], LY: [-0.8, 0.8], RY: [-0.8, 0.8], RX: [-0.8, 0.8] },
+  points_per_axis: 9,
+  min_changed_axes: 1,
+  max_changed_axes: 2,
+  single_gimbal_probability: 0.5,
+});
 const initialScopeConfiguration: ScopeConfiguration = {
-  debug_output: false, difficulty: "hard", action_timeout_s: 3, hold_time_s: 0.5, fps: 100, stick_max: 1000,
+  debug_output: false, action_timeout_s: 3, hold_time_s: 0.5, fps: 100, stick_max: 1000,
   max_completed_actions: 50, countdown_s: 3, seed: null,
+  action_settings: makeDefaultActionSettings(),
   fullscreen: true, topmost: true,
   gui_gimbal_size: 500, gui_stick_zone: 200, gui_stick_radius: 20,
   gui_stick_outline_width: 6, gui_zone_outline_width: 8, gui_gimbal_border_width: 12, gui_gimbal_cross_width: 6,
@@ -1582,7 +1604,23 @@ function makeScopeConfiguration(value: Record<string, unknown>): ScopeConfigurat
   delete normalized.expert_mode;
   delete normalized.output_root;
   delete normalized.use_dated_subfolders;
-  return { ...initialScopeConfiguration, ...normalized, difficulty: String(value.difficulty ?? "hard").toLowerCase() } as ScopeConfiguration;
+  delete normalized.difficulty;
+  const defaults = makeDefaultActionSettings();
+  const source = value.action_settings && typeof value.action_settings === "object"
+    ? value.action_settings as Partial<ActionSettings>
+    : {};
+  const sourceIntervals = source.intervals && typeof source.intervals === "object" ? source.intervals : {};
+  const actionSettings: ActionSettings = {
+    ...defaults,
+    ...source,
+    intervals: {
+      LX: [...(sourceIntervals.LX ?? defaults.intervals.LX)] as [number, number],
+      LY: [...(sourceIntervals.LY ?? defaults.intervals.LY)] as [number, number],
+      RY: [...(sourceIntervals.RY ?? defaults.intervals.RY)] as [number, number],
+      RX: [...(sourceIntervals.RX ?? defaults.intervals.RX)] as [number, number],
+    },
+  };
+  return { ...initialScopeConfiguration, ...normalized, action_settings: actionSettings } as ScopeConfiguration;
 }
 
 const initialSimpleConfiguration: Record<string, number | string> = {
@@ -1778,28 +1816,140 @@ function GimbalPreview({ configuration, onPick }: { configuration: ScopeConfigur
 
 function TestEditor({ test, onClose, onSaved }: { test: TestDefinition; onClose: () => void; onSaved: (test: TestDefinition) => void }) {
   const [configuration, setConfiguration] = useState(() => makeScopeConfiguration(test.configuration));
+  const [selectedPanel, setSelectedPanel] = useState<"basic" | "actions" | "colors">("basic");
   const [selectedColor, setSelectedColor] = useState("screen_background");
   const [message, setMessage] = useState("");
   const colorInput = useRef<HTMLInputElement>(null);
+  const actionSettings = configuration.action_settings;
   function setValue(key: string, value: unknown) { setConfiguration((current) => ({ ...current, [key]: value })); }
-  function pickColor(key: string) { setSelectedColor(key); if (colorInput.current) { colorInput.current.value = String(configuration[key] ?? "#ffffff"); colorInput.current.click(); } }
-  const colorFields = [["screen_background", t("Pozadie obrazovky")], ["gimbal_background", t("Pozadie gimbalu")], ["grid_color", t("Okraje a stredové značky")], ["zone_idle_fill", t("Výplň neaktívnej zóny")], ["zone_idle_outline", t("Obrys neaktívnej zóny")], ["zone_ok_fill", t("Výplň OK zóny")], ["zone_ok_outline", t("Obrys OK zóny")], ["stick_fill", t("Výplň páčky")], ["stick_outline", t("Obrys páčky")], ["label_color", t("Popisy")], ["prompt_color", t("Výzva")]] as const;
+  function updateAction(key: string, value: unknown) {
+    setConfiguration((current) => ({
+      ...current,
+      action_settings: { ...current.action_settings, [key]: value },
+    }));
+  }
+  function setAxisBound(axis: AxisKey, bound: 0 | 1, value: number) {
+    const intervals = { ...actionSettings.intervals, [axis]: [...actionSettings.intervals[axis]] as [number, number] };
+    intervals[axis][bound] = value;
+    updateAction("intervals", intervals);
+  }
+  function pickColor(key: string) {
+    setSelectedColor(key);
+    if (colorInput.current) {
+      colorInput.current.value = String(configuration[key] ?? "#ffffff");
+      colorInput.current.click();
+    }
+  }
+  const colorFields = [
+    ["screen_background", t("Pozadie obrazovky")], ["gimbal_background", t("Pozadie gimbalu")],
+    ["grid_color", t("Okraje a stredové značky")], ["zone_idle_fill", t("Výplň neaktívnej zóny")],
+    ["zone_idle_outline", t("Obrys neaktívnej zóny")], ["zone_ok_fill", t("Výplň OK zóny")],
+    ["zone_ok_outline", t("Obrys OK zóny")], ["stick_fill", t("Výplň páčky")],
+    ["stick_outline", t("Obrys páčky")], ["label_color", t("Popisy")], ["prompt_color", t("Výzva")],
+  ] as const;
+  function validate(): string | null {
+    if (!Number.isInteger(actionSettings.points_per_axis) || actionSettings.points_per_axis < 2 || actionSettings.points_per_axis > 101)
+      return t("Počet bodov na os musí byť celé číslo od 2 do 101.");
+    if (actionSettings.min_changed_axes < 1 || actionSettings.min_changed_axes > 4 ||
+        actionSettings.max_changed_axes < actionSettings.min_changed_axes || actionSettings.max_changed_axes > 4)
+      return t("Rozsah počtu meniacich sa osí musí byť od 1 do 4 a minimum nesmie prekročiť maximum.");
+    if (actionSettings.single_gimbal_probability < 0 || actionSettings.single_gimbal_probability > 1)
+      return t("Pravdepodobnosť zmeny jedného gimbalu musí byť od 0 do 100 %.");
+    for (const axis of AXIS_KEYS) {
+      const [low, high] = actionSettings.intervals[axis];
+      if (!Number.isFinite(low) || !Number.isFinite(high) || low < -1 || high > 1 || low >= high)
+        return tf("Interval osi {0} musí spĺňať −1 ≤ minimum < maximum ≤ 1.", axis);
+    }
+    return null;
+  }
   async function save() {
     setMessage("");
+    const validationError = validate();
+    if (validationError) { setMessage(validationError); setSelectedPanel("actions"); return; }
+    const cleanConfiguration: Record<string, unknown> = {
+      ...configuration,
+      action_settings: { ...actionSettings, generator_version: 1 },
+    };
+    delete cleanConfiguration.difficulty;
     try {
-      const saved = await request<TestDefinition>(`/api/admin/tests/${test.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ configuration: { ...configuration, difficulty: String(configuration.difficulty).toLowerCase() } }) });
-      onSaved(saved); setMessage(t("Nastavenia boli uložené."));
-    } catch (reason) { setMessage(reason instanceof Error ? reason.message : t("Nastavenia sa nepodarilo uložiť.")); }
+      const saved = await request<TestDefinition>("/api/admin/tests/" + test.id, {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ configuration: cleanConfiguration }),
+      });
+      onSaved(saved);
+      setMessage(t("Nastavenia boli uložené."));
+    } catch (reason) {
+      setMessage(reason instanceof Error ? reason.message : t("Nastavenia sa nepodarilo uložiť."));
+    }
   }
-  return <div className="editor-backdrop"><section className="test-editor-window"><header className="editor-header"><div><div className="eyebrow">{t("EDITOR TESTU · ROZPRACOVANÁ VERZIA")}</div><h2>{test.name}</h2><p className="muted">{test.test_code} {t("· v")}{test.version}</p></div><button type="button" className="quiet compact" onClick={onClose}>{t("Zavrieť")}</button></header><div className="editor-layout">
-    <div className="editor-controls">
-<section className="config-card"><div className="eyebrow">{t("VZHĽAD")}</div><h3>{t("Farby a geometria")}</h3><div className="selected-color"><span>{colorFields.find(([key]) => key === selectedColor)?.[1] ?? selectedColor}</span><input ref={colorInput} type="color" value={String(configuration[selectedColor])} onChange={(event) => setValue(selectedColor, event.target.value)} /><code>{String(configuration[selectedColor])}</code></div><div className="color-list">{colorFields.map(([key, label]) => <button type="button" className={selectedColor === key ? "color-item selected" : "color-item"} key={key} onClick={() => pickColor(key)}><span>{label}</span><i style={{ background: String(configuration[key]) }} /><code>{String(configuration[key])}</code></button>)}</div><div className="field-grid geometry-fields"><label>{t("Veľkosť gimbalu")}<input type="number" min="150" value={String(configuration.gui_gimbal_size)} onChange={(event) => setValue("gui_gimbal_size", Number(event.target.value))} /></label><label>{t("Polomer zóny")}<input type="number" min="10" value={String(configuration.gui_stick_zone)} onChange={(event) => setValue("gui_stick_zone", Number(event.target.value))} /></label><label>{t("Polomer páčky")}<input type="number" min="1" value={String(configuration.gui_stick_radius)} onChange={(event) => setValue("gui_stick_radius", Number(event.target.value))} /></label><label>{t("Obrys páčky")}<input type="number" min="1" value={String(configuration.gui_stick_outline_width)} onChange={(event) => setValue("gui_stick_outline_width", Number(event.target.value))} /></label><label>{t("Obrys zóny")}<input type="number" min="1" value={String(configuration.gui_zone_outline_width)} onChange={(event) => setValue("gui_zone_outline_width", Number(event.target.value))} /></label><label>{t("Obrys gimbalu")}<input type="number" min="1" value={String(configuration.gui_gimbal_border_width)} onChange={(event) => setValue("gui_gimbal_border_width", Number(event.target.value))} /></label><label>{t("Šírka stredových značiek")}<input type="number" min="1" value={String(configuration.gui_gimbal_cross_width)} onChange={(event) => setValue("gui_gimbal_cross_width", Number(event.target.value))} /></label></div></section>
-      <section className="config-card"><div className="eyebrow">{t("EXPERIMENT")}</div><h3>{t("Základné parametre")}</h3><div className="field-grid"><label>{t("Obtiažnosť")}<select value={String(configuration.difficulty)} onChange={(event) => setValue("difficulty", event.target.value)}><option value="easy">{t("Ľahká")}</option><option value="medium">{t("Stredná")}</option><option value="hard">{t("Ťažká")}</option><option value="ultra">{t("Ultra")}</option></select></label><label>{t("Vzorkovacia frekvencia (Hz)")}<input type="number" min="10" value={String(configuration.fps)} onChange={(event) => setValue("fps", Number(event.target.value))} /></label><label>{t("Počet dokončených akcií")}<input type="number" min="1" value={String(configuration.max_completed_actions)} onChange={(event) => setValue("max_completed_actions", Number(event.target.value))} /></label><label>{t("Timeout akcie (s)")}<input type="number" min=".1" step=".1" value={String(configuration.action_timeout_s)} onChange={(event) => setValue("action_timeout_s", Number(event.target.value))} /></label><label>{t("Čas podržania (s)")}<input type="number" min=".1" step=".1" value={String(configuration.hold_time_s)} onChange={(event) => setValue("hold_time_s", Number(event.target.value))} /></label><label>{t("Odpočet pred štartom (s)")}<input type="number" min="0" value={String(configuration.countdown_s)} onChange={(event) => setValue("countdown_s", Number(event.target.value))} /></label><label>{t("Maximálna hodnota páčky")}<input type="number" min="100" value={String(configuration.stick_max)} onChange={(event) => setValue("stick_max", Number(event.target.value))} /></label><label>{t("Náhodný seed")}<input value={configuration.seed == null ? "" : String(configuration.seed)} onChange={(event) => setValue("seed", event.target.value.trim() === "" ? null : Number(event.target.value))} placeholder={t("automaticky")} /></label></div><div className="toggle-row"><label><input type="checkbox" checked={Boolean(configuration.debug_output)} onChange={(event) => setValue("debug_output", event.target.checked)} /> {t("Debug výstup")}</label></div></section>
-      <section className="config-card"><div className="eyebrow">{t("RUNTIME")}</div><h3>{t("Správanie okna")}</h3><div className="toggle-row"><label><input type="checkbox" checked={Boolean(configuration.fullscreen)} onChange={(event) => setValue("fullscreen", event.target.checked)} /> {t("Celá obrazovka")}</label><label><input type="checkbox" checked={Boolean(configuration.topmost)} onChange={(event) => setValue("topmost", event.target.checked)} /> {t("Vždy navrchu")}</label></div></section>
-      <section className="config-card"><div className="eyebrow">{t("VÝSTUP")}</div><h3>{t("Súbory merania")}</h3><p className="config-note">{t("THRUST-measure vždy uloží raw log a súbor JSON s verziovanými štatistikami a bodmi grafov.")}</p></section>
+
+  const panels = [
+    { id: "basic" as const, title: t("Základné nastavenia"), detail: t("Vzorkovanie, priebeh a okno merania") },
+    { id: "actions" as const, title: t("Nastavenie akcií"), detail: t("Intervaly, hustota bodov a zmeny osí") },
+    { id: "colors" as const, title: t("Farby prvkov"), detail: t("Vzhľad SCoPE obrazovky") },
+  ];
+  return <div className="editor-backdrop"><section className="test-editor-window">
+    <header className="editor-header"><div><div className="eyebrow">{t("EDITOR TESTU · ROZPRACOVANÁ VERZIA")}</div><h2>{test.name}</h2><p className="muted">{test.test_code} {t("· v")}{test.version}</p></div><button type="button" className="quiet compact" onClick={onClose}>{t("Zavrieť")}</button></header>
+    <div className="editor-layout">
+      <div className="editor-controls">
+        <div className="editor-panel-cards" role="tablist" aria-label={t("Nastavenia testu")}>
+          {panels.map((panel) => <button type="button" role="tab" aria-selected={selectedPanel === panel.id}
+            className={selectedPanel === panel.id ? "editor-panel-card selected" : "editor-panel-card"}
+            key={panel.id} onClick={() => setSelectedPanel(panel.id)}>
+            <strong>{panel.title}</strong><span>{panel.detail}</span>
+          </button>)}
+        </div>
+        {selectedPanel === "basic" && <section className="config-card">
+          <div className="eyebrow">{t("PRIEBEH MERANIA")}</div><h3>{t("Základné parametre")}</h3>
+          <div className="field-grid">
+            <label>{t("Vzorkovacia frekvencia (Hz)")}<input type="number" min="10" max="1000" value={configuration.fps} onChange={(event) => setValue("fps", Number(event.target.value))} /></label>
+            <label>{t("Počet cieľov")}<input type="number" min="1" value={configuration.max_completed_actions} onChange={(event) => setValue("max_completed_actions", Number(event.target.value))} /></label>
+            <label>{t("Timeout cieľa (s)")}<input type="number" min=".1" step=".1" value={configuration.action_timeout_s} onChange={(event) => setValue("action_timeout_s", Number(event.target.value))} /></label>
+            <label>{t("Čas podržania v zóne (s)")}<input type="number" min=".1" step=".1" value={configuration.hold_time_s} onChange={(event) => setValue("hold_time_s", Number(event.target.value))} /></label>
+            <label>{t("Odpočet pred štartom (s)")}<input type="number" min="0" value={configuration.countdown_s} onChange={(event) => setValue("countdown_s", Number(event.target.value))} /></label>
+            <label>{t("Maximálna hodnota páčky")}<input type="number" min="100" value={configuration.stick_max} onChange={(event) => setValue("stick_max", Number(event.target.value))} /></label>
+            <label>{t("Náhodný seed")}<input value={configuration.seed == null ? "" : String(configuration.seed)} onChange={(event) => setValue("seed", event.target.value.trim() === "" ? null : Number(event.target.value))} placeholder={t("automaticky")} /></label>
+          </div>
+          <div className="toggle-row"><label><input type="checkbox" checked={Boolean(configuration.fullscreen)} onChange={(event) => setValue("fullscreen", event.target.checked)} /> {t("Celá obrazovka")}</label><label><input type="checkbox" checked={Boolean(configuration.topmost)} onChange={(event) => setValue("topmost", event.target.checked)} /> {t("Vždy navrchu")}</label><label><input type="checkbox" checked={Boolean(configuration.debug_output)} onChange={(event) => setValue("debug_output", event.target.checked)} /> {t("Debug výstup")}</label></div>
+          <div className="field-grid geometry-fields">
+            <label>{t("Veľkosť gimbalu")}<input type="number" min="150" value={configuration.gui_gimbal_size} onChange={(event) => setValue("gui_gimbal_size", Number(event.target.value))} /></label>
+            <label>{t("Polomer cieľovej zóny")}<input type="number" min="10" value={configuration.gui_stick_zone} onChange={(event) => setValue("gui_stick_zone", Number(event.target.value))} /></label>
+            <label>{t("Polomer páčky")}<input type="number" min="1" value={configuration.gui_stick_radius} onChange={(event) => setValue("gui_stick_radius", Number(event.target.value))} /></label>
+            <label>{t("Obrys páčky")}<input type="number" min="1" value={configuration.gui_stick_outline_width} onChange={(event) => setValue("gui_stick_outline_width", Number(event.target.value))} /></label>
+            <label>{t("Obrys zóny")}<input type="number" min="1" value={configuration.gui_zone_outline_width} onChange={(event) => setValue("gui_zone_outline_width", Number(event.target.value))} /></label>
+            <label>{t("Obrys gimbalu")}<input type="number" min="1" value={configuration.gui_gimbal_border_width} onChange={(event) => setValue("gui_gimbal_border_width", Number(event.target.value))} /></label>
+            <label>{t("Šírka stredových značiek")}<input type="number" min="1" value={configuration.gui_gimbal_cross_width} onChange={(event) => setValue("gui_gimbal_cross_width", Number(event.target.value))} /></label>
+          </div>
+        </section>}
+        {selectedPanel === "actions" && <section className="config-card action-settings-card">
+          <div className="eyebrow">{t("NÁHODNÝ GENERÁTOR CIEĽOV")} · v{actionSettings.generator_version}</div><h3>{t("Množina cieľových bodov a prechody")}</h3>
+          <p className="config-note">{t("Z každej osi sa vytvorí rovnomerná množina bodov v zadanom intervale. Následne sa náhodne mení 1 až nastavený maximálny počet súradníc oproti predchádzajúcemu cieľu. Nula je bežný bod; automatický návrat do stredu sa nevkladá.")}</p>
+          <div className="field-grid action-global-fields">
+            <label>{t("Počet možných bodov na každej osi")}<input type="number" min="2" max="101" step="1" value={actionSettings.points_per_axis} onChange={(event) => updateAction("points_per_axis", Number(event.target.value))} /></label>
+            <label>{t("Minimum meniacich sa osí")}<input type="number" min="1" max="4" value={actionSettings.min_changed_axes} onChange={(event) => updateAction("min_changed_axes", Number(event.target.value))} /></label>
+            <label>{t("Maximum meniacich sa osí")}<input type="number" min={actionSettings.min_changed_axes} max="4" value={actionSettings.max_changed_axes} onChange={(event) => updateAction("max_changed_axes", Math.max(actionSettings.min_changed_axes, Number(event.target.value)))} /></label>
+            <label>{t("Pravdepodobnosť zmeny iba jedného gimbalu (%)")}<input type="number" min="0" max="100" step="5" value={Math.round(actionSettings.single_gimbal_probability * 100)} onChange={(event) => updateAction("single_gimbal_probability", Number(event.target.value) / 100)} /></label>
+          </div>
+          <div className="action-axis-table">
+            <div className="action-axis-heading"><span>{t("Os")}</span><span>{t("Minimum")}</span><span>{t("Maximum")}</span></div>
+            {AXIS_KEYS.map((axis) => <div className="action-axis-row" key={axis}>
+              <strong>{axis}</strong>
+              <label><span className="sr-only">{tf("{0} minimum", axis)}</span><input aria-label={tf("{0} minimum", axis)} type="number" min="-1" max="1" step=".05" value={actionSettings.intervals[axis][0]} onChange={(event) => setAxisBound(axis, 0, Number(event.target.value))} /></label>
+              <label><span className="sr-only">{tf("{0} maximum", axis)}</span><input aria-label={tf("{0} maximum", axis)} type="number" min="-1" max="1" step=".05" value={actionSettings.intervals[axis][1]} onChange={(event) => setAxisBound(axis, 1, Number(event.target.value))} /></label>
+            </div>)}
+          </div>
+          <p className="muted">{t("Osi LX/LY patria k ľavému gimbalu, RY/RX k pravému. Keď sa mení iba jeden gimbal, cieľ druhého zostane na predošlej hodnote.")}</p>
+        </section>}
+        {selectedPanel === "colors" && <section className="config-card">
+          <div className="eyebrow">{t("VZHĽAD")}</div><h3>{t("Farby prvkov")}</h3>
+          <div className="selected-color"><span>{colorFields.find(([key]) => key === selectedColor)?.[1] ?? selectedColor}</span><input ref={colorInput} type="color" value={String(configuration[selectedColor] ?? "#ffffff")} onChange={(event) => setValue(selectedColor, event.target.value)} /><code>{String(configuration[selectedColor])}</code></div>
+          <div className="color-list">{colorFields.map(([key, label]) => <button type="button" className={selectedColor === key ? "color-item selected" : "color-item"} key={key} onClick={() => pickColor(key)}><span>{label}</span><i style={{ background: String(configuration[key]) }} /><code>{String(configuration[key])}</code></button>)}</div>
+        </section>}
+      </div>
+      <div className="editor-preview"><div className="eyebrow">{t("ŽIVÝ NÁHĽAD")}</div><h3>{t("SCoPE obrazovka")}</h3><GimbalPreview configuration={configuration} onPick={pickColor} /><details className="json-disclosure"><summary>{t("Rozšírený JSON náhľad")}</summary><pre className="config-preview live">{JSON.stringify(configuration, null, 2)}</pre></details></div>
     </div>
-    <div className="editor-preview"><div className="eyebrow">{t("ŽIVÝ NÁHĽAD")}</div><h3>{t("SCoPE obrazovka")}</h3><GimbalPreview configuration={configuration} onPick={pickColor} /><details className="json-disclosure"><summary>{t("Rozšírený JSON náhľad")}</summary><pre className="config-preview live">{JSON.stringify({ ...configuration, difficulty: String(configuration.difficulty).toLowerCase() }, null, 2)}</pre></details></div>
-  </div><footer className="editor-footer"><button type="button" className="quiet" onClick={onClose}>{t("Zrušiť")}</button><button className="primary" onClick={save}>{t("Uložiť nastavenia")}</button>{message && <span className="notice">{message}</span>}</footer></section></div>;
+    <footer className="editor-footer"><button type="button" className="quiet" onClick={onClose}>{t("Zrušiť")}</button><button className="primary" onClick={save}>{t("Uložiť nastavenia")}</button>{message && <span className="notice">{message}</span>}</footer>
+  </section></div>;
 }
 
 function ResearcherRegistrationPage({ onSubmit, onBack, onStudentRegister, onLogin, error, consentTexts, onOpenConsent }: {
