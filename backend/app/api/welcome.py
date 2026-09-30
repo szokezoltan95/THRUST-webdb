@@ -194,8 +194,11 @@ async def admin_welcome(lang: str = "sk", auth: AuthContext = Depends(require_ad
 
 @router.get("/admin/welcome/catalog")
 async def welcome_catalog(auth: AuthContext = Depends(require_admin), db: AsyncSession = Depends(get_db)) -> dict:
-    measurements, _ = await _source_records(db)
-    return {"metrics": _metric_catalog(measurements)}
+    measurements, tests = await _source_records(db)
+    return {
+        "metrics": _metric_catalog(measurements),
+        "tests": [{"id": test.id, "label": f"{test.name} v{test.version}"} for test in sorted(tests.values(), key=lambda item: (item.name, item.version)) if test.is_active],
+    }
 
 
 @router.post("/admin/welcome/preview-data")
