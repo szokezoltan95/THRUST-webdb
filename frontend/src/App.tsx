@@ -324,13 +324,20 @@ export function App() {
   const [reportMeasurementSort, setReportMeasurementSort] = useState<SortState>({ column: "date", direction: "desc" });
   const [tests, setTests] = useState<TestDefinition[]>([]);
   const defaultTestConfiguration = `{
-  "difficulty": "hard",
   "action_timeout_s": 3.0,
   "hold_time_s": 0.5,
   "fps": 100,
   "max_completed_actions": 50,
   "countdown_s": 3,
-  "stick_max": 1000
+  "stick_max": 1000,
+  "action_settings": {
+    "generator_version": 1,
+    "intervals": { "LX": [-0.8, 0.8], "LY": [-0.8, 0.8], "RY": [-0.8, 0.8], "RX": [-0.8, 0.8] },
+    "points_per_axis": 9,
+    "min_changed_axes": 1,
+    "max_changed_axes": 2,
+    "single_gimbal_probability": 0.5
+  }
 }`
   const [testForm, setTestForm] = useState({ test_code: "", name: "", version: "1.0", analysis_profile: "SCOPE_STEP_RESPONSE_V1", configuration: defaultTestConfiguration });
   const [testMessage, setTestMessage] = useState("");
