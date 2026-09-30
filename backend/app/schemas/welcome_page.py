@@ -70,7 +70,7 @@ class Histogram(Block):
 class AverageResponse(Block):
     type: Literal["average_response"]
     title: str = Field(max_length=180)
-    test_definition_id: str = Field(max_length=64)
+    test_definition_id: str = Field(min_length=1, max_length=64)
     channel: Literal["LX", "LY", "RX", "RY"] = "LX"
 
 
