@@ -1616,7 +1616,9 @@ function makeScopeConfiguration(value: Record<string, unknown>): ScopeConfigurat
   const source = value.action_settings && typeof value.action_settings === "object"
     ? value.action_settings as Partial<ActionSettings>
     : {};
-  const sourceIntervals = source.intervals && typeof source.intervals === "object" ? source.intervals : {};
+  const sourceIntervals: Partial<Record<AxisKey, [number, number]>> = source.intervals && typeof source.intervals === "object"
+    ? source.intervals as Partial<Record<AxisKey, [number, number]>>
+    : {};
   const actionSettings: ActionSettings = {
     ...defaults,
     ...source,
