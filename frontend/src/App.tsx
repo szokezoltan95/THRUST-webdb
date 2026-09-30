@@ -502,6 +502,15 @@ export function App() {
   }, []);
 
   useEffect(() => {
+    const refreshStudentResults = () => {
+      request<StudentMeasurement[]>("/api/student/measurements").then(setMeasurements).catch(() => undefined);
+      request<StudentComparison>(`/api/student/comparison?mode=${mode}`).then(setComparison).catch(() => undefined);
+    };
+    window.addEventListener("thrust:data-updated", refreshStudentResults);
+    return () => window.removeEventListener("thrust:data-updated", refreshStudentResults);
+  }, [mode]);
+
+  useEffect(() => {
     let active = true;
     setConsentTexts(null);
     request<ConsentDocuments>(`/api/public/consent-texts?lang=${language}`)
@@ -520,15 +529,39 @@ export function App() {
   }, [language]);
 
   useEffect(() => {
-    if (user && user.role !== "student") {
-      request<Overview>("/api/admin/overview").then(setOverview).catch(() => setOverview(null));
-      request<Participant[]>("/api/admin/participants").then(setParticipants).catch(() => setParticipants([]));
-      if (user.role === "admin" || user.role === "superadmin") request<AdminAccount[]>("/api/admin/users").then(setAdminAccounts).catch((reason) => setAccountMessage(reason instanceof Error ? reason.message : t("Používateľov sa nepodarilo načítať.")));
-      else setAdminAccounts([]);
-      request<TestDefinition[]>("/api/admin/tests").then(setTests).catch(() => setTests([]));
-      request<Measurement[]>("/api/admin/measurements").then(setMeasurements).catch(() => setMeasurements([]));
-      request<ParticipantGroup[]>("/api/admin/groups").then(setGroups).catch(() => setGroups([]));
-    }
+    if (!user || user.role === "student") return;
+    let active = true;
+    const refreshResearchData = () => {
+      request<Overview>("/api/admin/overview").then((value) => { if (active) setOverview(value); }).catch(() => { if (active) setOverview(null); });
+      request<Participant[]>("/api/admin/participants").then((value) => { if (active) setParticipants(value); }).catch(() => { if (active) setParticipants([]); });
+      if (user.role === "admin" || user.role === "superadmin") {
+        request<AdminAccount[]>("/api/admin/users").then((value) => { if (active) setAdminAccounts(value); }).catch((reason) => { if (active) setAccountMessage(reason instanceof Error ? reason.message : t("Používateľov sa nepodarilo načítať.")); });
+      } else setAdminAccounts([]);
+      request<TestDefinition[]>("/api/admin/tests").then((value) => { if (active) setTests(value); }).catch(() => { if (active) setTests([]); });
+      request<Measurement[]>("/api/admin/measurements").then((value) => { if (active) setMeasurements(value); }).catch(() => { if (active) setMeasurements([]); });
+      request<ParticipantGroup[]>("/api/admin/groups").then((value) => { if (active) setGroups(value); }).catch(() => { if (active) setGroups([]); });
+    };
+    refreshResearchData();
+    window.addEventListener("thrust:data-updated", refreshResearchData);
+    return () => {
+      active = false;
+      window.removeEventListener("thrust:data-updated", refreshResearchData);
+    };
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+    const stream = new EventSource("/api/live/events");
+    const refresh = () => window.dispatchEvent(new Event("thrust:data-updated"));
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
+    stream.addEventListener("measurement_updated", refresh);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+    return () => {
+      stream.close();
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+    };
   }, [user]);
 
   async function generateParticipantCode() {
