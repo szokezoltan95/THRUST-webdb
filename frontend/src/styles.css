@@ -1462,3 +1462,27 @@ main[data-color-mode="light"] .test-attendance.completed { color: #167e53; backg
 
 .simple-pattern-field { display: grid; gap: 7px; margin: 14px 0; color: var(--text-soft); }
 .simple-pattern-field select { width: 100%; padding: 10px; color: var(--text-main); border: 1px solid var(--line); border-radius: 7px; background: var(--surface-input); }
+
+/* Test lifecycle: finalized, draft, and deactivated remain easy to distinguish. */
+.test-table .data-table-head, .test-table .data-table-row {
+  grid-template-columns: minmax(100px, .75fr) minmax(180px, 1.3fr) minmax(75px, .55fr) minmax(170px, 1fr) minmax(510px, 2.6fr);
+  min-width: 1240px;
+}
+.test-table .test-row { border-left: 4px solid transparent; }
+.test-table .test-row-finalized { border-left-color: #2fba86; background: rgba(47,186,134,.07); }
+.test-table .test-row-draft { border-left-color: #e8ae45; background: rgba(232,174,69,.07); }
+.test-table .test-row-inactive { border-left-color: #7d8b9a; background: rgba(125,139,154,.12); }
+.test-table .test-row-inactive > :not(.row-actions) { opacity: .58; filter: grayscale(1); }
+.test-table .test-row-inactive:hover { background: rgba(125,139,154,.19); }
+.test-state-badge { display: inline-flex; align-items: center; padding: 5px 9px; border-radius: 999px; font-size: .72rem; font-weight: 800; white-space: nowrap; border: 1px solid currentColor; }
+.test-state-finalized { color: #48d7a0; background: rgba(47,186,134,.13); }
+.test-state-draft { color: #f3bf64; background: rgba(232,174,69,.13); }
+.test-state-inactive { color: #9aa8b4; background: rgba(125,139,154,.15); }
+main[data-color-mode="light"] .test-state-finalized { color: #08734b; }
+main[data-color-mode="light"] .test-state-draft { color: #875400; }
+main[data-color-mode="light"] .test-state-inactive { color: #52616e; }
+.test-removal-backdrop { z-index: 1250; }
+.test-removal-dialog { width: min(710px, calc(100vw - 32px)); max-height: 88vh; overflow: auto; }
+.test-delete-warning { color: #ef6976; }
+.test-removal-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 9px; margin-top: 22px; }
+@media (max-width: 650px) { .test-removal-actions { flex-direction: column; } }

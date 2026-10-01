@@ -414,7 +414,7 @@ async def list_tests(
     auth: AuthContext = Depends(require_researcher),
     db: AsyncSession = Depends(get_db),
 ) -> list[TestDefinition]:
-    result = await db.scalars(select(TestDefinition).order_by(TestDefinition.test_code, TestDefinition.version))
+    result = await db.scalars(select(TestDefinition).order_by(TestDefinition.is_active.desc(), TestDefinition.test_code, TestDefinition.version))
     return list(result)
 
 
@@ -468,13 +468,60 @@ async def update_test(
     if test is None:
         raise HTTPException(status_code=404, detail="Typ testu neexistuje.")
     if test.status != "draft":
-        raise HTTPException(status_code=409, detail="Aktívny test už nie je možné upravovať.")
+        raise HTTPException(status_code=409, detail="Finalizovaný test už nie je možné upravovať.")
     data = payload.model_dump(exclude_unset=True)
     if "name" in data:
         test.name = data["name"]
     if "configuration" in data and data["configuration"] is not None:
         configuration = normalize_test_configuration(data["configuration"], test.analysis_profile)
         test.configuration = configuration
+    await db.commit()
+    await db.refresh(test)
+    return test
+
+
+@router.post("/tests/{test_id}/finalize", response_model=TestDefinitionResponse)
+async def finalize_test(
+    test_id: str,
+    auth: AuthContext = Depends(require_researcher_csrf),
+    db: AsyncSession = Depends(get_db),
+) -> TestDefinition:
+    test = await db.get(TestDefinition, test_id)
+    if test is None:
+        raise HTTPException(status_code=404, detail="Verzia testu neexistuje.")
+    if test.status != "draft":
+        raise HTTPException(status_code=409, detail="Test je už finalizovaný.")
+    test.status = "finalized"
+    await db.commit()
+    await db.refresh(test)
+    return test
+
+
+@router.post("/tests/{test_id}/deactivate", response_model=TestDefinitionResponse)
+async def deactivate_test(
+    test_id: str,
+    auth: AuthContext = Depends(require_researcher_csrf),
+    db: AsyncSession = Depends(get_db),
+) -> TestDefinition:
+    test = await db.get(TestDefinition, test_id)
+    if test is None:
+        raise HTTPException(status_code=404, detail="Verzia testu neexistuje.")
+    test.is_active = False
+    await db.commit()
+    await db.refresh(test)
+    return test
+
+
+@router.post("/tests/{test_id}/reactivate", response_model=TestDefinitionResponse)
+async def reactivate_test(
+    test_id: str,
+    auth: AuthContext = Depends(require_researcher_csrf),
+    db: AsyncSession = Depends(get_db),
+) -> TestDefinition:
+    test = await db.get(TestDefinition, test_id)
+    if test is None:
+        raise HTTPException(status_code=404, detail="Verzia testu neexistuje.")
+    test.is_active = True
     await db.commit()
     await db.refresh(test)
     return test
@@ -554,8 +601,8 @@ async def create_measurement(
     if participant is None or not participant.is_active:
         raise HTTPException(status_code=404, detail="Aktívny účastník neexistuje.")
     test = await db.get(TestDefinition, payload.test_definition_id)
-    if test is None or not test.is_active:
-        raise HTTPException(status_code=404, detail="Aktívny typ testu neexistuje.")
+    if test is None:
+        raise HTTPException(status_code=404, detail="Typ testu neexistuje.")
 
     try:
         raw_bytes = decode_raw_upload(

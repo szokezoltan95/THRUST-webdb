@@ -240,7 +240,7 @@ async def create_measurement(
     student = require_student(auth).user
     participant = await db.get(Participant, student.participant_id)
     test = await db.get(TestDefinition, payload.test_definition_id)
-    if participant is None or not participant.is_active or test is None or not test.is_active:
+    if participant is None or not participant.is_active or test is None:
         raise HTTPException(status_code=404, detail="Aktívny účastník alebo test neexistuje.")
     try:
         raw_bytes = decode_raw_upload(

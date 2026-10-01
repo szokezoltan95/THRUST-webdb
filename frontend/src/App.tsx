@@ -346,6 +346,7 @@ export function App() {
   const [resultMode, setResultMode] = useState<MeasurementMode>("SCOPE");
   const [selectedTestId, setSelectedTestId] = useState<string | null>(null);
   const [editingTestId, setEditingTestId] = useState<string | null>(null);
+  const [testRemovalTarget, setTestRemovalTarget] = useState<TestDefinition | null>(null);
   const [selectedParticipant, setSelectedParticipant] = useState<ParticipantDetail | null>(null);
   const [participantDialog, setParticipantDialog] = useState<"detail" | "measurements" | null>(null);
   const [selectedAccount, setSelectedAccount] = useState<AdminAccount | null>(null);
@@ -713,10 +714,39 @@ export function App() {
     URL.revokeObjectURL(link.href);
   }
 
+  async function finalizeTest(test: TestDefinition) {
+    if (!user || test.status !== "draft") return;
+    if (!window.confirm(t("Finalizovať test? Po finalizácii už nebude možné upraviť jeho názov ani nastavenia."))) return;
+    try {
+      const saved = await request<TestDefinition>(`/api/admin/tests/${test.id}/finalize`, {
+        method: "POST", headers: { "X-CSRF-Token": user.csrf_token },
+      });
+      setTests((current) => current.map((item) => item.id === saved.id ? saved : item));
+      setEditingTestId((current) => current === saved.id ? null : current);
+      setTestMessage(t("Test bol finalizovaný a jeho nastavenia sú uzamknuté."));
+    } catch (reason) {
+      setTestMessage(reason instanceof Error ? reason.message : t("Test sa nepodarilo finalizovať."));
+    }
+  }
+
+  async function changeTestAvailability(test: TestDefinition, active: boolean) {
+    if (!user) return;
+    try {
+      const saved = await request<TestDefinition>(`/api/admin/tests/${test.id}/${active ? "reactivate" : "deactivate"}`, {
+        method: "POST", headers: { "X-CSRF-Token": user.csrf_token },
+      });
+      setTests((current) => current.map((item) => item.id === saved.id ? saved : item));
+      setTestRemovalTarget(null);
+      setTestMessage(active ? t("Test je opäť dostupný v THRUST-measure.") : t("Test bol deaktivovaný. Doterajšie merania zostali zachované."));
+    } catch (reason) {
+      setTestMessage(reason instanceof Error ? reason.message : t("Stav testu sa nepodarilo zmeniť."));
+    }
+  }
+
   async function deleteTestVersion(test: TestDefinition) {
     if (!user || user.role !== "superadmin") return;
+    if (!window.confirm(t("Natrvalo zmazať tento test, všetky jeho merania a raw súbory? Táto akcia sa nedá vrátiť."))) return;
     const attached = measurements.filter((item) => item.test_definition_id === test.id);
-    if (!window.confirm(t("Trvalo odstrániť verziu ") + test.test_code + " v" + test.version + t(" a všetkých ") + attached.length + t(" priradených meraní vrátane archivovaných raw súborov? Akcia sa nedá vrátiť späť."))) return;
     try {
       await request<void>("/api/admin/tests/" + test.id, { method: "DELETE", headers: { "X-CSRF-Token": user.csrf_token } });
       const removedIds = new Set(attached.map((item) => item.id));
@@ -726,7 +756,9 @@ export function App() {
       setOverview((current) => current ? { ...current, measurement_count: Math.max(0, current.measurement_count - attached.length) } : current);
       setTests((current) => current.filter((item) => item.id !== test.id));
       if (selectedTestId === test.id) setSelectedTestId(null);
-      setTestMessage("Verzia " + test.test_code + " v" + test.version + t(" a jej merania boli odstránené."));
+      setEditingTestId((current) => current === test.id ? null : current);
+      setTestRemovalTarget(null);
+      setTestMessage(t("Test a všetky jeho merania boli natrvalo odstránené."));
     } catch (reason) {
       setTestMessage(reason instanceof Error ? reason.message : t("Verziu testu sa nepodarilo odstrániť."));
     }
@@ -997,10 +1029,11 @@ export function App() {
   function filteredTests() {
     const query = testSearch.trim().toLowerCase();
     const filtered = tests.filter((test) => (testModeFilter === "ALL" || test.analysis_profile.toUpperCase().startsWith(testModeFilter)) && (!query || [test.test_code, test.name, test.version, test.analysis_profile].join(" ").toLowerCase().includes(query)));
-    return sortRows(filtered, testSort, (test, column) => ({
+    const ordered = sortRows(filtered, testSort, (test, column) => ({
       code: test.test_code, name: test.name, version: test.version,
       profile: test.analysis_profile, status: test.status,
     }[column as "code" | "name" | "version" | "profile" | "status"]));
+    return [...ordered.filter((test) => test.is_active), ...ordered.filter((test) => !test.is_active)];
   }
 
   function participantMeasurements(participantId: string) {
@@ -1259,7 +1292,24 @@ export function App() {
                 <section className="browser-panel">
                   <div className="browser-header"><div><div className="eyebrow">{t("KATALÓG TESTOV")}</div><h2>{t("Testy a konfigurácie")}</h2><p className="muted">{t("Každá verzia testu je samostatná, nemenná konfigurácia pre THRUST.")}</p></div></div>
                   <div className="browser-toolbar"><select value={testModeFilter} onChange={(event) => setTestModeFilter(event.target.value as "ALL" | MeasurementMode)} aria-label={t("Režim testu")}><option value="ALL">{t("Všetky programy")}</option><option value="SCOPE">{t("SCoPE")}</option><option value="SIMPLE">{t("SimPLE")}</option></select><input placeholder={t("Hľadať kód, názov alebo profil…")} value={testSearch} onChange={(event) => setTestSearch(event.target.value)} /></div>
-                  <div className="data-table test-table"><div className="data-table-head"><SortHeader label={t("Kód")} active={testSort.column === "code"} direction={testSort.direction} onClick={() => setTestSort((current) => nextSort(current, "code"))} /><SortHeader label={t("Názov")} active={testSort.column === "name"} direction={testSort.direction} onClick={() => setTestSort((current) => nextSort(current, "name"))} /><SortHeader label={t("Verzia")} active={testSort.column === "version"} direction={testSort.direction} onClick={() => setTestSort((current) => nextSort(current, "version"))} /><SortHeader label={t("Profil")} active={testSort.column === "profile"} direction={testSort.direction} onClick={() => setTestSort((current) => nextSort(current, "profile"))} /><span>{t("Stav / akcie")}</span></div>{filteredTests().map((test) => <div className="data-table-row" key={test.id}><strong className="test-code-cell"><ProgramWordmark mode={test.analysis_profile.toUpperCase().startsWith("SIMPLE") ? "SIMPLE" : "SCOPE"} compact />{test.test_code}</strong><span>{test.name}</span><span>{t("v")}{test.version}</span><span>{test.analysis_profile}</span><span className="row-actions"><span>{test.status}</span><button className="quiet compact" onClick={() => setSelectedTestId(test.id)}>{t("Otvoriť")}</button><button className="quiet compact" onClick={() => setEditingTestId(test.id)}>{t("Editovať")}</button>{user.role === "superadmin" && <button className="quiet compact danger" onClick={() => void deleteTestVersion(test)}>{t("Zmazať")}</button>}</span></div>)}</div>
+                  {testMessage && <p className="notice" role="status">{testMessage}</p>}
+                  <div className="data-table test-table">
+                    <div className="data-table-head"><SortHeader label={t("Kód")} active={testSort.column === "code"} direction={testSort.direction} onClick={() => setTestSort((current) => nextSort(current, "code"))} /><SortHeader label={t("Názov")} active={testSort.column === "name"} direction={testSort.direction} onClick={() => setTestSort((current) => nextSort(current, "name"))} /><SortHeader label={t("Verzia")} active={testSort.column === "version"} direction={testSort.direction} onClick={() => setTestSort((current) => nextSort(current, "version"))} /><SortHeader label={t("Profil")} active={testSort.column === "profile"} direction={testSort.direction} onClick={() => setTestSort((current) => nextSort(current, "profile"))} /><span>{t("Stav / akcie")}</span></div>
+                    {filteredTests().map((test) => {
+                      const state = !test.is_active ? "inactive" : test.status === "draft" ? "draft" : "finalized";
+                      return <div className={`data-table-row test-row test-row-${state}`} key={test.id}>
+                        <strong className="test-code-cell"><ProgramWordmark mode={test.analysis_profile.toUpperCase().startsWith("SIMPLE") ? "SIMPLE" : "SCOPE"} compact />{test.test_code}</strong>
+                        <span>{test.name}</span><span>{t("v")}{test.version}</span><span>{test.analysis_profile}</span>
+                        <span className="row-actions">
+                          <span className={`test-state-badge test-state-${state}`}>{t(state === "inactive" ? "Deaktivovaný" : state === "draft" ? "Draft" : "Finalizovaný")}</span>
+                          <button className="quiet compact" onClick={() => setSelectedTestId(test.id)}>{t("Otvoriť")}</button>
+                          {test.status === "draft" && <button className="quiet compact" onClick={() => setEditingTestId(test.id)}>{t("Editovať")}</button>}
+                          {test.status === "draft" && <button className="quiet compact" onClick={() => void finalizeTest(test)}>{t("Finalizovať")}</button>}
+                          <button className="quiet compact danger" onClick={() => { setTestMessage(""); setTestRemovalTarget(test); }}>{test.is_active ? t("Zmazať…") : t("Spravovať…")}</button>
+                        </span>
+                      </div>;
+                    })}
+                  </div>
                   {filteredTests().length === 0 && <div className="empty-list"><h2>{t("Žiadne testy")}</h2><p className="muted">{t("Filteru nezodpovedá žiadna verzia testu.")}</p></div>}
                 </section>
                 {selectedTestId && (() => {
@@ -1292,7 +1342,7 @@ export function App() {
                       <div><span>{t("Účastníci s meraním")}</span><strong>{completedPeople} / {participants.length}</strong></div>
                       <div><span>{t("Prvé vykonanie")}</span><strong>{firstRun ? formatDateTime(firstRun) : "—"}</strong></div>
                       <div><span>{t("Posledné vykonanie")}</span><strong>{lastRun ? formatDateTime(lastRun) : "—"}</strong></div>
-                      <div><span>{t("Stav testu")}</span><strong>{selected.status} · {selected.is_active ? t("Aktívny") : t("Neaktívny")}</strong></div>
+                      <div><span>{t("Stav testu")}</span><strong>{t(!selected.is_active ? "Deaktivovaný" : selected.status === "draft" ? "Draft" : "Finalizovaný")}</strong></div>
                     </div>
                     <div className="test-overview-list-heading"><div><h3>{t("Účastníci")}</h3><p className="muted">{t("Prehľad účasti a počtu vykonaní tohto testu.")}</p></div><span>{participants.length} {t("účastníkov.")}</span></div>
                     <div className="test-participant-table-wrap"><table className="test-participant-table"><thead><tr><th><SortHeader label={t("Participant ID")} active={overviewParticipantSort.column === "code"} direction={overviewParticipantSort.direction} onClick={() => setOverviewParticipantSort((current) => nextSort(current, "code"))} /></th><th><SortHeader label={t("Účasť")} active={overviewParticipantSort.column === "attendance"} direction={overviewParticipantSort.direction} onClick={() => setOverviewParticipantSort((current) => nextSort(current, "attendance"))} /></th><th><SortHeader label={t("Počet meraní")} active={overviewParticipantSort.column === "count"} direction={overviewParticipantSort.direction} onClick={() => setOverviewParticipantSort((current) => nextSort(current, "count"))} /></th><th><SortHeader label={t("Prvé meranie")} active={overviewParticipantSort.column === "first"} direction={overviewParticipantSort.direction} onClick={() => setOverviewParticipantSort((current) => nextSort(current, "first"))} /></th><th><SortHeader label={t("Posledné meranie")} active={overviewParticipantSort.column === "last"} direction={overviewParticipantSort.direction} onClick={() => setOverviewParticipantSort((current) => nextSort(current, "last"))} /></th><th><SortHeader label={t("Stav účastníka")} active={overviewParticipantSort.column === "status"} direction={overviewParticipantSort.direction} onClick={() => setOverviewParticipantSort((current) => nextSort(current, "status"))} /></th></tr></thead><tbody>{orderedParticipants.map((participant) => {
@@ -1303,7 +1353,21 @@ export function App() {
                   </section>;
                 })()}
                 <TestCreator onCreated={(test) => { setTests((current) => [...current, test]); setEditingTestId(test.id); }} />
-                {editingTestId && (() => { const editing = tests.find((test) => test.id === editingTestId); if (!editing) return null; const onSaved = (saved: TestDefinition) => { setTests((current) => current.map((item) => item.id === saved.id ? saved : item)); setEditingTestId(null); }; return editing.analysis_profile.toUpperCase().startsWith("SIMPLE") ? <SimpleTestEditor test={editing} csrfToken={user.csrf_token} onClose={() => setEditingTestId(null)} onSaved={onSaved} /> : <TestEditor test={editing} onClose={() => setEditingTestId(null)} onSaved={onSaved} />; })()}
+                {editingTestId && (() => { const editing = tests.find((test) => test.id === editingTestId); if (!editing || editing.status !== "draft") return null; const onSaved = (saved: TestDefinition) => { setTests((current) => current.map((item) => item.id === saved.id ? saved : item)); setEditingTestId(null); }; return editing.analysis_profile.toUpperCase().startsWith("SIMPLE") ? <SimpleTestEditor test={editing} csrfToken={user.csrf_token} onClose={() => setEditingTestId(null)} onSaved={onSaved} /> : <TestEditor test={editing} onClose={() => setEditingTestId(null)} onSaved={onSaved} />; })()}
+                {testRemovalTarget && <div className="backdrop test-removal-backdrop" onMouseDown={() => setTestRemovalTarget(null)}>
+                  <section className="login test-removal-dialog" role="dialog" aria-modal="true" aria-labelledby="test-removal-heading" onMouseDown={(event) => event.stopPropagation()}>
+                    <div className="eyebrow">{t("SPRÁVA TESTU")}</div>
+                    <h2 id="test-removal-heading">{testRemovalTarget.name} · {t("v")}{testRemovalTarget.version}</h2>
+                    <p className="muted">{t("Deaktivácia skryje test v THRUST-measure, ale ponechá všetky merania a výsledky. Test môžeš neskôr znovu aktivovať.")}</p>
+                    {user.role === "superadmin" && <p className="test-delete-warning">{t("Trvalé zmazanie odstráni test, všetky jeho merania a uložené raw súbory.")}</p>}
+                    {testMessage && <p className="notice" role="status">{testMessage}</p>}
+                    <div className="test-removal-actions">
+                      <button className="quiet" onClick={() => setTestRemovalTarget(null)}>{t("Zrušiť")}</button>
+                      <button className="primary" onClick={() => void changeTestAvailability(testRemovalTarget, !testRemovalTarget.is_active)}>{testRemovalTarget.is_active ? t("Deaktivovať · ponechať merania") : t("Znovu aktivovať")}</button>
+                      {user.role === "superadmin" && <button className="quiet danger" onClick={() => void deleteTestVersion(testRemovalTarget)}>{t("Natrvalo zmazať aj merania")}</button>}
+                    </div>
+                  </section>
+                </div>}
               </>}
               {activeSection === "measurements" && <>
                 <div className="workbench">
