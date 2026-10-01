@@ -24,6 +24,10 @@ function Brand({ colorMode = "dark" }: { colorMode?: ColorMode }) {
   return <div className="brand"><img src={colorMode === "light" ? thrustLogoBlack : thrustLogoWhite} alt="THRUST" /></div>;
 }
 
+function SiteFooter() {
+  return <footer className="site-footer">© 2026 Zoltán Szőke · THRUST-webdb · MIT License</footer>;
+}
+
 function AppearanceControls({ accentTheme, colorMode, onAccentChange, onModeChange }: {
   accentTheme: AccentTheme;
   colorMode: ColorMode;
@@ -1405,6 +1409,7 @@ export function App() {
               </>}
 
             </section>
+            <SiteFooter />
           </div>
         </div>
       ) : (
@@ -1413,6 +1418,7 @@ export function App() {
           <section className="public">
           <WelcomeContent blocks={publishedWelcome.blocks ?? defaultWelcomeBlocks(language)} language={language} metrics={metrics} data={publishedWelcome.data} />
           </section>
+          <SiteFooter />
         </>
       )}
 
@@ -1466,6 +1472,7 @@ function RegistrationPage({ onSubmit, onBack, onLogin, onResearcherRegister, err
         </section>
       </form>
     </section>
+    <SiteFooter />
   </main>;
 }
 
@@ -2171,6 +2178,7 @@ function ResearcherRegistrationPage({ onSubmit, onBack, onStudentRegister, onLog
         </section>
       </form>
     </section>
+    <SiteFooter />
   </main>;
 }
 
@@ -2405,6 +2413,7 @@ function StudentPortal({ user, onLogout, accentTheme, colorMode, onAppearanceCha
       </section>
     </section>
     {consentDialog && consentTexts && <ConsentTextDialog kind={consentDialog} document={activeConsentDocument || consentTexts[consentDialog]} onClose={() => { setConsentDialog(null); setActiveConsentDocument(null); }} />}
+    <SiteFooter />
   </main>;
 }
 function ParticipantProfileEditor({ participant, studentProfile, csrfToken, onSaved, onStudentSaved }: {

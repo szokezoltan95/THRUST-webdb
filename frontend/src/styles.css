@@ -62,6 +62,10 @@ body { margin: 0; min-width: 320px; min-height: 100vh; background: radial-gradie
 button, input { font: inherit; }
 button { cursor: pointer; }
 main { min-height: 100vh; color: var(--text-main); background-color: var(--page-bg); background-image: radial-gradient(ellipse 68% 62% at 92% 0%, rgba(var(--accent-rgb), var(--glow-alpha)), transparent 72%), radial-gradient(ellipse 55% 52% at 0% 100%, rgba(var(--accent-rgb), calc(var(--glow-alpha) * .62)), transparent 72%); background-repeat: no-repeat; transition: color .18s ease, background-color .18s ease; }
+ .site-footer { flex: 0 0 auto; padding: 16px 5vw 20px; border-top: 1px solid var(--line); color: var(--text-muted); font-size: 12px; text-align: center; }
+.app-main > .site-footer { padding: 8px 18px; }
+.registration-page, .student-shell { display: flex; flex-direction: column; }
+.registration-page > .registration-content, .student-shell > .student-content { flex: 1 0 auto; width: 100%; }
 header { height: 78px; padding: 0 5vw; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); background: var(--header-bg); backdrop-filter: blur(14px); }
 .brand { display: flex; align-items: center; flex: 0 0 auto; }
 .brand img { display: block; width: 158px; height: auto; }

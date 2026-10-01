@@ -1,5 +1,7 @@
 # THRUST-webdb
 
+THRUST-webdb is the PostgreSQL-backed web application for THRUST measurement collection, immutable analysis artifacts, student results, researcher comparisons, and test administration. The frontend uses React/TypeScript; the API uses FastAPI and Alembic.
+
 The frontend offers Slovak and English in the header. It starts in Slovak if
 the browser's system language is Slovak, otherwise in English; a manual choice
 is remembered in the browser. Consent documents are served in the selected
@@ -17,9 +19,10 @@ Central web database for THRUST measurements. The server stores pseudonymous par
 - Argon2id password hashing;
 - opaque, server-side sessions in secure cookies;
 - PostgreSQL persistence;
-- participant and measurement foundations;
+- participant accounts, consent records, configurable versioned tests, and measurements;
 - a versioned Measure analysis contract and immutable per-measurement results;
-- student measurement upload, personal history, and privacy-aware group statistics.
+- student measurement upload, personal history, and privacy-aware group statistics;
+- configurable bilingual welcome pages with aggregated charts and numeric metrics.
 
 Measure calculates each result before upload. WebDB validates the artifact and
 raw-log hash, then stores and displays it without recalculating individual
@@ -88,9 +91,6 @@ Image files are re-encoded before public delivery and stored in the existing
 measurement volume. Charts and research values are editorial content; public
 participant counts continue to respect the minimum group size.
 
-After updating the server, apply migration `0011_welcome_pages` with
-`docker compose -f docker-compose.yml -f docker-compose.https.yml exec backend alembic upgrade head`.
-
 After `git pull`, keep using the same Compose files used to start the server.
 For an HTTP-only local development stack:
 
@@ -108,6 +108,20 @@ docker compose -f docker-compose.yml -f docker-compose.https.yml up -d --build
 docker compose -f docker-compose.yml -f docker-compose.https.yml exec backend alembic upgrade head
 ```
 
+## Test lifecycle
+
+Test definitions can be kept as drafts, finalized to prevent further edits, or
+deactivated so they no longer appear in the measurement client. Deactivated
+tests remain visible at the bottom of the WebDB list with their existing
+measurements. Permanent deletion removes the test and its measurements; use it
+only when that data is no longer needed.
+
+## Checks
+
+From `frontend/`, run `npm ci && npm run build` to type-check and build the
+client. From `backend/`, install the test extra and run `pytest` for the API
+suite. A running PostgreSQL instance is required for the integration tests.
+
 ## Security boundary
 
 - Never store names, e-mail addresses, university identifiers, or the local ID-to-name mapping here.
@@ -122,3 +136,7 @@ After an administrator logs in, a local THRUST/SCoPE client can load one exact t
 `GET /api/admin/tests/{test_id}/configuration`
 
 The response contains `schema_version: test-configuration-v1` and the selected test definition, including its JSON configuration. The client should keep the returned test code and version together with each measurement so later changes do not alter historical interpretation.
+
+## License
+
+Copyright © 2026 Zoltán Szőke. Source code is licensed under the [MIT License](LICENSE). Third-party assets and dependencies retain their own applicable terms.
