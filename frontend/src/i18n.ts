@@ -2,6 +2,15 @@
 export type Language = "sk" | "en";
 
 const english: Record<string, string> = {
+  "Minimálna výška cieľa [m]": "Minimum target height [m]",
+  "Polomer dronu [m]": "Drone radius [m]",
+  "Počet bodov trajektórie": "Waypoints per trajectory",
+  "Trajektória cieľov": "Target trajectory",
+  "Náhodné body": "Random points",
+  "Slalom": "Slalom",
+  "Obvodová trasa": "Circuit",
+  "Cieľová zóna musí byť celá v ihrisku. Uprav limity X/Y alebo mierku sveta.": "The entire target zone must fit inside the field. Adjust X/Y limits or world scale.",
+  "Kolízie": "Collisions",
   "Základné nastavenia": "Basic settings",
   "Vzorkovanie, priebeh a okno merania": "Sampling, session flow and window",
   "Nastavenie akcií": "Action settings",
