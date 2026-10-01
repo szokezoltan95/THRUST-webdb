@@ -74,6 +74,31 @@ class AverageResponse(Block):
     channel: Literal["LX", "LY", "RX", "RY"] = "LX"
 
 
+COMPARISON_METRICS = {
+    "reaction_delay_s", "rise_time_s", "overshoot_pct", "settling_time_s",
+    "steady_state_error_pct", "tracking_rmse", "mean_std",
+    "mean_target_error_m", "median_target_error_m", "rms_target_error_m",
+    "time_in_zone_pct", "action_count", "reset_count", "crash_count",
+}
+
+
+class FeaturedComparison(Block):
+    type: Literal["featured_comparison"]
+    title: str = Field(max_length=180)
+    description: str = Field(default="", max_length=400)
+    mode: Literal["SCOPE", "SIMPLE"] = "SCOPE"
+    metrics: list[str] = Field(min_length=1, max_length=8)
+    bins: int = Field(default=8, ge=3, le=20)
+    show_response: bool = True
+    test_definition_id: str | None = Field(default=None, max_length=64)
+
+    @model_validator(mode="after")
+    def valid_metrics(self):
+        if len(set(self.metrics)) != len(self.metrics) or any(key not in COMPARISON_METRICS for key in self.metrics):
+            raise ValueError("Invalid comparison metrics")
+        return self
+
+
 class DataTable(Block):
     type: Literal["data_table"]
     title: str = Field(max_length=180)
@@ -106,7 +131,7 @@ class Paper(Block):
 
 
 WelcomeBlock = Annotated[
-    Eyebrow | Heading | Paragraph | Banner | ImageBlock | Metrics | DataChart | DataTable | Histogram | AverageResponse | Paper,
+    Eyebrow | Heading | Paragraph | Banner | ImageBlock | Metrics | DataChart | DataTable | Histogram | AverageResponse | FeaturedComparison | Paper,
     Field(discriminator="type"),
 ]
 

@@ -21,6 +21,10 @@ from app.api.dependencies import AuthContext, require_admin, require_csrf
 from app.core.config import settings
 from app.db.session import get_db
 from app.api.reports import _metric_map
+from app.api.student import (
+    RESPONSE_CURVE_POINTS, comparison_metrics, comparison_response_curve,
+    histogram, mean_curves,
+)
 from app.models import AdminUser, Measurement, Participant, ResearchConsent, TestDefinition, WelcomePage
 from app.schemas.welcome_page import WelcomeDraft, WelcomePublish
 
@@ -188,6 +192,128 @@ def _average_response(measurements: list[Measurement], tests: dict[str, TestDefi
     return {"publishable": True, "response_points": points, "test": f"{test.name} v{test.version}", "channel": channel}
 
 
+def _measurement_mode(item: Measurement, tests: dict[str, TestDefinition]) -> str:
+    test = tests.get(item.test_definition_id or "")
+    profile = str(test.analysis_profile or "").upper() if test else ""
+    if profile.startswith(("SCOPE", "SIMPLE")):
+        return "SIMPLE" if profile.startswith("SIMPLE") else "SCOPE"
+    analysis = item.analysis_data if isinstance(item.analysis_data, dict) else {}
+    if str(analysis.get("analysis_type", "")).upper().startswith("SIMPLE"):
+        return "SIMPLE"
+    return "SIMPLE" if str(item.test_type).upper().startswith("SIMPLE") else "SCOPE"
+
+
+def _featured_comparison(measurements: list[Measurement], tests: dict[str, TestDefinition], block: dict) -> dict:
+    mode = block["mode"]
+    test_id = block.get("test_definition_id")
+    selected = [
+        item for item in measurements
+        if _measurement_mode(item, tests) == mode and (not test_id or item.test_definition_id == test_id)
+    ]
+    minimum = settings.public_min_group_size
+    subject_count = len({item.participant_id for item in selected})
+    available = subject_count >= minimum
+    by_participant: dict[str, list[dict[str, float]]] = {}
+    curves_by_participant: dict[str, list[list[float]]] = {}
+    for item in selected:
+        values = comparison_metrics(item.analysis_data, mode)
+        if values:
+            by_participant.setdefault(item.participant_id, []).append(values)
+        curve = comparison_response_curve(item.analysis_data) if block.get("show_response", True) else None
+        if curve is not None:
+            curves_by_participant.setdefault(item.participant_id, []).append(curve)
+
+    metric_cards = []
+    for key in block["metrics"]:
+        participant_values = [
+            statistics.fmean(values)
+            for records in by_participant.values()
+            if (values := [record[key] for record in records if key in record])
+        ]
+        publishable = available and len(participant_values) >= minimum
+        bins = []
+        if publishable:
+            # Use fewer intervals when a fine histogram would reveal a small
+            # cell. One interval is always safe once the cohort is eligible.
+            for candidate in range(min(block.get("bins", 8), len(participant_values)), 0, -1):
+                distribution = histogram(participant_values, None, candidate)
+                if all(count == 0 or count >= minimum for count in distribution["counts"]):
+                    break
+            counts = distribution["counts"]
+            step = (distribution["maximum"] - distribution["minimum"]) / len(counts)
+            bins = [
+                {
+                    "start": distribution["minimum"] + index * step,
+                    "end": distribution["minimum"] + (index + 1) * step,
+                    "count": count if count == 0 or count >= minimum else None,
+                    "suppressed": 0 < count < minimum,
+                }
+                for index, count in enumerate(counts)
+            ]
+        metric_cards.append({
+            "key": key,
+            "cohort_average": statistics.fmean(participant_values) if publishable else None,
+            "participant_count": len(participant_values) if publishable else None,
+            "bins": bins,
+        })
+
+    response_curve = None
+    if available and block.get("show_response", True):
+        participant_curves = [mean_curves(curves) for curves in curves_by_participant.values()]
+        participant_curves = [curve for curve in participant_curves if curve is not None]
+        if len(participant_curves) >= minimum:
+            cohort_mean = mean_curves(participant_curves)
+            if cohort_mean is not None:
+                response_curve = {
+                    "time_fraction": [index / (RESPONSE_CURVE_POINTS - 1) for index in range(RESPONSE_CURVE_POINTS)],
+                    "cohort_mean": cohort_mean,
+                    "cohort_std": [
+                        math.sqrt(statistics.fmean((curve[index] - cohort_mean[index]) ** 2 for curve in participant_curves))
+                        for index in range(RESPONSE_CURVE_POINTS)
+                    ],
+                }
+    return {
+        "available": available,
+        "participant_count": subject_count if available else None,
+        "metrics": metric_cards,
+        "response_curve": response_curve,
+    }
+
+
+def _default_data_blocks() -> list[dict]:
+    return [
+        {"id": "numbers", "type": "metrics", "items": ["participants", "measurements", "active_tests"], "trends": []},
+        {"id": "scope-spotlight", "type": "featured_comparison", "mode": "SCOPE",
+         "metrics": ["reaction_delay_s", "tracking_rmse", "overshoot_pct"], "bins": 8, "show_response": True},
+        {"id": "simple-spotlight", "type": "featured_comparison", "mode": "SIMPLE",
+         "metrics": ["mean_target_error_m", "time_in_zone_pct", "reaction_delay_s"], "bins": 8, "show_response": True},
+    ]
+
+
+def _is_legacy_default(blocks: list[dict], lang: str) -> bool:
+    if [(block.get("id"), block.get("type")) for block in blocks] != [
+        ("eyebrow", "eyebrow"), ("intro", "heading"), ("lead", "text"),
+        ("tagline", "banner"), ("numbers", "metrics"),
+    ]:
+        return False
+    old_texts = {
+        "sk": ("LETECKÁ FAKULTA TUKE · VÝSKUM RIADENIA UAV", "Za každým letom je človek.",
+               "THRUST skúma, ako piloti reagujú a ovládajú dron. Spája meranie, analýzu a porovnávanie výsledkov, aby sme ľudskému výkonu pri riadení UAV lepšie rozumeli.",
+               "Od prvého pohybu ovládača až po zmeny výkonu v čase."),
+        "en": ("FACULTY OF AERONAUTICS TUKE · UAV CONTROL RESEARCH", "Behind every flight is a person.",
+               "THRUST explores how pilots respond and control a drone. It brings together measurement, analysis and comparison of results to better understand human performance in UAV control.",
+               "From the first movement of the controls to changes in performance over time."),
+    }
+    eyebrow, intro, lead, tagline = old_texts[lang]
+    return (
+        blocks[0].get("text") == eyebrow and blocks[1].get("text") == intro
+        and blocks[2].get("text") == lead and blocks[3].get("title") == tagline
+        and blocks[3].get("body") == "" and not blocks[3].get("image_id")
+        and blocks[4].get("items") == ["participants", "measurements", "active_tests"]
+        and not blocks[4].get("trends")
+    )
+
+
 async def _page_data(blocks: list[dict], db: AsyncSession) -> dict:
     measurements, tests = await _source_records(db)
     participant_total = await db.scalar(select(func.count()).select_from(Participant)) or 0
@@ -217,6 +343,8 @@ async def _page_data(blocks: list[dict], db: AsyncSession) -> dict:
                 **_histogram(measurements, block["metric"], block.get("bins", 8), block.get("test_definition_id"))}
         elif kind == "average_response":
             result[block["id"]] = _average_response(measurements, tests, block["test_definition_id"], block["channel"])
+        elif kind == "featured_comparison":
+            result[block["id"]] = {"comparison": _featured_comparison(measurements, tests, block)}
         elif kind == "data_table":
             metrics = block["metrics"]
             columns = [{"key": key, "label": key.replace("_", " ").replace(".", " · "), "unit": _unit(key)} for key in metrics]
@@ -247,7 +375,9 @@ async def public_welcome(lang: str = "sk", db: AsyncSession = Depends(get_db)) -
         raise HTTPException(422, "Unsupported language")
     page = await db.get(WelcomePage, lang)
     blocks = page.published_blocks if page and page.published_blocks is not None else None
-    return {"blocks": blocks, "data": await _page_data(blocks or [], db)}
+    if blocks is None or _is_legacy_default(blocks, lang):
+        return {"blocks": None, "data": await _page_data(_default_data_blocks(), db)}
+    return {"blocks": blocks, "data": await _page_data(blocks, db)}
 
 
 def image_response(image_id: str, *, public: bool) -> FileResponse:
@@ -292,7 +422,9 @@ async def admin_welcome(lang: str = "sk", auth: AuthContext = Depends(require_ad
 async def welcome_catalog(auth: AuthContext = Depends(require_admin), db: AsyncSession = Depends(get_db)) -> dict:
     measurements, tests = await _source_records(db)
     return {"metrics": _metric_catalog(measurements),
-        "tests": [{"id": test.id, "label": f"{test.name} v{test.version}"} for test in sorted(tests.values(), key=lambda item: (item.name, item.version)) if test.is_active]}
+        "tests": [{"id": test.id, "label": f"{test.name} v{test.version}",
+                   "mode": "SIMPLE" if str(test.analysis_profile or "").upper().startswith("SIMPLE") else "SCOPE"}
+                  for test in sorted(tests.values(), key=lambda item: (item.name, item.version)) if test.is_active]}
 
 
 @router.post("/admin/welcome/preview-data")

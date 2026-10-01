@@ -1525,3 +1525,47 @@ main[data-color-mode="light"] .test-state-inactive { color: #52616e; }
   .comparison-legend { justify-content: flex-start; }
   .comparison-axis-label { font-size: 14px; }
 }
+
+/* Public welcome: compact counts and configurable group charts */
+.welcome-mini-stats { display: flex; flex-wrap: wrap; gap: 10px; margin: 36px 0 48px; }
+.welcome-mini-stat { min-width: 145px; display: flex; align-items: baseline; gap: 16px; padding: 12px 16px; border: 1px solid var(--line); border-radius: 11px; background: var(--surface); }
+.welcome-mini-stat span { color: var(--text-soft); font-size: .78rem; }
+.welcome-mini-stat strong { margin-left: auto; color: var(--text-main); font-size: 1.45rem; font-variant-numeric: tabular-nums; }
+.welcome-featured { container-type: inline-size; margin: 46px 0 68px; padding: 28px; border: 1px solid var(--line); border-radius: 20px; background: radial-gradient(circle at 85% 0, rgba(var(--accent-rgb), .11), transparent 45%), var(--surface); }
+.welcome-featured-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 22px; }
+.welcome-featured-heading h2 { margin: 8px 0 0; font-size: clamp(24px, 3vw, 37px); line-height: 1.14; letter-spacing: -.035em; }
+.welcome-featured-heading p { margin: 8px 0 0; color: var(--text-soft); }
+.welcome-featured-count { flex: 0 0 auto; padding: 7px 11px; border: 1px solid var(--line); border-radius: 999px; color: var(--text-soft); font-size: .8rem; }
+.welcome-featured-grid-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; }
+.welcome-featured-grid-layout.single { grid-template-columns: minmax(0, 1fr); }
+.welcome-featured-card { min-width: 0; padding: 18px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface-raised); }
+.welcome-featured-card-header { display: grid; gap: 4px; margin-bottom: 14px; }
+.welcome-featured-card-header span { color: var(--accent); font-size: .7rem; font-weight: 800; letter-spacing: .12em; }
+.welcome-featured-card-header strong { font-size: 1.1rem; }
+.welcome-featured-tabs { display: flex; gap: 6px; margin-bottom: 15px; padding-bottom: 5px; overflow-x: auto; }
+.welcome-featured-tabs button { flex: 0 0 auto; padding: 7px 11px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--text-soft); font-size: .78rem; font-weight: 700; }
+.welcome-featured-tabs button.active { border-color: var(--accent); background: var(--accent); color: var(--accent-contrast); }
+.welcome-featured-average { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 4px 0 8px; }
+.welcome-featured-average span { color: var(--text-soft); font-size: .8rem; }
+.welcome-featured-average strong { font-size: 1.4rem; font-variant-numeric: tabular-nums; }
+.welcome-featured-average small { color: var(--text-soft); font-size: .75rem; }
+.welcome-featured-svg { display: block; width: 100%; height: auto; overflow: visible; }
+.welcome-featured-svg text { fill: var(--text-soft); font-size: 13px; }
+.welcome-featured-grid { stroke: var(--line); stroke-width: 1; }
+.welcome-featured-axis { stroke: var(--text-muted); stroke-width: 1.4; }
+.welcome-featured-bar { fill: var(--accent); opacity: .8; }
+.welcome-featured-bar:hover { opacity: 1; }
+.welcome-featured-bar.suppressed { fill: var(--text-muted); opacity: .5; }
+.welcome-featured-band { fill: var(--accent); opacity: .16; }
+.welcome-featured-line { fill: none; stroke: var(--accent); stroke-width: 3.5; }
+.welcome-featured-empty { min-height: 160px; display: flex; align-items: center; justify-content: center; text-align: center; padding: 15px; border: 1px dashed var(--line); border-radius: 9px; }
+.welcome-featured-note { margin: 14px 0 0; color: var(--text-muted); font-size: .78rem; line-height: 1.4; }
+@container (max-width: 790px) {
+  .welcome-featured-grid-layout { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 650px) {
+  .welcome-mini-stat { min-width: 0; flex: 1 1 140px; }
+  .welcome-featured { padding: 16px; margin: 30px 0 46px; }
+  .welcome-featured-heading { flex-direction: column; }
+  .welcome-featured-card { padding: 12px; }
+}
