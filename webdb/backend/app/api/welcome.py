@@ -23,7 +23,7 @@ from app.db.session import get_db
 from app.api.reports import _metric_map
 from app.api.student import (
     RESPONSE_CURVE_POINTS, comparison_metrics, comparison_response_curve,
-    mean_curves,
+    histogram, mean_curves,
 )
 from app.models import AdminUser, Measurement, Participant, ResearchConsent, TestDefinition, WelcomePage
 from app.schemas.welcome_page import WelcomeDraft, WelcomePublish
@@ -203,35 +203,6 @@ def _measurement_mode(item: Measurement, tests: dict[str, TestDefinition]) -> st
     return "SIMPLE" if str(item.test_type).upper().startswith("SIMPLE") else "SCOPE"
 
 
-def _private_distribution(values: list[float], requested_bins: int, minimum: int) -> list[dict]:
-    """Split participant averages into ordered ranges with enough people in each."""
-    ordered = sorted(values)
-    count = len(ordered)
-    for groups in range(min(requested_bins, count // minimum), 1, -1):
-        cuts = []
-        previous = 0
-        for group in range(1, groups):
-            remaining = groups - group
-            options = (
-                index for index in range(previous + minimum, count - remaining * minimum + 1)
-                if ordered[index - 1] < ordered[index]
-            )
-            cut = min(options, key=lambda index: abs(index - group * count / groups), default=None)
-            if cut is None:
-                break
-            cuts.append(cut)
-            previous = cut
-        if len(cuts) == groups - 1:
-            boundaries = [ordered[0], *((ordered[index - 1] + ordered[index]) / 2 for index in cuts), ordered[-1]]
-            positions = [0, *cuts, count]
-            return [
-                {"start": boundaries[index], "end": boundaries[index + 1],
-                 "count": positions[index + 1] - positions[index], "suppressed": False}
-                for index in range(groups)
-            ]
-    return [{"start": ordered[0], "end": ordered[-1], "count": count, "suppressed": False}]
-
-
 def _featured_comparison(measurements: list[Measurement], tests: dict[str, TestDefinition], block: dict) -> dict:
     mode = block["mode"]
     test_id = block.get("test_definition_id")
@@ -260,14 +231,11 @@ def _featured_comparison(measurements: list[Measurement], tests: dict[str, TestD
             if (values := [record[key] for record in records if key in record])
         ]
         publishable = available and len(participant_values) >= minimum
-        bins = []
-        if publishable:
-            bins = _private_distribution(participant_values, block.get("bins", 8), minimum)
         metric_cards.append({
             "key": key,
             "cohort_average": statistics.fmean(participant_values) if publishable else None,
             "participant_count": len(participant_values) if publishable else None,
-            "bins": bins,
+            "histogram": histogram(participant_values, None, block.get("bins", 12)) if publishable else None,
         })
 
     response_curve = None
@@ -293,13 +261,26 @@ def _featured_comparison(measurements: list[Measurement], tests: dict[str, TestD
     }
 
 
+def _aggregate_metric(measurements: list[Measurement], tests: dict[str, TestDefinition], spec: dict) -> float | None:
+    selected = [item for item in measurements if _measurement_mode(item, tests) == spec["mode"]
+                and (not spec.get("test_definition_id") or item.test_definition_id == spec["test_definition_id"])]
+    by_participant: dict[str, list[float]] = {}
+    for item in selected:
+        value = comparison_metrics(item.analysis_data, spec["mode"]).get(spec["metric"])
+        if value is not None:
+            by_participant.setdefault(item.participant_id, []).append(value)
+    if len(by_participant) < settings.public_min_group_size:
+        return None
+    return statistics.fmean(statistics.fmean(values) for values in by_participant.values())
+
+
 def _default_data_blocks() -> list[dict]:
     return [
         {"id": "numbers", "type": "metrics", "items": ["participants", "measurements", "active_tests"], "trends": []},
         {"id": "scope-spotlight", "type": "featured_comparison", "mode": "SCOPE",
-         "metrics": ["reaction_delay_s", "tracking_rmse", "overshoot_pct"], "bins": 8, "show_response": True},
+         "metrics": ["reaction_delay_s", "tracking_rmse", "overshoot_pct"], "bins": 12, "show_response": True},
         {"id": "simple-spotlight", "type": "featured_comparison", "mode": "SIMPLE",
-         "metrics": ["mean_target_error_m", "time_in_zone_pct", "reaction_delay_s"], "bins": 8, "show_response": True},
+         "metrics": ["mean_target_error_m", "time_in_zone_pct", "reaction_delay_s"], "bins": 12, "show_response": True},
     ]
 
 
@@ -342,6 +323,10 @@ async def _page_data(blocks: list[dict], db: AsyncSession) -> dict:
             result[block["id"]] = {
                 "items": [{"key": key, "label": {"participants": "Participants", "measurements": "Measurements", "active_tests": "Active tests"}[key], "value": values[key]}
                           for key in block.get("items", ["participants", "measurements", "active_tests"])],
+                "aggregates": [
+                    {"mode": spec["mode"], "metric": spec["metric"], "value": _aggregate_metric(measurements, tests, spec)}
+                    for spec in block.get("aggregates", [])
+                ],
                 "trends": [
                     {**spec, "title": f"{spec['metric']} · {spec['axis']}", "unit": _unit(spec["metric"]),
                      "points": _series(measurements, tests, spec["metric"], spec["axis"], spec["statistic"])}
