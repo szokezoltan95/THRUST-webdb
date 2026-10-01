@@ -1,4 +1,5 @@
 import hashlib
+import math
 import secrets
 import string
 from pathlib import Path
@@ -116,6 +117,34 @@ def normalize_test_configuration(source: dict, analysis_profile: str = "SCOPE_ST
         # Each image is kept in the persistent measurement volume, never as a server path in JSON.
         for key in ("visual", "gui_gimbal_size", "gui_stick_size", "target_zone_radius_px", "sampling_hz", "zoom_px_per_m"):
             configuration.pop(key, None)
+        defaults = {
+            "field_width_px": 1920, "field_height_px": 1080, "world_width_m": 4.5,
+            "completion_radius_m": .1, "copter_radius_m": .08,
+            "target_x_limit_m": 1.5, "target_y_min_m": .25, "target_y_max_m": 2.0,
+            "target_pattern": "random", "route_points": 6,
+        }
+        values = {**defaults, **configuration}
+        try:
+            width, height = int(values["field_width_px"]), int(values["field_height_px"])
+            world_width = float(values["world_width_m"])
+            radius = float(values["completion_radius_m"])
+            copter_radius = float(values["copter_radius_m"])
+            x_limit = float(values["target_x_limit_m"])
+            y_min, y_max = float(values["target_y_min_m"]), float(values["target_y_max_m"])
+            route_points = int(values["route_points"])
+            numbers = (world_width, radius, copter_radius, x_limit, y_min, y_max)
+            if (width < 600 or height < 400 or width != values["field_width_px"]
+                    or height != values["field_height_px"] or not all(map(math.isfinite, numbers))):
+                raise ValueError("invalid field dimensions")
+            margin = max(radius, copter_radius)
+            world_height = world_width * height / width
+            if (margin <= 0 or x_limit <= 0 or x_limit > world_width / 2 - margin
+                    or y_min < margin or y_max > world_height - margin or y_min > y_max
+                    or values["target_pattern"] not in ("random", "slalom", "circuit")
+                    or not 4 <= route_points <= 20 or route_points != values["route_points"]):
+                raise ValueError("targets outside playable field")
+        except (TypeError, ValueError, ZeroDivisionError, OverflowError) as exc:
+            raise HTTPException(status_code=422, detail="Ciele SimPLE musia zostať celé v ihrisku; skontroluj rozmery, výšky a trajektóriu.") from exc
         image_id = configuration.get("background_image_id")
         if image_id not in (None, ""):
             from app.api.backgrounds import background_metadata
