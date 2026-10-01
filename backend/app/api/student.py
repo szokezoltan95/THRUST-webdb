@@ -140,6 +140,114 @@ def numeric_metrics(analysis_data: dict | None) -> dict[str, float]:
     }
 
 
+SCOPE_COMPARISON_FIELDS = (
+    "reaction_delay_s",
+    "rise_time_s",
+    "overshoot_pct",
+    "settling_time_s",
+    "steady_state_error_pct",
+    "tracking_rmse",
+    "mean_std",
+)
+SIMPLE_COMPARISON_FIELDS = (
+    "simple_mean_target_error_m",
+    "simple_median_target_error_m",
+    "simple_rms_target_error_m",
+    "simple_in_zone_fraction",
+    "simple_action_count",
+    "simple_reset_count",
+    "simple_crash_count",
+)
+RESPONSE_CURVE_POINTS = 61
+
+
+def comparison_metrics(analysis_data: dict | None, mode: str) -> dict[str, float]:
+    if not isinstance(analysis_data, dict):
+        return {}
+    values: dict[str, list[float]] = defaultdict(list)
+    response = analysis_data.get("normalized_step_response")
+    channels = response.get("channels") if isinstance(response, dict) else None
+    if isinstance(channels, dict):
+        for channel in channels.values():
+            channel_metrics = channel.get("metrics") if isinstance(channel, dict) else None
+            if not isinstance(channel_metrics, dict):
+                continue
+            for key in SCOPE_COMPARISON_FIELDS:
+                value = channel_metrics.get(key)
+                if isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value):
+                    values[key].append(float(value))
+    result = {key: mean(items) for key, items in values.items() if items}
+    if mode == "SCOPE":
+        return result
+    metrics = numeric_metrics(analysis_data)
+    for key in SIMPLE_COMPARISON_FIELDS:
+        if key not in metrics:
+            continue
+        display_key = key.removeprefix("simple_")
+        value = metrics[key]
+        if display_key == "in_zone_fraction":
+            display_key = "time_in_zone_pct"
+            value *= 100
+        result[display_key] = value
+    return result
+
+def comparison_response_curve(analysis_data: dict | None) -> list[float] | None:
+    if not isinstance(analysis_data, dict):
+        return None
+    response = analysis_data.get("normalized_step_response")
+    channels = response.get("channels") if isinstance(response, dict) else None
+    if not isinstance(channels, dict):
+        return None
+    curves: list[list[float]] = []
+    for channel in channels.values():
+        raw = channel.get("mean") if isinstance(channel, dict) else None
+        if not isinstance(raw, list) or len(raw) < 2:
+            continue
+        curve = [float(value) for value in raw if isinstance(value, (int, float)) and not isinstance(value, bool)]
+        if len(curve) >= 2 and all(math.isfinite(value) for value in curve):
+            curves.append(curve)
+    if not curves:
+        return None
+    combined: list[float] = []
+    for point in range(RESPONSE_CURVE_POINTS):
+        fraction = point / (RESPONSE_CURVE_POINTS - 1)
+        at_point: list[float] = []
+        for curve in curves:
+            position = fraction * (len(curve) - 1)
+            lower = math.floor(position)
+            upper = min(len(curve) - 1, lower + 1)
+            ratio = position - lower
+            at_point.append(curve[lower] * (1 - ratio) + curve[upper] * ratio)
+        combined.append(mean(at_point))
+    return combined
+
+
+def mean_curves(curves: list[list[float]]) -> list[float] | None:
+    if not curves:
+        return None
+    return [
+        mean([curve[index] for curve in curves if index < len(curve)])
+        for index in range(RESPONSE_CURVE_POINTS)
+    ]
+
+
+def histogram(values: list[float], own_value: float | None, bin_count: int = 12) -> dict:
+    if not values:
+        return {"minimum": 0.0, "maximum": 1.0, "counts": [0] * bin_count, "own_value": own_value}
+    minimum = min(values)
+    maximum = max(values)
+    if math.isclose(minimum, maximum):
+        padding = max(abs(minimum) * 0.05, 0.5)
+        minimum -= padding
+        maximum += padding
+    width = (maximum - minimum) / bin_count
+    counts = [0] * bin_count
+    for value in values:
+        index = min(bin_count - 1, max(0, int((value - minimum) / width)))
+        counts[index] += 1
+    return {"minimum": minimum, "maximum": maximum, "counts": counts, "own_value": own_value}
+
+
 @router.get("/comparison")
 async def comparison(
     mode: Literal["SCOPE", "SIMPLE"] = "SCOPE",
@@ -182,22 +290,81 @@ async def comparison(
     ]
     cohort_count = len({item.participant_id for item in cohort})
     eligible = cohort_count >= settings.public_min_group_size
-    own_values: dict[str, list[float]] = defaultdict(list)
-    cohort_values: dict[str, list[float]] = defaultdict(list)
-    for item in own:
-        for key, value in numeric_metrics(item.analysis_data).items():
-            own_values[key].append(value)
+
+    # First average all axes within each measurement, then average that participant's
+    # measurements. This gives each axis and each participant equal weight.
+    participant_measurements: dict[str, list[dict[str, float]]] = defaultdict(list)
+    participant_curves: dict[str, list[list[float]]] = defaultdict(list)
     for item in cohort:
-        for key, value in numeric_metrics(item.analysis_data).items():
-            cohort_values[key].append(value)
+        participant_id = str(item.participant_id)
+        metrics = comparison_metrics(item.analysis_data, mode)
+        if metrics:
+            participant_measurements[participant_id].append(metrics)
+        curve = comparison_response_curve(item.analysis_data)
+        if curve:
+            participant_curves[participant_id].append(curve)
+
+    cohort_values: dict[str, list[float]] = defaultdict(list)
+    for rows in participant_measurements.values():
+        keys = {key for row in rows for key in row}
+        for key in keys:
+            values = [row[key] for row in rows if key in row]
+            if values:
+                cohort_values[key].append(mean(values))
+
+    own_measurements = [comparison_metrics(item.analysis_data, mode) for item in own]
+    own_keys = {key for row in own_measurements for key in row}
+    own_average = {
+        key: mean([row[key] for row in own_measurements if key in row])
+        for key in own_keys
+        if any(key in row for row in own_measurements)
+    }
+
+    metric_cards = []
+    for key in sorted(cohort_values):
+        distribution = cohort_values[key]
+        if not distribution:
+            continue
+        own_value = own_average.get(key)
+        metric_cards.append({
+            "key": key,
+            "own_value": own_value,
+            "cohort_average": mean(distribution) if eligible else None,
+            "histogram": histogram(distribution, own_value) if eligible else None,
+        })
+
+    own_curves = [
+        curve for item in own
+        if (curve := comparison_response_curve(item.analysis_data)) is not None
+    ]
+    own_curve = mean_curves(own_curves)
+    cohort_person_curves = [mean_curves(curves) for curves in participant_curves.values()]
+    cohort_person_curves = [curve for curve in cohort_person_curves if curve is not None]
+    cohort_curve = mean_curves(cohort_person_curves) if eligible else None
+    cohort_std = None
+    if cohort_curve is not None:
+        cohort_std = [
+            math.sqrt(mean([(curve[index] - cohort_curve[index]) ** 2 for curve in cohort_person_curves]))
+            for index in range(RESPONSE_CURVE_POINTS)
+        ]
+
     return {
         "mode": mode,
         "available": eligible,
         "minimum_group_size": settings.public_min_group_size,
         "cohort_participant_count": cohort_count,
         "own_measurement_count": len(own),
-        "own_average": {key: mean(values) for key, values in own_values.items()},
-        "cohort_average": {key: mean(values) for key, values in cohort_values.items()} if eligible else {},
+        "metrics": metric_cards if eligible else [],
+        "response_curve": (
+            {
+                "time_fraction": [index / (RESPONSE_CURVE_POINTS - 1) for index in range(RESPONSE_CURVE_POINTS)],
+                "own_mean": own_curve,
+                "cohort_mean": cohort_curve,
+                "cohort_std": cohort_std,
+            }
+            if eligible and own_curve is not None and cohort_curve is not None
+            else None
+        ),
     }
 
 

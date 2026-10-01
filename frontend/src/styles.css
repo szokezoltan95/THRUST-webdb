@@ -1486,3 +1486,42 @@ main[data-color-mode="light"] .test-state-inactive { color: #52616e; }
 .test-delete-warning { color: #ef6976; }
 .test-removal-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 9px; margin-top: 22px; }
 @media (max-width: 650px) { .test-removal-actions { flex-direction: column; } }
+
+
+/* Student group comparison charts */
+.student-comparison { display: grid; gap: 16px; }
+.comparison-explainer, .comparison-footnote { margin: 0; }
+.comparison-view-tabs, .comparison-metric-tabs { display: flex; gap: 8px; overflow-x: auto; padding: 2px 1px 8px; }
+.comparison-view-tabs button, .comparison-metric-tabs button {
+  flex: 0 0 auto; border: 1px solid var(--line); border-radius: 999px; padding: 9px 14px;
+  color: var(--text-soft); background: var(--surface-raised); font-weight: 700; transition: .16s ease;
+}
+.comparison-view-tabs button.active, .comparison-metric-tabs button.active {
+  color: var(--accent-contrast); border-color: var(--accent); background: var(--accent);
+}
+.comparison-view-tabs button:disabled { opacity: .42; cursor: not-allowed; }
+.comparison-chart-card { min-width: 0; padding: 16px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface-raised); }
+.comparison-chart-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 8px; }
+.comparison-chart-heading h3 { margin: 4px 0 0; }
+.comparison-legend { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 12px; color: var(--text-soft); font-size: .84rem; }
+.comparison-legend span { display: inline-flex; align-items: center; gap: 7px; }
+.comparison-legend i { width: 18px; height: 4px; border-radius: 4px; display: inline-block; }
+.legend-cohort { background: var(--accent); }
+.legend-student { background: #ffad4d; }
+.comparison-svg { display: block; width: 100%; height: auto; overflow: visible; }
+.comparison-grid-line { stroke: var(--line); stroke-width: 1; opacity: .8; }
+.comparison-axis { stroke: var(--text-muted); stroke-width: 1.3; }
+.comparison-axis-label { fill: var(--text-soft); font-size: 12px; }
+.comparison-histogram-bar { fill: var(--accent); opacity: .72; }
+.comparison-histogram-bar:hover { opacity: 1; }
+.comparison-student-line { stroke: #ffad4d; stroke-width: 3; stroke-dasharray: 8 5; }
+.comparison-student-label { fill: #ffad4d; font-size: 13px; font-weight: 800; }
+.comparison-response-band { fill: var(--accent); opacity: .16; }
+.comparison-cohort-line { fill: none; stroke: var(--accent); stroke-width: 4; }
+.comparison-student-line-path { fill: none; stroke: #ffad4d; stroke-width: 3.5; stroke-dasharray: 8 5; }
+@media (max-width: 650px) {
+  .comparison-chart-card { padding: 12px 8px; }
+  .comparison-chart-heading { align-items: flex-start; flex-direction: column; }
+  .comparison-legend { justify-content: flex-start; }
+  .comparison-axis-label { font-size: 14px; }
+}

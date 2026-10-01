@@ -99,7 +99,10 @@ type AdminSection = "overview" | "participants" | "groups" | "trends" | "reports
 type ParticipantGroup = { id: string; name: string; description: string | null; created_at: string; participant_ids: string[]; participant_codes: string[] };
 type StudentMeasurement = { id: string; test_type: string; status: string; started_at: string; raw_size_bytes: number | null; analysis_data: Record<string, unknown> | null };
 type StudentProfile = { username: string; email: string | null; role: string; participant_code: string; first_name: string; last_name: string; created_at: string; birth_date: string | null; pilot_experience: string | null; flight_hours_range: string | null; pilot_certificate: string | null; primary_uav_type: string | null; simulator_experience: string | null; self_rated_skill: number | null; sex?: string | null; dominant_hand?: string | null; vision_correction?: string | null; vision_diopters_left?: number | null; vision_diopters_right?: number | null; rc_experience?: string | null; fpv_experience?: string | null; game_controller_experience?: string | null; video_game_experience?: string | null; }
-type StudentComparison = { available: boolean; minimum_group_size: number; cohort_participant_count: number; own_measurement_count: number; own_average: Record<string, number>; cohort_average: Record<string, number> };
+type ComparisonHistogram = { minimum: number; maximum: number; counts: number[]; own_value: number | null };
+type ComparisonMetric = { key: string; own_value: number | null; cohort_average: number | null; histogram: ComparisonHistogram | null };
+type ComparisonResponseCurve = { time_fraction: number[]; own_mean: number[] | null; cohort_mean: number[]; cohort_std: number[] };
+type StudentComparison = { available: boolean; minimum_group_size: number; cohort_participant_count: number; own_measurement_count: number; metrics: ComparisonMetric[]; response_curve: ComparisonResponseCurve | null };
 
 type MeasurementMode = "SCOPE" | "SIMPLE";
 function getMeasurementMode(item: { test_type: string; analysis_data: Record<string, unknown> | null; test_definition_id?: string | null }, tests: TestDefinition[] = []): MeasurementMode {
@@ -2195,6 +2198,121 @@ function Metric({ label, value }: { label: string; value: string | number }) {
   return <article className="metric"><span>{label}</span><strong>{value}</strong></article>;
 }
 
+const COMPARISON_METRIC_LABELS: Record<string, string> = {
+  reaction_delay_s: "Oneskorenie reakcie",
+  rise_time_s: "Čas nábehu",
+  overshoot_pct: "Presiahnutie cieľa",
+  settling_time_s: "Čas ustálenia",
+  steady_state_error_pct: "Chyba v ustálenom stave",
+  tracking_rmse: "Chyba sledovania",
+  mean_std: "Kolísanie odozvy",
+  mean_target_error_m: "Priemerná chyba cieľa",
+  median_target_error_m: "Medián chyby cieľa",
+  rms_target_error_m: "RMS chyba cieľa",
+  time_in_zone_pct: "Čas v cieľovej zóne",
+  action_count: "Počet akcií",
+  reset_count: "Resetovania",
+  crash_count: "Crash udalosti",
+};
+
+function comparisonMetricUnit(key: string): string {
+  if (key.endsWith("_s")) return " s";
+  if (key.endsWith("_pct")) return " %";
+  if (key.endsWith("_m")) return " m";
+  return "";
+}
+
+function formatComparisonValue(value: number | null, key: string): string {
+  if (value == null || !Number.isFinite(value)) return "—";
+  return value.toFixed(comparisonMetricUnit(key) === " %" ? 1 : 2) + comparisonMetricUnit(key);
+}
+
+function ComparisonHistogramPlot({ metric }: { metric: ComparisonMetric }) {
+  const histogram = metric.histogram;
+  if (!histogram || !histogram.counts.length) return <div className="chart-empty">{t("Histogram nie je dostupný.")}</div>;
+  const width = 760, height = 340, left = 62, right = 730, top = 36, bottom = 270;
+  const counts = histogram.counts;
+  const maxCount = Math.max(1, ...counts);
+  const step = (right - left) / counts.length;
+  const x = (value: number) => left + ((value - histogram.minimum) / Math.max(.000001, histogram.maximum - histogram.minimum)) * (right - left);
+  const ownX = histogram.own_value == null ? null : Math.max(left, Math.min(right, x(histogram.own_value)));
+  const y = (count: number) => bottom - (count / maxCount) * (bottom - top);
+  const xTicks = [0, .5, 1].map((fraction) => histogram.minimum + fraction * (histogram.maximum - histogram.minimum));
+  return <svg className="comparison-svg" viewBox={`0 0 ${width} ${height}`} role="img" aria-label={t("Histogram porovnania účastníkov")}>
+    {[0, .5, 1].map((fraction) => {
+      const countTick = Math.round(maxCount * fraction);
+      return <g key={fraction}><line className="comparison-grid-line" x1={left} x2={right} y1={y(countTick)} y2={y(countTick)} /><text className="comparison-axis-label" x={left - 10} y={y(countTick) + 4} textAnchor="end">{countTick}</text></g>;
+    })}
+    {counts.map((count, index) => {
+      const barHeight = bottom - y(count);
+      return <rect key={index} className="comparison-histogram-bar" x={left + index * step + 2} y={y(count)} width={Math.max(1, step - 4)} height={barHeight} rx="4"><title>{tf("Počet účastníkov: {0}", count)}</title></rect>;
+    })}
+    <line className="comparison-axis" x1={left} x2={right} y1={bottom} y2={bottom} />
+    <line className="comparison-axis" x1={left} x2={left} y1={top} y2={bottom} />
+    {ownX != null && <><line className="comparison-student-line" x1={ownX} x2={ownX} y1={top} y2={bottom} /><text className="comparison-student-label" x={Math.max(left + 4, Math.min(right - 4, ownX))} y={top - 10} textAnchor={ownX > right - 120 ? "end" : "start"}>{t("Ty")}: {formatComparisonValue(histogram.own_value, metric.key)}{histogram.own_value! < histogram.minimum ? " ←" : histogram.own_value! > histogram.maximum ? " →" : ""}</text></>}
+    <text className="comparison-axis-label" x={(left + right) / 2} y={height - 20} textAnchor="middle">{t("Priemer na účastníka")}</text>
+    <text className="comparison-axis-label" transform={`rotate(-90 17 ${(top + bottom) / 2})`} x="17" y={(top + bottom) / 2} textAnchor="middle">{t("Počet účastníkov")}</text>
+    {xTicks.map((value, index) => <text key={index} className="comparison-axis-label" x={left + index * ((right - left) / 2)} y={bottom + 18} textAnchor={index === 0 ? "start" : index === 2 ? "end" : "middle"}>{value.toFixed(1)}</text>)}
+  </svg>;
+}
+
+function ComparisonResponsePlot({ data }: { data: ComparisonResponseCurve }) {
+  const own = data.own_mean ?? [];
+  const cohort = data.cohort_mean ?? [];
+  const std = data.cohort_std ?? [];
+  const count = Math.min(data.time_fraction.length, cohort.length, own.length || cohort.length);
+  if (count < 2) return <div className="chart-empty">{t("Priebeh odozvy nie je dostupný.")}</div>;
+  const lower = cohort.slice(0, count).map((value, index) => value - (std[index] || 0));
+  const upper = cohort.slice(0, count).map((value, index) => value + (std[index] || 0));
+  const allValues = [...lower, ...upper, ...own.slice(0, count)].filter(Number.isFinite);
+  const min = Math.min(-.2, ...allValues), max = Math.max(1.2, ...allValues);
+  const width = 760, height = 340, left = 62, right = 730, top = 30, bottom = 270;
+  const x = (index: number) => left + (index / Math.max(1, count - 1)) * (right - left);
+  const y = (value: number) => bottom - ((value - min) / Math.max(.001, max - min)) * (bottom - top);
+  const line = (values: number[]) => values.slice(0, count).map((value, index) => `${x(index).toFixed(1)},${y(value).toFixed(1)}`).join(" ");
+  const area = [...upper.slice(0, count).map((value, index) => `${x(index).toFixed(1)},${y(value).toFixed(1)}`), ...lower.slice(0, count).map((value, index) => `${x(index).toFixed(1)},${y(value).toFixed(1)}`).reverse()].join(" ");
+  return <svg className="comparison-svg" viewBox={`0 0 ${width} ${height}`} role="img" aria-label={t("Priemerný priebeh odozvy všetkých osí")}>
+    {[0, .5, 1].map((fraction) => <g key={fraction}><line className="comparison-grid-line" x1={left} x2={right} y1={top + fraction * (bottom - top)} y2={top + fraction * (bottom - top)} /><line className="comparison-grid-line" x1={left + fraction * (right - left)} x2={left + fraction * (right - left)} y1={top} y2={bottom} /><text className="comparison-axis-label" x={left + fraction * (right - left)} y={bottom + 18} textAnchor="middle">{Math.round(fraction * 100)}%</text></g>)}
+    <polygon points={area} className="comparison-response-band" />
+    <polyline points={line(cohort)} className="comparison-cohort-line" />
+    {own.length > 1 && <polyline points={line(own)} className="comparison-student-line-path" />}
+    <line className="comparison-axis" x1={left} x2={right} y1={bottom} y2={bottom} /><line className="comparison-axis" x1={left} x2={left} y1={top} y2={bottom} />
+    <text className="comparison-axis-label" x={width / 2} y={height - 20} textAnchor="middle">{t("Normalizovaný čas")}</text>
+    <text className="comparison-axis-label" transform={`rotate(-90 17 ${(top + bottom) / 2})`} x="17" y={(top + bottom) / 2} textAnchor="middle">{t("Normalizovaná odozva")}</text>
+  </svg>;
+}
+
+function StudentComparisonCharts({ comparison }: { comparison: StudentComparison }) {
+  const [metricKey, setMetricKey] = useState("");
+  const [view, setView] = useState<"histogram" | "response">("histogram");
+  const metric = comparison.metrics.find((item) => item.key === metricKey) ?? comparison.metrics[0];
+  const responseAvailable = Boolean(comparison.response_curve);
+  useEffect(() => { if (!responseAvailable && view === "response") setView("histogram"); }, [responseAvailable, view]);
+  if (!comparison.metrics.length) return <p className="muted">{t("Pre túto skupinu zatiaľ nie sú dostupné porovnateľné ukazovatele.")}</p>;
+  const metricName = metric ? t(COMPARISON_METRIC_LABELS[metric.key] ?? metric.key) : "";
+  return <div className="student-comparison">
+    <p className="muted comparison-explainer">{t("Každý výsledok spája všetky osi jedného účastníka. Graf ukazuje anonymné rozdelenie skupiny a tvoju hodnotu.")}</p>
+    <div className="comparison-view-tabs" role="tablist" aria-label={t("Typ grafu")}>
+      <button type="button" role="tab" aria-selected={view === "histogram"} className={view === "histogram" ? "active" : ""} onClick={() => setView("histogram")}>{t("Histogram")}</button>
+      <button type="button" role="tab" aria-selected={view === "response"} className={view === "response" ? "active" : ""} disabled={!responseAvailable} onClick={() => setView("response")}>{t("Priebeh odozvy")}</button>
+    </div>
+    {view === "histogram" ? <>
+      <div className="comparison-metric-tabs" role="tablist" aria-label={t("Ukazovateľ")}>
+        {comparison.metrics.map((item) => <button type="button" role="tab" key={item.key} aria-selected={item.key === metric?.key} className={item.key === metric?.key ? "active" : ""} onClick={() => setMetricKey(item.key)}>{t(COMPARISON_METRIC_LABELS[item.key] ?? item.key)}</button>)}
+      </div>
+      {metric && <div className="comparison-chart-card">
+        <div className="comparison-chart-heading"><div><div className="eyebrow">{t("SKUPINOVÉ POROVNANIE")}</div><h3>{metricName}</h3></div><div className="comparison-legend"><span><i className="legend-cohort" />{t("Skupina")}</span><span><i className="legend-student" />{t("Ty")}: {formatComparisonValue(metric.own_value, metric.key)}</span></div></div>
+        <ComparisonHistogramPlot metric={metric} />
+      </div>}
+    </> : comparison.response_curve && <div className="comparison-chart-card">
+      <div className="comparison-chart-heading"><div><div className="eyebrow">{t("AGREGOVANÉ VŠETKY OSI")}</div><h3>{t("Priemerný normalizovaný priebeh")}</h3></div><div className="comparison-legend"><span><i className="legend-cohort" />{t("Skupina")}</span><span><i className="legend-student" />{t("Ty")}</span></div></div>
+      <ComparisonResponsePlot data={comparison.response_curve} />
+    </div>}
+    <p className="comparison-footnote">{t("Každý účastník má v skupinovom priemere rovnakú váhu.")}</p>
+  </div>;
+}
+
+
 function StudentPortal({ user, onLogout, accentTheme, colorMode, onAppearanceChange }: {
   user: User;
   onLogout: () => Promise<void>;
@@ -2332,8 +2450,8 @@ function StudentPortal({ user, onLogout, accentTheme, colorMode, onAppearanceCha
         {selectedMeasurement && <div className="student-result-detail"><h3>{selectedMeasurement.test_type} · {formatDateTime(selectedMeasurement.started_at)}</h3>{mode === "SIMPLE" ? <SimpleAnalysisView analysis={selectedMeasurement.analysis_data ?? {}} /> : selectedMeasurement.analysis_data?.normalized_step_response ? <><ResponseChart data={selectedMeasurement.analysis_data.normalized_step_response} /><ResponseMetrics data={selectedMeasurement.analysis_data.normalized_step_response} /></> : <p className="muted">{t("Toto meranie nemá uloženú analýzu odozvy.")}</p>}</div>}
       </section>
       <section className="panel">
-        <div className="eyebrow">{t("ANONYMIZOVANÉ POROVNANIE ·")} {mode === "SCOPE" ? "SCoPE" : "SimPLE"}</div>
-        {comparison?.available ? <><p>{t("Tvoje priemery:")} {formatMetricMap(comparison.own_average)}</p><p>{t("Skupinové priemery:")} {formatMetricMap(comparison.cohort_average)}</p></> : <p className="muted">{t("Porovnanie sa zobrazí po nazbieraní dostatočne veľkej skupiny.")}</p>}
+        <div className="student-result-heading"><div><div className="eyebrow">{t("ANONYMIZOVANÉ POROVNANIE ·")} {mode === "SCOPE" ? "SCoPE" : "SimPLE"}</div><h2>{t("Výsledok v porovnaní so skupinou")}</h2></div></div>
+        {comparison?.available ? <StudentComparisonCharts comparison={comparison} /> : <p className="muted">{t("Grafy sa zobrazia po nazbieraní dostatočne veľkej skupiny.")}</p>}
       </section>
       <section className="panel">
         <div className="eyebrow">{t("TVOJE SÚHLASY")}</div><h2>{t("Informácie o spracúvaní údajov")}</h2>
