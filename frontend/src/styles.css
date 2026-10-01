@@ -1095,9 +1095,9 @@ header > .actions, .registration-header > .actions { margin-top: 0; align-items:
 .participant-mode-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
 .participant-mode-stats > section { min-width: 0; padding: 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-raised); }
 .participant-mode-stats > section > .eyebrow { margin-bottom: 10px; }
-.simple-scene-preview { position: relative; width: 100%; overflow: hidden; min-height: 310px; border: 1px solid var(--border-strong); border-radius: 10px; background: var(--surface-highlight); isolation: isolate; }
+.simple-scene-preview { position: relative; width: 100%; overflow: hidden; min-height: 310px; border: 1px solid var(--border-strong); border-radius: 10px; background: #000000; isolation: isolate; }
 .simple-scene-preview > img, .simple-scene-preview > .simple-scene-default { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-.simple-scene-default { background: linear-gradient(180deg, #5d8fb1 0%, var(--text-soft) 65%, #8c9b85 66%, #526451 100%); }
+.simple-scene-default { background: #000000; }
 .simple-scene-preview > svg { position: absolute; inset: 0; width: 100%; height: 100%; }
 .simple-scene-preview .scene-ground { fill: rgba(16,35,31,.38); }
 .simple-scene-preview .scene-ground-line { stroke: rgba(239,248,242,.78); stroke-width: 2; stroke-dasharray: 8 7; }
@@ -1459,3 +1459,6 @@ main[data-color-mode="light"] .test-attendance.completed { color: #167e53; backg
 .client-activity.measuring .client-activity-indicator { background: #32db91; box-shadow: 0 0 0 5px color-mix(in srgb, #32db91 18%, transparent); }
 .client-activity strong { font-size: 16px; }
 .client-activity-detail { margin-left: auto; text-align: right; font-weight: 650; overflow-wrap: anywhere; }
+
+.simple-pattern-field { display: grid; gap: 7px; margin: 14px 0; color: var(--text-soft); }
+.simple-pattern-field select { width: 100%; padding: 10px; color: var(--text-main); border: 1px solid var(--line); border-radius: 7px; background: var(--surface-input); }
