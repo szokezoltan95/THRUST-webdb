@@ -1,141 +1,64 @@
 # THRUST-webdb
 
-THRUST-webdb is the PostgreSQL-backed web application for THRUST measurement collection, immutable analysis artifacts, student results, researcher comparisons, and test administration. The frontend uses React/TypeScript; the API uses FastAPI and Alembic.
+THRUST-webdb is the web application and central data store for **THRUST** (Testing Hub for Research in UAV Simulation and Training), a research system developed at the Faculty of Aeronautics, Technical University of Košice. It works with [THRUST-measure](https://github.com/szokezoltan95/THRUST-measure), the desktop application that runs the measurement tasks.
 
-The frontend offers Slovak and English in the header. It starts in Slovak if
-the browser's system language is Slovak, otherwise in English; a manual choice
-is remembered in the browser. Consent documents are served in the selected
-language and their accepted text is stored with the registration record.
-Set `DATA_RETENTION_NOTICE_EN` alongside `DATA_RETENTION_NOTICE` in the server
-`.env` for the English consent text. The API marks the English document
-unconfigured until this translation and the controller details are present.
+## Why THRUST exists
 
-Central web database for THRUST measurements. The server stores pseudonymous participant codes only; the mapping between a participant and their real identity must remain outside this system.
+Research on UAV control needs repeatable tasks, consistent records, and a way to compare measurements made under similar conditions. A study team defines test versions in WebDB, uses THRUST-measure to collect SCoPE or SimPLE measurements, and reviews the resulting data in one place.
 
-## Current scope
+These results describe performance in the selected tasks and conditions. They are not, by themselves, a certificate of real-world piloting ability or a universal score of pilot competence.
 
-- public aggregate overview;
-- self-hosted administrator accounts;
-- Argon2id password hashing;
-- opaque, server-side sessions in secure cookies;
-- PostgreSQL persistence;
-- participant accounts, consent records, configurable versioned tests, and measurements;
-- a versioned Measure analysis contract and immutable per-measurement results;
-- student measurement upload, personal history, and privacy-aware group statistics;
-- configurable bilingual welcome pages with aggregated charts and numeric metrics.
+## What WebDB provides
 
-Measure calculates each result before upload. WebDB validates the artifact and
-raw-log hash, then stores and displays it without recalculating individual
-measurement metrics. It continues to calculate aggregate group and historical
-comparisons.
+- **Participants** can register, record the required consents and background information, see their own results, and compare them with eligible group statistics.
+- **Researchers** can prepare test versions, inspect measurements, compare participants or saved groups over time, and download results and raw logs for further analysis.
+- **Administrators** manage participant records and accounts. Superadmins can also assign roles and access the full pseudonymous data archive. Access to functions depends on the signed-in role.
+- **Visitors** can see the published welcome page and public aggregate figures. Published content can be maintained in Slovak and English.
 
-## Local development
+The desktop application is needed to perform a measurement. WebDB does not read a joystick or run SCoPE and SimPLE tasks in the browser. A study organizer supplies the correct WebDB address, participant access, controller instructions, and measurement procedure.
 
-1. Copy `.env.example` to `.env` and replace the database password.
-2. Start the stack: `docker compose up --build`.
-3. Apply migrations: `docker compose exec backend alembic upgrade head`.
-4. Create the first administrator: `docker compose exec backend python -m app.create_admin admin`.
+## How the system works
+
+1. A researcher creates a versioned test definition in WebDB. It contains the task configuration and analysis profile used by the measurement client. Drafts can be edited; a finalized version is kept for reproducible measurements. Deactivated versions stop appearing for new measurements while existing results remain associated with them.
+2. THRUST-measure signs in through the WebDB API, obtains the participant and selected test configuration, and runs the task locally with a compatible controller.
+3. After a session, THRUST-measure produces a compressed raw log and a separate analysis result. It calculates the individual measurement metrics before upload.
+4. WebDB validates the submitted result against the test version and checks the raw file's SHA-256 hash, size, type, and name against the analysis record. It stores the result and raw log; it does not recalculate the individual metrics.
+5. WebDB displays individual results and calculates group statistics and historical comparisons. Authorized researchers can download the underlying artifacts for independent analysis.
+
+Different test versions, controller setups, and procedures can affect comparisons. Researchers should compare like conditions and interpret the measured tasks within their study protocol.
+
+### Technical architecture and stored data
+
+The browser interface uses React, TypeScript, and Vite. A FastAPI backend supplies the API and enforces access rules. PostgreSQL stores accounts, participant details, consent records, test definitions, measurement metadata, and analysis JSON. Alembic manages database schema changes. Compressed raw measurement files are stored separately in a persistent Docker volume. The frontend is served by Nginx; the optional HTTPS configuration terminates TLS there. THRUST-measure talks to the API, never directly to PostgreSQL.
+
+WebDB stores personal information for registered accounts, including e-mail address, name, password hash, and consent history. Participant records can include birth date, vision, handedness, and experience data. Measurements are linked to generated participant codes, but those codes are **pseudonyms, not anonymity**: the service also holds the account-to-participant link. Public and student group views apply a configurable minimum group size. Study operators are responsible for the applicable consent text, access, retention, and backups.
+
+Two Docker volumes matter for recovery: `postgres_data` for PostgreSQL and `measurement_data` for raw logs and uploaded welcome-page images. Back up and test restoring both together; a database backup alone cannot restore the raw files.
+
+## Running your own instance
+
+The project is intended for a study team that can operate a server, set up participant information and consent, and provide access to THRUST-measure. You need Docker Compose and a configured `.env` file. These steps start a local development instance:
+
+1. Copy `.env.example` to `.env`. Set a strong `POSTGRES_PASSWORD` and put the same password in `DATABASE_URL`. Fill in the data-controller and retention fields before inviting participants.
+2. Start the services with `docker compose up -d --build`.
+3. Apply the database schema with `docker compose exec backend alembic upgrade head`.
+4. Create an initial administrator with `docker compose exec backend python -m app.create_admin admin`.
 5. Open `http://localhost`.
 
-### HTTPS deployment
-
-The default Compose setup is for local development over HTTP. For deployment with
-HTTPS, obtain a certificate for the WebDB hostname from TUKE or another trusted
-certificate authority. Place the certificate chain at
-`certs/fullchain.pem` and its private key at `certs/privkey.pem`; the whole
-`certs/` directory is ignored by Git.
-
-Set these values in the server's `.env` file:
-
-```dotenv
-COOKIE_SECURE=true
-ALLOWED_HOSTS=webdb.example.tuke.sk
-```
-
-Replace the example hostname with the actual name used by clients and included
-in the certificate. Start the HTTPS configuration with:
+The default Compose setup uses HTTP for local development. For a server reachable by participants, use a trusted TLS certificate and set `COOKIE_SECURE=true` and `ALLOWED_HOSTS` to the actual host name. Put the certificate chain in `certs/fullchain.pem` and private key in `certs/privkey.pem`, then start with:
 
 ```console
 docker compose -f docker-compose.yml -f docker-compose.https.yml up -d --build
 docker compose -f docker-compose.yml -f docker-compose.https.yml exec backend alembic upgrade head
 ```
 
-The HTTPS Nginx configuration publishes port 443 and redirects port 80 to
-HTTPS. Ensure the server and network firewall allow inbound TCP ports 80 and 443.
-PostgreSQL and backend traffic remain on the private Docker network; no
-database migration is required for TLS. Keep the certificate private key out of
-the repository and backups that are not access-controlled.
+The HTTPS configuration serves port 443 and redirects port 80. Keep the private key and `.env` out of Git. On later updates, use **the same pair of Compose files** for both the build and migration commands. See `.env.example` for the remaining settings, including the public minimum group size, raw upload limit, and optional researcher registration key.
 
-## Longitudinal trends and reports
+## Development and data handling
 
-Researcher and administrator accounts can create pseudonymous participant
-groups, compare any combination of participants and saved groups on the Trends
-page, and view date-based or test-based averages. Python computes the tables and
-Matplotlib creates downloadable group trend PNG charts. Per-measurement metrics
-and response curves come from the immutable Measure analysis JSON; WebDB stores
-and displays them without recalculating them. The Reports page downloads
-archived TSV/GZIP files, saved analysis JSON, and CSV tables. The complete
-pseudonymous data archive is available only to superadmin and is delivered as
-a ZIP; it excludes login accounts.
+From `frontend/`, run `npm ci && npm run build` to type-check and build the interface. From `backend/`, install its test dependencies and run `pytest`; integration tests require PostgreSQL. Schema changes need an Alembic migration so existing installations can update without discarding their data.
 
-## Welcome page editor
-
-The **Welcome page** item in the administrator sidebar is available only to
-admins and superadmins. Content is edited separately in Slovak and English.
-Add or reorder headings, text, banners, uploaded images, public statistics,
-tables, manually entered charts and research result cards. The live preview
-uses the same renderer as the public page. Save a draft, then publish it;
-unsaved drafts and changes to published pages remain private. Until a language
-has been published, visitors see the built-in welcome page for that language.
-Image files are re-encoded before public delivery and stored in the existing
-measurement volume. Charts and research values are editorial content; public
-participant counts continue to respect the minimum group size.
-
-After `git pull`, keep using the same Compose files used to start the server.
-For an HTTP-only local development stack:
-
-```console
-docker compose up -d --build
-docker compose exec backend alembic upgrade head
-```
-
-For the HTTPS deployment, include the HTTPS overlay on every Compose command so
-an update does not replace the TLS-enabled Nginx configuration with the local
-HTTP-only setup:
-
-```console
-docker compose -f docker-compose.yml -f docker-compose.https.yml up -d --build
-docker compose -f docker-compose.yml -f docker-compose.https.yml exec backend alembic upgrade head
-```
-
-## Test lifecycle
-
-Test definitions can be kept as drafts, finalized to prevent further edits, or
-deactivated so they no longer appear in the measurement client. Deactivated
-tests remain visible at the bottom of the WebDB list with their existing
-measurements. Permanent deletion removes the test and its measurements; use it
-only when that data is no longer needed.
-
-## Checks
-
-From `frontend/`, run `npm ci && npm run build` to type-check and build the
-client. From `backend/`, install the test extra and run `pytest` for the API
-suite. A running PostgreSQL instance is required for the integration tests.
-
-## Security boundary
-
-- Never store names, e-mail addresses, university identifiers, or the local ID-to-name mapping here.
-- Never commit `.env`, database dumps, participant mappings, tokens, or measurement exports.
-- PostgreSQL must not be exposed directly to the internet.
-- Production traffic must terminate over HTTPS at a trusted reverse proxy; the optional Compose HTTPS overlay provides TLS at the frontend Nginx.
-
-## Local client configuration
-
-After an administrator logs in, a local THRUST/SCoPE client can load one exact test version with:
-
-`GET /api/admin/tests/{test_id}/configuration`
-
-The response contains `schema_version: test-configuration-v1` and the selected test definition, including its JSON configuration. The client should keep the returned test code and version together with each measurement so later changes do not alter historical interpretation.
+Do not commit `.env`, certificates, database dumps, participant mappings, access tokens, or measurement exports. Do not expose PostgreSQL directly to the internet. Researchers can export raw logs, saved analysis, and tables; handle those exports under the same study access rules as the server data.
 
 ## License
 
