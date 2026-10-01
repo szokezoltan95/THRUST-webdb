@@ -1532,10 +1532,11 @@ function SimpleAnalysisView({ analysis }: { analysis: Record<string, unknown> })
     [t("RMS chyba cieľa"), "simple_rms_target_error_m", " m"],
     [t("Čas v cieľovej zóne"), "simple_in_zone_fraction", "%"],
     [t("Reset polohy"), "simple_reset_count", ""],
+    [t("Kolízie"), "simple_crash_count", ""],
     [t("Vzorkovacia frekvencia"), "simple_sampling_hz", " Hz"],
     [t("Trvanie"), "simple_duration_s", " s"],
   ];
-  const display = (key: string, suffix: string) => { const value = rawMetrics[key]; if (typeof value !== "number" || !Number.isFinite(value)) return "—"; const scaled = key === "simple_in_zone_fraction" ? value * 100 : value; return `${scaled.toFixed(key === "simple_action_count" || key === "simple_reset_count" ? 0 : 2)}${suffix}`; };
+  const display = (key: string, suffix: string) => { const value = rawMetrics[key]; if (typeof value !== "number" || !Number.isFinite(value)) return "—"; const scaled = key === "simple_in_zone_fraction" ? value * 100 : value; return `${scaled.toFixed(key === "simple_action_count" || key === "simple_reset_count" || key === "simple_crash_count" ? 0 : 2)}${suffix}`; };
   return <section className="simple-analysis-view"><header className="simple-analysis-heading"><div><div className="eyebrow">{t("SIMULOVANÝ LET")}</div><h3>{t("Výsledky SimPLE")}</h3></div><span className="simple-analysis-version">{t("Analýza")} {String(analysis.algorithm_version ?? "v1")}</span></header>{analysis.algorithm_version === "1.0.0" && <p className="notice">{t("Toto meranie používa staršie vyhodnotenie; počty akcií, resetov a čas v zóne môžu byť neúplné.")}</p>}<div className="simple-metric-grid">{metrics.map(([label, key, suffix]) => <article className="simple-metric-card" key={key}><span>{label}</span><strong>{display(key, suffix)}</strong></article>)}</div><div className="simple-trace-grid"><SimpleTrace name="x" channel={response.channels?.x} color="#45d5ff"/><SimpleTrace name="y" channel={response.channels?.y} color="#ff6878"/></div></section>;
 }
 
@@ -1660,10 +1661,11 @@ function makeScopeConfiguration(value: Record<string, unknown>): ScopeConfigurat
 
 const initialSimpleConfiguration: Record<string, number | string> = {
   action_timeout_s: 5, hold_time_s: 1, countdown_s: 3,
-  completion_radius_m: 0.1, target_x_limit_m: 1.5, target_y_max_m: 2,
+  completion_radius_m: 0.1, target_x_limit_m: 1.5, target_y_min_m: 0.25, target_y_max_m: 2,
+  target_pattern: "random", route_points: 6, copter_radius_m: 0.08,
   field_width_px: 1920, field_height_px: 1080, world_width_m: 4.5,
-  zone_idle_fill: "#ff3948", zone_idle_outline: "#ff3948",
-  zone_ok_fill: "#00cc66", zone_ok_outline: "#00ff80",
+  zone_idle_fill: "#ff0000", zone_idle_outline: "#ff0000",
+  zone_ok_fill: "#00cc00", zone_ok_outline: "#00cc00",
   mass_kg: 0.8, max_thrust_n: 16, drag_coefficient: 0.3,
 };
 
@@ -1717,25 +1719,26 @@ function TestCreator({ onCreated }: { onCreated: (test: TestDefinition) => void 
 }
 
 type BackgroundImage = { id: string; filename: string; width: number; height: number; created_at: string };
-function SimpleScenePreview({ imageId, radius, xLimit, yLimit, worldWidth, widthPx, heightPx, fill, outline }: { imageId: string; radius: number; xLimit: number; yLimit: number; worldWidth: number; widthPx: number; heightPx: number; fill: string; outline: string }) {
+function SimpleScenePreview({ imageId, radius, copterRadius, xLimit, yMin, yLimit, worldWidth, widthPx, heightPx, fill, outline }: { imageId: string; radius: number; copterRadius: number; xLimit: number; yMin: number; yLimit: number; worldWidth: number; widthPx: number; heightPx: number; fill: string; outline: string }) {
   const sceneHeight = 720 * heightPx / widthPx;
-  const horizon = sceneHeight * .82;
-  const groundY = sceneHeight - Math.max(50, sceneHeight * .14);
+  const groundY = sceneHeight - Math.max(50, sceneHeight * .12);
   const scale = Math.min(640 / worldWidth, (groundY - 30) / (worldWidth * heightPx / widthPx));
+  const left = 360 - worldWidth * scale / 2, right = 360 + worldWidth * scale / 2;
+  const top = groundY - worldWidth * heightPx / widthPx * scale;
   const zoneRadius = Math.max(1, radius * scale);
-  const targetX = 530;
-  const targetY = Math.max(zoneRadius + 12, horizon - Math.min(yLimit, 1.2) * scale);
-  const droneX = Math.max(80, Math.min(300, 360 - Math.min(xLimit, 1) * scale));
-  const droneY = Math.max(40, horizon - Math.min(yLimit * .5, .8) * scale);
+  const targetX = 360 + Math.min(xLimit, worldWidth / 2 - radius) * scale * .6;
+  const targetY = groundY - (yMin + yLimit) / 2 * scale;
+  const droneY = groundY - copterRadius * scale;
   return <div className="simple-scene-preview" style={{ aspectRatio: `${widthPx} / ${heightPx}` }} aria-label={t("Náhľad SimPLE scény")}>
-    {imageId ? <img src={`/api/backgrounds/${imageId}`} alt={t("Zvolené pozadie SimPLE")} /> : <div className="simple-scene-default" />}
+    {imageId && <img src={`/api/backgrounds/${imageId}`} alt={t("Zvolené pozadie SimPLE")} />}
     <svg viewBox={`0 0 720 ${sceneHeight}`} preserveAspectRatio="xMidYMid meet" role="img" aria-label={t("Modrý dron a cieľová zóna")}>
-      <rect x="0" y={horizon} width="720" height={sceneHeight - horizon} className="scene-ground" />
-      <line x1="0" y1={horizon} x2="720" y2={horizon} className="scene-ground-line" />
-      <circle cx={targetX} cy={targetY} r={zoneRadius} fill={fill} stroke={outline} strokeWidth="2.5" className="scene-target-zone" />
-      <circle cx={droneX} cy={droneY} r="24" className="scene-drone-ball" />
-      <line x1={droneX} y1={droneY} x2={droneX} y2={droneY - 34} className="scene-drone-arrow" />
-      <path d={`M${droneX} ${droneY - 41} L${droneX - 8} ${droneY - 27} L${droneX + 8} ${droneY - 27} Z`} className="scene-drone-arrow-head" />
+      <rect x={left} y={top} width={right-left} height={groundY-top} fill={imageId ? "#80808066" : "#808080"} />
+      <path d={`M${left} ${groundY} V${top} H${right} V${groundY}`} fill="none" stroke="#ffffff" strokeWidth="3" />
+      <line x1={left} y1={groundY} x2={right} y2={groundY} stroke="#ffffff" strokeWidth="4" />
+      {Array.from({ length: Math.floor((right-left)/22) }, (_, index) => <line key={index} x1={left+12+index*22} y1={groundY+5} x2={left+22+index*22} y2={groundY+15} stroke="#808080" />)}
+      <circle cx={targetX} cy={targetY} r={zoneRadius} fill={fill} stroke={outline} strokeWidth="2" />
+      <circle cx="360" cy={droneY} r={Math.max(1,copterRadius*scale)} className="scene-drone-ball" />
+      <line x1="360" y1={droneY} x2="360" y2={droneY-Math.max(1,copterRadius*scale)*1.8} className="scene-drone-arrow" />
     </svg>
     <span className="scene-preview-caption">{t("Náhľad letovej scény · mierka zachováva pomer strán")}</span>
   </div>;
@@ -1747,7 +1750,7 @@ function SimpleTestEditor({ test, csrfToken, onClose, onSaved }: { test: TestDef
     for (const key of Object.keys(values)) {
       const value = test.configuration[key];
       if (typeof values[key] === "number" && typeof value === "number" && Number.isFinite(value)) values[key] = value;
-      if (typeof values[key] === "string" && typeof value === "string" && /^#[0-9a-fA-F]{6}$/.test(value)) values[key] = value;
+      if (typeof values[key] === "string" && typeof value === "string" && (key === "target_pattern" ? ["random", "slalom", "circuit"].includes(value) : /^#[0-9a-fA-F]{6}$/.test(value))) values[key] = value;
     }
     return values;
   });
@@ -1783,9 +1786,12 @@ function SimpleTestEditor({ test, csrfToken, onClose, onSaved }: { test: TestDef
     ["hold_time_s", t("Výdrž v cieľovej zóne [s]"), .1, 30, .1],
     ["countdown_s", t("Odpočítavanie [s]"), 0, 60, 1],
     ["completion_radius_m", t("Polomer cieľovej zóny [m]"), .01, 2, .01],
-    ["target_x_limit_m", t("Limit cieľa v osi X [m]"), .1, 20, .1],
+    ["target_x_limit_m", t("Limit cieľa v osi X [m]"), .01, 20, .01],
+    ["target_y_min_m", t("Minimálna výška cieľa [m]"), .01, 20, .01],
     ["target_y_max_m", t("Maximálna výška cieľa [m]"), .1, 20, .1],
     ["world_width_m", t("Šírka ihriska [m]"), .5, 50, .1],
+    ["copter_radius_m", t("Polomer dronu [m]"), .01, 2, .01],
+    ["route_points", t("Počet bodov trajektórie"), 4, 20, 1],
     ["mass_kg", t("Hmotnosť modelu [kg]"), .1, 10, .1],
     ["max_thrust_n", t("Maximálny ťah [N]"), 1, 100, .5],
     ["drag_coefficient", t("Koeficient odporu"), 0, 5, .05],
@@ -1797,8 +1803,13 @@ function SimpleTestEditor({ test, csrfToken, onClose, onSaved }: { test: TestDef
     ? resolutions
     : [[fieldWidth, fieldHeight, tf("{0} × {1} · aktuálne", fieldWidth, fieldHeight)] as const, ...resolutions];
   const worldHeight = Number(configuration.world_width_m) * fieldHeight / fieldWidth;
+  const targetMargin = Math.max(Number(configuration.completion_radius_m), Number(configuration.copter_radius_m));
+  const xMax = Number(configuration.world_width_m) / 2 - targetMargin;
+  const yMax = worldHeight - targetMargin;
+  const validTargets = xMax > 0 && yMax >= targetMargin && Number(configuration.target_x_limit_m) > 0 && Number(configuration.target_x_limit_m) <= xMax && Number(configuration.target_y_min_m) >= targetMargin && Number(configuration.target_y_min_m) <= Number(configuration.target_y_max_m) && Number(configuration.target_y_max_m) <= yMax;
   async function save() {
     setMessage("");
+    if (!validTargets) { setMessage(t("Cieľová zóna musí byť celá v ihrisku. Uprav limity X/Y alebo mierku sveta.")); return; }
     const cleanConfiguration: Record<string, unknown> = { ...configuration, field_width_px: fieldWidth, field_height_px: fieldHeight };
     delete cleanConfiguration.sampling_hz; delete cleanConfiguration.zoom_px_per_m;
     if (backgroundImageId) cleanConfiguration.background_image_id = backgroundImageId;
@@ -1813,14 +1824,16 @@ function SimpleTestEditor({ test, csrfToken, onClose, onSaved }: { test: TestDef
     <div className="simple-editor-intro"><ProgramWordmark mode="SIMPLE" /><p>{t("Určuje sa tu letová úloha, mierka 2D sveta a fyzikálne parametre modelu. Joystick a break/reset zostávajú lokálnymi nastaveniami THRUSTu.")}</p></div>
     <div className="simple-editor-layout"><div>
       <div className="simple-config-grid"><label>{t("Rozlíšenie / pomer strán")}<select value={`${fieldWidth}x${fieldHeight}`} onChange={(event) => { const [w,h] = event.target.value.split("x").map(Number); setConfiguration((current) => ({ ...current, field_width_px: w, field_height_px: h })); }}>{resolutionOptions.map(([w,h,label]) => <option key={`${w}x${h}`} value={`${w}x${h}`}>{label}</option>)}</select></label>
-      {numericFields.map(([key,label,min,max,step]) => <label key={key}>{label}<input type="number" min={min} max={max} step={step} value={Number(configuration[key] ?? initialSimpleConfiguration[key])} onChange={(event) => setConfiguration((current) => ({ ...current, [key]: Number(event.target.value) }))} />{key === "world_width_m" && <small>{t("Odvodená výška:")} {worldHeight.toFixed(2)} {t("m")}</small>}</label>)}</div>
+      {numericFields.map(([key,label,min,max,step]) => { const fieldMax = key === "target_x_limit_m" ? Math.max(.01,xMax) : key === "target_y_min_m" || key === "target_y_max_m" ? Math.max(.01,yMax) : max; const fieldMin = key === "target_y_min_m" ? targetMargin : key === "target_y_max_m" ? Number(configuration.target_y_min_m) : min; return <label key={key}>{label}<input type="number" min={fieldMin} max={fieldMax} step={step} value={Number(configuration[key] ?? initialSimpleConfiguration[key])} onChange={(event) => setConfiguration((current) => ({ ...current, [key]: Number(event.target.value) }))} />{key === "world_width_m" && <small>{t("Odvodená výška:")} {worldHeight.toFixed(2)} {t("m")}</small>}</label>; })}</div>
+      <label className="simple-pattern-field">{t("Trajektória cieľov")}<select value={String(configuration.target_pattern)} onChange={(event) => setConfiguration((current) => ({ ...current, target_pattern: event.target.value }))}><option value="random">{t("Náhodné body")}</option><option value="slalom">{t("Slalom")}</option><option value="circuit">{t("Obvodová trasa")}</option></select></label>
       <p className="muted">{t("Obrazovka určuje iba pomer strán. Výška ihriska sa počíta z nastavenej šírky a pomeru strán.")}</p>
     </div><div className="simple-background-panel"><div className="eyebrow">{t("POZADIE A NÁHĽAD")}</div><label>{t("Vybrané pozadie")}<select value={backgroundImageId} onChange={(event) => setBackgroundImageId(event.target.value)}><option value="">{t("Predvolené vektorové pozadie SimPLE")}</option>{backgrounds.map((item) => <option key={item.id} value={item.id}>{item.filename} · {item.width}×{item.height}</option>)}</select></label><label>{t("Nahrať vlastné PNG / JPEG")}<input type="file" accept="image/png,image/jpeg" disabled={uploading} onChange={(event) => { void uploadBackground(event.target.files?.[0]); event.currentTarget.value = ""; }} /></label>
-      <SimpleScenePreview imageId={backgroundImageId} radius={Number(configuration.completion_radius_m)} xLimit={Number(configuration.target_x_limit_m)} yLimit={Number(configuration.target_y_max_m)} worldWidth={Number(configuration.world_width_m)} widthPx={fieldWidth} heightPx={fieldHeight} fill={String(configuration.zone_idle_fill)} outline={String(configuration.zone_idle_outline)} />
+      <SimpleScenePreview imageId={backgroundImageId} radius={Number(configuration.completion_radius_m)} copterRadius={Number(configuration.copter_radius_m)} yMin={Number(configuration.target_y_min_m)} xLimit={Number(configuration.target_x_limit_m)} yLimit={Number(configuration.target_y_max_m)} worldWidth={Number(configuration.world_width_m)} widthPx={fieldWidth} heightPx={fieldHeight} fill={String(configuration.zone_idle_fill)} outline={String(configuration.zone_idle_outline)} />
       <div className="simple-zone-colors"><label>{t("Zóna · výplň")}<input type="color" value={String(configuration.zone_idle_fill)} onChange={(event) => setConfiguration((current) => ({ ...current, zone_idle_fill: event.target.value }))} /></label><label>{t("Zóna · okraj")}<input type="color" value={String(configuration.zone_idle_outline)} onChange={(event) => setConfiguration((current) => ({ ...current, zone_idle_outline: event.target.value }))} /></label><label>{t("Úspech · výplň")}<input type="color" value={String(configuration.zone_ok_fill)} onChange={(event) => setConfiguration((current) => ({ ...current, zone_ok_fill: event.target.value }))} /></label><label>{t("Úspech · okraj")}<input type="color" value={String(configuration.zone_ok_outline)} onChange={(event) => setConfiguration((current) => ({ ...current, zone_ok_outline: event.target.value }))} /></label></div>
       {uploading && <p className="muted">{t("Nahrávam obrázok…")}</p>}</div></div>
+    {!validTargets && <p className="error">{t("Cieľová zóna musí byť celá v ihrisku. Uprav limity X/Y alebo mierku sveta.")}</p>}
     {message && <p className="error">{message}</p>}
-    <div className="simple-editor-actions"><button type="button" className="quiet" onClick={onClose}>{t("Zrušiť")}</button><button type="button" className="primary" onClick={() => void save()}>{t("Uložiť nastavenia")}</button></div>
+    <div className="simple-editor-actions"><button type="button" className="quiet" onClick={onClose}>{t("Zrušiť")}</button><button type="button" className="primary" onClick={() => void save()} disabled={!validTargets}>{t("Uložiť nastavenia")}</button></div>
   </section></div>;
 }
 
