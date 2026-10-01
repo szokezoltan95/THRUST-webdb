@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from "react";
 import type { Language } from "./i18n";
+import { ComparisonHistogramPlot, ComparisonResponsePlot, type ComparisonHistogram } from "./ComparisonVisuals";
 
 export type WelcomeBlock =
   | { id: string; type: "eyebrow"; text: string }
@@ -7,7 +8,7 @@ export type WelcomeBlock =
   | { id: string; type: "text"; text: string }
   | { id: string; type: "banner"; title: string; body: string; image_id?: string | null }
   | { id: string; type: "image"; image_id: string; alt: string; caption: string }
-  | { id: string; type: "metrics"; items: ("participants" | "measurements" | "active_tests")[]; trends: MetricTrend[] }
+  | { id: string; type: "metrics"; items: ("participants" | "measurements" | "active_tests")[]; trends: MetricTrend[]; aggregates?: AggregateMetric[]; max_width?: number; columns?: number; gap?: number; size?: "compact" | "regular" | "spacious" }
   | { id: string; type: "data_chart"; title: string; metric: string; axis: "month" | "test"; statistic: "mean" | "median"; style: "line" | "bar" }
   | { id: string; type: "data_table"; title: string; metrics: string[]; axis: "month" | "test"; statistic: "mean" | "median" }
   | { id: string; type: "histogram"; title: string; metric: string; bins: number; test_definition_id?: string | null }
@@ -15,14 +16,16 @@ export type WelcomeBlock =
   | { id: string; type: "featured_comparison"; title: string; description: string; mode: "SCOPE" | "SIMPLE"; metrics: string[]; bins: number; show_response: boolean; test_definition_id?: string | null }
   | { id: string; type: "paper"; title: string; authors: string[]; journal: string; publisher: string; year: number | null; volume: string; issue: string; pages: string; doi: string; url: string; abstract: string };
 
+export type AggregateMetric = { mode: "SCOPE" | "SIMPLE"; metric: string; test_definition_id?: string | null };
 export type MetricTrend = { metric: string; axis: "month" | "test"; statistic: "mean" | "median" };
 export type MetricCatalogItem = { key: string; label: string; unit: string; participant_count: number };
 export type TestCatalogItem = { id: string; label: string; mode?: "SCOPE" | "SIMPLE" };
 export type WelcomePoint = { label: string; date?: string; value: number; participant_count?: number };
-export type FeaturedMetric = { key: string; cohort_average: number | null; participant_count: number | null; bins: { start: number; end: number; count: number | null; suppressed: boolean }[] };
+export type FeaturedMetric = { key: string; cohort_average: number | null; participant_count: number | null; histogram: Omit<ComparisonHistogram, "own_value"> | null };
 export type FeaturedComparisonData = { available: boolean; participant_count: number | null; metrics: FeaturedMetric[]; response_curve: { time_fraction: number[]; cohort_mean: number[]; cohort_std: number[] } | null };
 export type WelcomeData = Record<string, {
   items?: { key: string; label: string; value: number | null }[];
+  aggregates?: { mode: "SCOPE" | "SIMPLE"; metric: string; value: number | null }[];
   trends?: { metric: string; axis: "month" | "test"; statistic: "mean" | "median"; title: string; unit: string; points: WelcomePoint[] }[];
   metric?: string;
   unit?: string;
@@ -69,18 +72,18 @@ export function defaultWelcomeBlocks(language: Language): WelcomeBlock[] {
     { id: "eyebrow", type: "eyebrow", text: "LETECKÁ FAKULTA TUKE · VÝSKUM RIADENIA UAV" },
     { id: "intro", type: "heading", level: 1, text: "Za každým letom je človek." },
     { id: "lead", type: "text", text: "THRUST skúma, ako piloti reagujú a ovládajú dron. Spája meranie, analýzu a porovnávanie výsledkov, aby sme ľudskému výkonu pri riadení UAV lepšie rozumeli." },
-    { id: "numbers", type: "metrics", items: ["participants", "measurements", "active_tests"], trends: [] },
-    { id: "scope-spotlight", type: "featured_comparison", title: "Ako skupina reaguje na zmenu", description: "Priemery všetkých osí · SCoPE", mode: "SCOPE", metrics: ["reaction_delay_s", "tracking_rmse", "overshoot_pct"], bins: 8, show_response: true, test_definition_id: null },
-    { id: "simple-spotlight", type: "featured_comparison", title: "Presnosť v simulovanom lete", description: "Pohľad na pohyb a riadenie · SimPLE", mode: "SIMPLE", metrics: ["mean_target_error_m", "time_in_zone_pct", "reaction_delay_s"], bins: 8, show_response: true, test_definition_id: null },
+    { id: "numbers", type: "metrics", items: ["participants", "measurements", "active_tests"], trends: [], aggregates: [], max_width: 510, columns: 3, gap: 10, size: "compact" },
     { id: "tagline", type: "banner", title: "Od prvého pohybu ovládača až po zmeny výkonu v čase.", body: "" },
+    { id: "scope-spotlight", type: "featured_comparison", title: "Ako skupina reaguje na zmenu", description: "Priemery všetkých osí · SCoPE", mode: "SCOPE", metrics: ["reaction_delay_s", "tracking_rmse", "overshoot_pct"], bins: 12, show_response: true, test_definition_id: null },
+    { id: "simple-spotlight", type: "featured_comparison", title: "Presnosť v simulovanom lete", description: "Pohľad na pohyb a riadenie · SimPLE", mode: "SIMPLE", metrics: ["mean_target_error_m", "time_in_zone_pct", "reaction_delay_s"], bins: 12, show_response: true, test_definition_id: null },
   ] : [
     { id: "eyebrow", type: "eyebrow", text: "FACULTY OF AERONAUTICS TUKE · UAV CONTROL RESEARCH" },
     { id: "intro", type: "heading", level: 1, text: "Behind every flight is a person." },
     { id: "lead", type: "text", text: "THRUST explores how pilots respond and control a drone. It brings together measurement, analysis and comparison of results to better understand human performance in UAV control." },
-    { id: "numbers", type: "metrics", items: ["participants", "measurements", "active_tests"], trends: [] },
-    { id: "scope-spotlight", type: "featured_comparison", title: "How the group responds to change", description: "All-axis averages · SCoPE", mode: "SCOPE", metrics: ["reaction_delay_s", "tracking_rmse", "overshoot_pct"], bins: 8, show_response: true, test_definition_id: null },
-    { id: "simple-spotlight", type: "featured_comparison", title: "Precision in simulated flight", description: "Movement and control · SimPLE", mode: "SIMPLE", metrics: ["mean_target_error_m", "time_in_zone_pct", "reaction_delay_s"], bins: 8, show_response: true, test_definition_id: null },
+    { id: "numbers", type: "metrics", items: ["participants", "measurements", "active_tests"], trends: [], aggregates: [], max_width: 510, columns: 3, gap: 10, size: "compact" },
     { id: "tagline", type: "banner", title: "From the first movement of the controls to changes in performance over time.", body: "" },
+    { id: "scope-spotlight", type: "featured_comparison", title: "How the group responds to change", description: "All-axis averages · SCoPE", mode: "SCOPE", metrics: ["reaction_delay_s", "tracking_rmse", "overshoot_pct"], bins: 12, show_response: true, test_definition_id: null },
+    { id: "simple-spotlight", type: "featured_comparison", title: "Precision in simulated flight", description: "Movement and control · SimPLE", mode: "SIMPLE", metrics: ["mean_target_error_m", "time_in_zone_pct", "reaction_delay_s"], bins: 12, show_response: true, test_definition_id: null },
   ];
 }
 
@@ -109,75 +112,36 @@ function WelcomeResponseCurve({ title, test, channel, points, language }: { titl
   </svg></figure>;
 }
 
-function FeaturedHistogram({ metric, language }: { metric: FeaturedMetric | undefined; language: Language }) {
-  const bins = metric?.bins ?? [];
-  if (!bins.length || !bins.some((bin) => bin.count != null && bin.count > 0)) {
-    return <p className="muted welcome-featured-empty">{language === "sk" ? "Rozdelenie sa zobrazí, keď bude v intervaloch dosť účastníkov." : "The distribution appears when enough participants fall into each interval."}</p>;
-  }
-  const number = new Intl.NumberFormat(language, { maximumFractionDigits: 2 });
-  const left = 50, right = 620, top = 20, bottom = 204;
-  const maxCount = Math.max(1, ...bins.map((bin) => bin.count ?? 0));
-  const width = (right - left) / bins.length;
-  return <svg className="welcome-featured-svg" viewBox="0 0 660 270" role="img" aria-label={language === "sk" ? "Rozdelenie skupinových priemerov" : "Distribution of group averages"}>
-    {[0, .5, 1].map((fraction) => { const count = Math.round(maxCount * fraction); const y = bottom - (count / maxCount) * (bottom - top); return <g key={fraction}><line className="welcome-featured-grid" x1={left} x2={right} y1={y} y2={y} /><text x={left - 8} y={y + 4} textAnchor="end">{count}</text></g>; })}
-    {bins.map((bin, index) => {
-      const height = bin.suppressed ? 10 : ((bin.count ?? 0) / maxCount) * (bottom - top);
-      return <rect key={index} x={left + index * width + 2} y={bottom - height} width={Math.max(1, width - 4)} height={height} rx="4" className={bin.suppressed ? "welcome-featured-bar suppressed" : "welcome-featured-bar"}>
-        <title>{bin.suppressed ? (language === "sk" ? "Malá skupina · skryté" : "Small group · hidden") : `${number.format(bin.start)}–${number.format(bin.end)}: ${bin.count}`}</title>
-      </rect>;
-    })}
-    <line className="welcome-featured-axis" x1={left} x2={right} y1={bottom} y2={bottom} />
-    {[0, .5, 1].map((fraction) => { const value = bins[0].start + fraction * (bins[bins.length - 1].end - bins[0].start); return <text key={fraction} x={left + fraction * (right - left)} y={bottom + 21} textAnchor={fraction === 0 ? "start" : fraction === 1 ? "end" : "middle"}>{number.format(value)}</text>; })}
-    <text x={(left + right) / 2} y="258" textAnchor="middle">{language === "sk" ? "Priemer na účastníka" : "Average per participant"}</text>
-  </svg>;
-}
-
-function FeaturedResponse({ response, language }: { response: NonNullable<FeaturedComparisonData["response_curve"]>; language: Language }) {
-  const points = response.cohort_mean;
-  const std = response.cohort_std;
-  if (points.length < 2) return null;
-  const lower = points.map((value, index) => value - (std[index] || 0));
-  const upper = points.map((value, index) => value + (std[index] || 0));
-  const low = Math.min(-.2, ...lower), high = Math.max(1.2, ...upper);
-  const left = 50, right = 620, top = 20, bottom = 204;
-  const x = (index: number) => left + index * (right - left) / (points.length - 1);
-  const y = (value: number) => bottom - (value - low) * (bottom - top) / Math.max(.001, high - low);
-  const line = points.map((value, index) => `${x(index).toFixed(1)},${y(value).toFixed(1)}`).join(" ");
-  const band = [...upper.map((value, index) => `${x(index).toFixed(1)},${y(value).toFixed(1)}`), ...lower.map((value, index) => `${x(index).toFixed(1)},${y(value).toFixed(1)}`).reverse()].join(" ");
-  return <svg className="welcome-featured-svg" viewBox="0 0 660 270" role="img" aria-label={language === "sk" ? "Skupinový priebeh všetkých osí" : "Group trace across all axes"}>
-    {[0, .5, 1].map((fraction) => <g key={fraction}><line className="welcome-featured-grid" x1={left} x2={right} y1={top + fraction * (bottom - top)} y2={top + fraction * (bottom - top)} /><text x={left - 8} y={top + fraction * (bottom - top) + 4} textAnchor="end">{(high - fraction * (high - low)).toFixed(1)}</text><text x={left + fraction * (right - left)} y={bottom + 21} textAnchor="middle">{Math.round(fraction * 100)}%</text></g>)}
-    <polygon className="welcome-featured-band" points={band} /><polyline className="welcome-featured-line" points={line} />
-    <line className="welcome-featured-axis" x1={left} x2={right} y1={bottom} y2={bottom} />
-    <text x={(left + right) / 2} y="258" textAnchor="middle">{language === "sk" ? "Normalizovaný čas" : "Normalized time"}</text>
-  </svg>;
-}
-
 function WelcomeFeaturedComparison({ block, comparison, language }: { block: Extract<WelcomeBlock, { type: "featured_comparison" }>; comparison?: FeaturedComparisonData; language: Language }) {
   const [selectedKey, setSelectedKey] = useState(block.metrics[0] ?? "");
+  const [view, setView] = useState<"histogram" | "response">("histogram");
   const selected = comparison?.metrics.find((metric) => metric.key === selectedKey) ?? comparison?.metrics[0];
-  const number = new Intl.NumberFormat(language, { maximumFractionDigits: 2 });
-  const label = selected ? featuredMetricLabel(selected.key, language) : "";
-  const unit = selected ? featuredLabels[selected.key]?.unit ?? "" : "";
+  const response = comparison?.response_curve;
+  const activeView = view === "response" && response && block.show_response ? "response" : "histogram";
   return <section className="welcome-featured">
     <div className="welcome-featured-heading">
       <div><div className="eyebrow">{block.mode === "SCOPE" ? "SCoPE" : "SimPLE"} · {language === "sk" ? "ANONYMIZOVANÉ VÝSLEDKY" : "ANONYMOUS RESULTS"}</div><h2>{block.title}</h2>{block.description && <p>{block.description}</p>}</div>
       {comparison?.participant_count != null && <span className="welcome-featured-count">{comparison.participant_count} {language === "sk" ? "účastníkov" : "participants"}</span>}
     </div>
-    <div className={block.show_response ? "welcome-featured-grid-layout" : "welcome-featured-grid-layout single"}>
-      <div className="welcome-featured-card">
-        <div className="welcome-featured-card-header"><span>{language === "sk" ? "ROZDELENIE VÝSLEDKOV" : "RESULT DISTRIBUTION"}</span><strong>{label || (language === "sk" ? "Ukazovateľ" : "Metric")}</strong></div>
-        <div className="welcome-featured-tabs" role="tablist" aria-label={language === "sk" ? "Vybrať ukazovateľ" : "Choose a metric"}>
+    <div className="student-comparison">
+      <div className="comparison-view-tabs" role="tablist" aria-label={language === "sk" ? "Typ grafu" : "Chart type"}>
+        <button type="button" role="tab" aria-selected={activeView === "histogram"} className={activeView === "histogram" ? "active" : ""} onClick={() => setView("histogram")}>Histogram</button>
+        {block.show_response && <button type="button" role="tab" aria-selected={activeView === "response"} className={activeView === "response" ? "active" : ""} disabled={!response} onClick={() => setView("response")}>{language === "sk" ? "Priebeh odozvy" : "Response trace"}</button>}
+      </div>
+      {activeView === "histogram" ? <>
+        <div className="comparison-metric-tabs" role="tablist" aria-label={language === "sk" ? "Ukazovateľ" : "Metric"}>
           {block.metrics.map((key) => <button key={key} type="button" role="tab" aria-selected={selected?.key === key} className={selected?.key === key ? "active" : ""} onClick={() => setSelectedKey(key)}>{featuredMetricLabel(key, language)}</button>)}
         </div>
-        {selected?.cohort_average != null && <div className="welcome-featured-average"><span>{language === "sk" ? "Skupinový priemer" : "Group average"}</span><strong>{number.format(selected.cohort_average)}{unit && <small> {unit}</small>}</strong></div>}
-        <FeaturedHistogram metric={selected} language={language} />
-      </div>
-      {block.show_response && <div className="welcome-featured-card">
-        <div className="welcome-featured-card-header"><span>{language === "sk" ? "PRIEMERNÝ PRIEBEH" : "AVERAGE TRACE"}</span><strong>{language === "sk" ? "Odozva všetkých osí" : "Response across all axes"}</strong></div>
-        {comparison?.response_curve ? <><FeaturedResponse response={comparison.response_curve} language={language} /><p className="welcome-featured-note">{language === "sk" ? "Čiara: priemer skupiny · pásmo: rozptyl medzi účastníkmi" : "Line: group mean · band: spread across participants"}</p></> : <p className="muted welcome-featured-empty">{language === "sk" ? "Priebeh sa zobrazí po získaní dostatočnej skupiny s uloženou analýzou." : "The trace appears once enough participants have saved analyses."}</p>}
+        <div className="comparison-chart-card">
+          <div className="comparison-chart-heading"><div><div className="eyebrow">{language === "sk" ? "SKUPINOVÉ POROVNANIE" : "GROUP COMPARISON"}</div><h3>{selected ? featuredMetricLabel(selected.key, language) : "—"}</h3></div><div className="comparison-legend"><span><i className="legend-cohort" />{language === "sk" ? "Skupina" : "Group"}</span></div></div>
+          {selected ? <ComparisonHistogramPlot metric={{ key: selected.key, own_value: null, cohort_average: selected.cohort_average, histogram: selected.histogram ? { ...selected.histogram, own_value: null } : null }} /> : <p className="muted">{language === "sk" ? "Údaje zatiaľ nie sú dostupné." : "Data is not available yet."}</p>}
+        </div>
+      </> : <div className="comparison-chart-card">
+        <div className="comparison-chart-heading"><div><div className="eyebrow">{language === "sk" ? "AGREGOVANÉ VŠETKY OSI" : "ALL AXES AGGREGATED"}</div><h3>{language === "sk" ? "Priemerný normalizovaný priebeh" : "Average normalized response trace"}</h3></div><div className="comparison-legend"><span><i className="legend-cohort" />{language === "sk" ? "Skupina" : "Group"}</span></div></div>
+        {response && <ComparisonResponsePlot data={{ ...response, own_mean: null }} />}
       </div>}
+      <p className="comparison-footnote">{language === "sk" ? "Každý účastník má v skupinovom priemere rovnakú váhu." : "Each participant has equal weight in the group average."}</p>
     </div>
-    <p className="welcome-featured-note">{language === "sk" ? "Každý účastník má rovnakú váhu. Počet intervalov sa prispôsobí veľkosti anonymnej skupiny." : "Each participant has equal weight. The number of bins adapts to the anonymous group size."}</p>
   </section>;
 }
 
@@ -231,9 +195,13 @@ export function WelcomeContent({ blocks, language, metrics, data = {}, assetBase
       case "metrics": {
         const live = data[block.id];
         const itemKeys = block.items ?? ["participants", "measurements", "active_tests"];
+        const aggregates = block.aggregates ?? [];
         const trends = block.trends ?? [];
         const labels: Record<string, string> = language === "sk" ? { participants: "Účastníci", measurements: "Merania", active_tests: "Aktívne testy" } : { participants: "Participants", measurements: "Measurements", active_tests: "Active tests" };
-        return <div key={block.id}>{itemKeys.length > 0 && <div className="welcome-mini-stats">{itemKeys.map((key) => <Metric key={key} label={labels[key]} value={live?.items?.find((item) => item.key === key)?.value ?? "—"} />)}</div>}{metrics && !metrics.publishable && itemKeys.some((key) => key !== "active_tests") && <p className="privacy">{language === "sk" ? `Verejné štatistiky sa zobrazia po dosiahnutí minimálnej skupiny ${metrics.minimum_group_size} účastníkov.` : `Public statistics appear once the minimum group size of ${metrics.minimum_group_size} participants is reached.`}</p>}{trends.map((trend, index) => { const result = live?.trends?.[index]; return result ? <WelcomeChart key={`${trend.metric}-${index}`} title={result.title} unit={result.unit} points={result.points} style="line" language={language} /> : null; })}</div>;
+        return <div key={block.id}>{(itemKeys.length > 0 || aggregates.length > 0) && <div className={`welcome-mini-stats ${block.size ?? "compact"}`} style={{ maxWidth: `${block.max_width ?? 510}px`, gap: `${block.gap ?? 10}px`, gridTemplateColumns: `repeat(${block.columns ?? 3}, minmax(0, 1fr))` }}>
+          {itemKeys.map((key) => <Metric key={key} label={labels[key]} value={live?.items?.find((item) => item.key === key)?.value ?? "—"} />)}
+          {aggregates.map((spec, index) => { const value = live?.aggregates?.[index]?.value; const unit = featuredLabels[spec.metric]?.unit; return <Metric key={`${index}-${spec.mode}-${spec.metric}`} label={`${spec.mode === "SCOPE" ? "SCoPE" : "SimPLE"} · ${featuredMetricLabel(spec.metric, language)}`} value={value == null ? "—" : `${number.format(value)}${unit ? ` ${unit}` : ""}`} />; })}
+        </div>}{metrics && !metrics.publishable && (itemKeys.some((key) => key !== "active_tests") || aggregates.length > 0) && <p className="privacy">{language === "sk" ? `Verejné štatistiky sa zobrazia po dosiahnutí minimálnej skupiny ${metrics.minimum_group_size} účastníkov.` : `Public statistics appear once the minimum group size of ${metrics.minimum_group_size} participants is reached.`}</p>}{trends.map((trend, index) => { const result = live?.trends?.[index]; return result ? <WelcomeChart key={`${trend.metric}-${index}`} title={result.title} unit={result.unit} points={result.points} style="line" language={language} /> : null; })}</div>;
       }
       case "data_chart": { const live = data[block.id]; return live?.points?.length ? <WelcomeChart key={block.id} title={block.title} unit={live.unit ?? ""} points={live.points} style={block.style} language={language} /> : <div key={block.id} className="welcome-chart"><strong>{block.title}</strong><p className="muted">{language === "sk" ? "Graf sa zobrazí po získaní dostatočného počtu meraní." : "The chart appears when enough measurements are available."}</p></div>; }
       case "histogram": { const live = data[block.id]; return <WelcomeHistogram key={block.id} title={block.title} unit={live?.unit ?? ""} bins={live?.bins ?? []} publishable={Boolean(live?.publishable)} language={language} />; }

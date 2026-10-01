@@ -231,30 +231,11 @@ def _featured_comparison(measurements: list[Measurement], tests: dict[str, TestD
             if (values := [record[key] for record in records if key in record])
         ]
         publishable = available and len(participant_values) >= minimum
-        bins = []
-        if publishable:
-            # Use fewer intervals when a fine histogram would reveal a small
-            # cell. One interval is always safe once the cohort is eligible.
-            for candidate in range(min(block.get("bins", 8), len(participant_values)), 0, -1):
-                distribution = histogram(participant_values, None, candidate)
-                if all(count == 0 or count >= minimum for count in distribution["counts"]):
-                    break
-            counts = distribution["counts"]
-            step = (distribution["maximum"] - distribution["minimum"]) / len(counts)
-            bins = [
-                {
-                    "start": distribution["minimum"] + index * step,
-                    "end": distribution["minimum"] + (index + 1) * step,
-                    "count": count if count == 0 or count >= minimum else None,
-                    "suppressed": 0 < count < minimum,
-                }
-                for index, count in enumerate(counts)
-            ]
         metric_cards.append({
             "key": key,
             "cohort_average": statistics.fmean(participant_values) if publishable else None,
             "participant_count": len(participant_values) if publishable else None,
-            "bins": bins,
+            "histogram": histogram(participant_values, None, block.get("bins", 12)) if publishable else None,
         })
 
     response_curve = None
@@ -280,13 +261,26 @@ def _featured_comparison(measurements: list[Measurement], tests: dict[str, TestD
     }
 
 
+def _aggregate_metric(measurements: list[Measurement], tests: dict[str, TestDefinition], spec: dict) -> float | None:
+    selected = [item for item in measurements if _measurement_mode(item, tests) == spec["mode"]
+                and (not spec.get("test_definition_id") or item.test_definition_id == spec["test_definition_id"])]
+    by_participant: dict[str, list[float]] = {}
+    for item in selected:
+        value = comparison_metrics(item.analysis_data, spec["mode"]).get(spec["metric"])
+        if value is not None:
+            by_participant.setdefault(item.participant_id, []).append(value)
+    if len(by_participant) < settings.public_min_group_size:
+        return None
+    return statistics.fmean(statistics.fmean(values) for values in by_participant.values())
+
+
 def _default_data_blocks() -> list[dict]:
     return [
         {"id": "numbers", "type": "metrics", "items": ["participants", "measurements", "active_tests"], "trends": []},
         {"id": "scope-spotlight", "type": "featured_comparison", "mode": "SCOPE",
-         "metrics": ["reaction_delay_s", "tracking_rmse", "overshoot_pct"], "bins": 8, "show_response": True},
+         "metrics": ["reaction_delay_s", "tracking_rmse", "overshoot_pct"], "bins": 12, "show_response": True},
         {"id": "simple-spotlight", "type": "featured_comparison", "mode": "SIMPLE",
-         "metrics": ["mean_target_error_m", "time_in_zone_pct", "reaction_delay_s"], "bins": 8, "show_response": True},
+         "metrics": ["mean_target_error_m", "time_in_zone_pct", "reaction_delay_s"], "bins": 12, "show_response": True},
     ]
 
 
@@ -329,6 +323,10 @@ async def _page_data(blocks: list[dict], db: AsyncSession) -> dict:
             result[block["id"]] = {
                 "items": [{"key": key, "label": {"participants": "Participants", "measurements": "Measurements", "active_tests": "Active tests"}[key], "value": values[key]}
                           for key in block.get("items", ["participants", "measurements", "active_tests"])],
+                "aggregates": [
+                    {"mode": spec["mode"], "metric": spec["metric"], "value": _aggregate_metric(measurements, tests, spec)}
+                    for spec in block.get("aggregates", [])
+                ],
                 "trends": [
                     {**spec, "title": f"{spec['metric']} · {spec['axis']}", "unit": _unit(spec["metric"]),
                      "points": _series(measurements, tests, spec["metric"], spec["axis"], spec["statistic"])}

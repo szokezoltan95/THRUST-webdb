@@ -2,7 +2,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from app.api.welcome import _featured_comparison, _is_legacy_default
+from app.api.welcome import _aggregate_metric, _featured_comparison, _is_legacy_default
+from app.api.student import histogram
 from app.core.config import settings
 
 
@@ -16,7 +17,7 @@ def _measurement(participant_id: str, reaction: float, *, second_axis: float | N
     )
 
 
-def test_public_comparison_weights_people_equally_and_suppresses_small_bins(monkeypatch):
+def test_public_comparison_uses_student_histogram_without_own_value(monkeypatch):
     monkeypatch.setattr(settings, "public_min_group_size", 3)
     tests = {"scope-1": SimpleNamespace(analysis_profile="SCOPE_STEP_RESPONSE_V1")}
     rows = [
@@ -34,8 +35,9 @@ def test_public_comparison_weights_people_equally_and_suppresses_small_bins(monk
     assert result["metrics"][0]["cohort_average"] == pytest.approx((0.35 + 0.6 + 0.8) / 3)
     assert result["participant_count"] == 3
     assert result["response_curve"] is not None
-    assert sum(bin_item["count"] or 0 for bin_item in result["metrics"][0]["bins"]) == 3
-    assert all(bin_item["count"] in (0, None) or bin_item["count"] >= 3 for bin_item in result["metrics"][0]["bins"])
+    assert result["metrics"][0]["histogram"]["counts"] == histogram([0.35, 0.6, 0.8], None, 3)["counts"]
+    assert result["metrics"][0]["histogram"]["minimum"] == pytest.approx(0.35)
+    assert result["metrics"][0]["histogram"]["own_value"] is None
     assert "p1" not in str(result) and "p2" not in str(result)
 
 
@@ -49,8 +51,18 @@ def test_public_comparison_hides_data_below_cohort_minimum(monkeypatch):
     assert result["available"] is False
     assert result["participant_count"] is None
     assert result["metrics"][0]["cohort_average"] is None
-    assert result["metrics"][0]["bins"] == []
+    assert result["metrics"][0]["histogram"] is None
     assert result["response_curve"] is None
+
+
+def test_public_aggregate_weights_people_equally_and_checks_minimum(monkeypatch):
+    monkeypatch.setattr(settings, "public_min_group_size", 3)
+    tests = {"scope-1": SimpleNamespace(analysis_profile="SCOPE_STEP_RESPONSE_V1")}
+    rows = [_measurement("p1", 0.2), _measurement("p1", 0.4), _measurement("p2", 0.6), _measurement("p3", 0.9)]
+    spec = {"mode": "SCOPE", "metric": "reaction_delay_s"}
+
+    assert _aggregate_metric(rows, tests, spec) == pytest.approx((0.3 + 0.6 + 0.9) / 3)
+    assert _aggregate_metric(rows[:3], tests, spec) is None
 
 
 def test_only_original_untouched_home_page_is_replaced_by_new_default():

@@ -44,10 +44,27 @@ class MetricTrend(BaseModel):
     statistic: Literal["mean", "median"] = "mean"
 
 
+class AggregateMetric(BaseModel):
+    mode: Literal["SCOPE", "SIMPLE"] = "SCOPE"
+    metric: str = Field(max_length=100)
+    test_definition_id: str | None = Field(default=None, max_length=64)
+
+    @model_validator(mode="after")
+    def valid_metric(self):
+        if self.metric not in COMPARISON_METRICS:
+            raise ValueError("Invalid aggregate metric")
+        return self
+
+
 class Metrics(Block):
     type: Literal["metrics"]
     items: list[Literal["participants", "measurements", "active_tests"]] = Field(default_factory=lambda: ["participants", "measurements", "active_tests"], max_length=3)
     trends: list[MetricTrend] = Field(default_factory=list, max_length=4)
+    aggregates: list[AggregateMetric] = Field(default_factory=list, max_length=12)
+    max_width: int = Field(default=540, ge=320, le=1600)
+    columns: int = Field(default=3, ge=1, le=6)
+    gap: int = Field(default=10, ge=4, le=32)
+    size: Literal["compact", "regular", "spacious"] = "compact"
 
 
 class DataChart(Block):
@@ -88,7 +105,7 @@ class FeaturedComparison(Block):
     description: str = Field(default="", max_length=400)
     mode: Literal["SCOPE", "SIMPLE"] = "SCOPE"
     metrics: list[str] = Field(min_length=1, max_length=8)
-    bins: int = Field(default=8, ge=3, le=20)
+    bins: int = Field(default=12, ge=3, le=20)
     show_response: bool = True
     test_definition_id: str | None = Field(default=None, max_length=64)
 
