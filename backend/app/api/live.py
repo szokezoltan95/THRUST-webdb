@@ -95,6 +95,9 @@ async def update_measure_presence(
         unregister_client(client_id)
         return {"status": "disconnect"}
     if payload.status == "disconnected":
+        if measure_disconnect_pending(client_id):
+            await db.delete(auth.session)
+            await db.commit()
         unregister_client(client_id)
         return {"status": "disconnected"}
 
