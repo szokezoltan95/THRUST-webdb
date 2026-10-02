@@ -98,7 +98,7 @@ type Overview = { participant_count: number; measurement_count: number };
 type Participant = { id: string; participant_code: string; is_active: boolean; created_at: string; revoked_consents?: Partial<Record<ConsentKind, string>>; birth_date?: string | null; pilot_experience?: string | null; flight_hours_range?: string | null; pilot_certificate?: string | null; primary_uav_type?: string | null; simulator_experience?: string | null; self_rated_skill?: number | null; sex?: string | null; dominant_hand?: string | null; vision_correction?: string | null; vision_diopters_left?: number | null; vision_diopters_right?: number | null; rc_experience?: string | null; fpv_experience?: string | null; game_controller_experience?: string | null; video_game_experience?: string | null; }
 type AdminAccount = { id: string; username: string; email: string | null; first_name: string | null; last_name: string | null; role: string; effective_role: string; is_active: boolean; participant_id: string | null; participant_code: string | null; created_at: string };
 type TestDefinition = { id: string; test_code: string; name: string; version: string; status: string; analysis_profile: string; configuration: Record<string, unknown>; is_active: boolean };
-type Measurement = { id: string; participant_id: string; test_definition_id: string | null; test_type: string; status: string; started_at: string; source_file_name: string | null; raw_sha256: string | null; raw_size_bytes: number | null; analysis_data: Record<string, unknown> | null };
+type Measurement = { id: string; participant_id: string; test_definition_id: string | null; test_type: string; status: string; started_at: string; source_file_name: string | null; raw_sha256: string | null; raw_size_bytes: number | null; analysis_data: Record<string, unknown> | null; human_model_status?: string; human_model_revision?: number | null; compute_quality_status?: string; compute_quality_note?: string | null };
 type ParticipantDetail = { participant: Participant; measurements: { id: string; test_type: string; status: string; started_at: string; raw_data_available?: boolean; raw_size_bytes?: number | null }[] };
 type AdminSection = "overview" | "participants" | "groups" | "trends" | "reports" | "tests" | "measurements" | "welcome" | "clients";
 type ParticipantGroup = { id: string; name: string; description: string | null; created_at: string; participant_ids: string[]; participant_codes: string[] };
@@ -1301,7 +1301,7 @@ export function App() {
                       analysis: m.analysis_data ? 1 : 0,
                     }[column as "participant" | "test" | "date" | "analysis"])).map((m) => <label className="measurement-item" key={m.id}>
                       <input type="checkbox" checked={reportMeasurementIds.includes(m.id)} onChange={(event) => setReportMeasurementIds((ids) => event.target.checked ? [...ids, m.id] : ids.filter((id) => id !== m.id))} />
-                      <strong>{participantCodeFor(m.participant_id)}</strong><span>{m.test_type}</span><span>{formatDateTime(m.started_at)}</span><small>{m.analysis_data ? t("Analýza uložená") : t("Bez uloženej analýzy")}</small>
+                      <strong>{participantCodeFor(m.participant_id)}</strong><span>{m.test_type}</span><span>{formatDateTime(m.started_at)}</span><small>{m.human_model_status === "accepted" ? tf("Human model prijatý · v{0}", m.human_model_revision ?? "—") : (m.analysis_data ? t("Analýza uložená · human model chýba") : t("Bez uloženej analýzy"))}</small>
                     </label>)}
                   </div>
                   <div className="actions report-actions"><button className="quiet" disabled={!reportMeasurementIds.length} onClick={() => void downloadProtectedFile(`/api/admin/reports/measurements.csv?${reportMeasurementIds.map((id) => `measurement_ids=${encodeURIComponent(id)}`).join("&")}`, "thrust-measurements.csv")}>{t("Stiahnuť tabuľku CSV")}</button>{reportMeasurementIds.length === 1 && (() => { const id = reportMeasurementIds[0]; const selected = measurements.find((m) => m.id === id); return <><a className="quiet" href={`/api/admin/measurements/${id}/raw`}>{t("Stiahnuť raw TSV/GZIP")}</a><button className="quiet" onClick={() => { if (selected) { const blob = new Blob([JSON.stringify(selected, null, 2)], { type: "application/json" }); const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = `measurement-${id}.json`; link.click(); URL.revokeObjectURL(link.href); } }}>{t("Stiahnuť JSON analýzy")}</button></>; })()}</div>
@@ -1411,7 +1411,7 @@ export function App() {
                       }[column as "participant" | "date" | "test" | "size" | "status"])).map((measurement) => <button className={selectedMeasurementId === measurement.id ? "measurement-item selected" : "measurement-item"} key={measurement.id} onClick={() => setSelectedMeasurementId(measurement.id)}>
                         <input type="checkbox" checked={selectedMeasurementIds.includes(measurement.id)} onChange={(event) => { event.stopPropagation(); toggleMeasurementSelection(measurement.id); }} onClick={(event) => event.stopPropagation()} />
                         <strong>{participantCodeFor(measurement.participant_id)}</strong><span>{formatDateTime(measurement.started_at)}</span><span>{measurement.test_type} · {measurement.source_file_name ?? "raw"}</span>
-                        <small>{formatBytes(measurement.raw_size_bytes)}</small><span className="measurement-status">{measurement.raw_sha256 ? t("Archivované") : t("Bez raw dát")}</span>
+                        <small>{formatBytes(measurement.raw_size_bytes)}</small><span className="measurement-status">{measurement.human_model_status === "accepted" ? tf("Model prijatý · verzia {0}", measurement.human_model_revision ?? "—") : t("Model nepočítaný")}</span>
                       </button>)}
                     </div>
                     {filteredMeasurements().length === 0 && <p className="muted empty-list">{t("Filteru nezodpovedajú žiadne archivované merania.")}</p>}
@@ -1708,13 +1708,75 @@ const initialScopeConfiguration: ScopeConfiguration = {
   grid_color: "#ffffff", label_color: "#ffffff", prompt_color: "#ff0000"
 };
 
+function HumanTransferFunction({ parameters }: { parameters: Record<string, number> }) {
+  return <div style={{ textAlign: "center", fontFamily: "Georgia, serif", fontSize: "1.3rem", padding: "14px", overflowX: "auto" }}>
+    <span>G(s) = </span><span style={{ display: "inline-grid", verticalAlign: "middle", textAlign: "center", lineHeight: 1.35 }}>
+      <span style={{ borderBottom: "1px solid currentColor", padding: "0 12px 3px" }}>{parameters.gain.toPrecision(5)} (1 + {parameters.t3_s.toPrecision(4)}s)</span>
+      <span style={{ padding: "3px 12px 0" }}>(1 + {parameters.t1_s.toPrecision(4)}s)(1 + {parameters.t2_s.toPrecision(4)}s)</span>
+    </span><span> e<sup>−{parameters.delay_s.toPrecision(4)}s</sup></span>
+  </div>;
+}
+
+function HumanModelCurve({ axis, channel }: { axis: string; channel: any }) {
+  const recording = channel?.recording;
+  if (!recording) return <section className="panel"><h3>{axis}</h3><p className="muted">{t("Graf celého záznamu nie je k dispozícii.")}</p></section>;
+  const times = recording.time_s.map((value: number) => value + (recording.time_origin_s ?? 0));
+  const scale = recording.request_span ?? 1;
+  const offset = recording.output_offset ?? 0;
+  const observed = recording.observed_normalized.map((value: number) => value * scale + offset);
+  const predicted = recording.model_normalized.map((value: number) => value * scale + offset);
+  const all = [...observed, ...predicted].filter(Number.isFinite);
+  const ymin = Math.min(...all), ymax = Math.max(...all), span = Math.max(ymax - ymin, 1e-9);
+  const xmin = times[0] ?? 0, xmax = times[times.length - 1] ?? 1;
+  const path = (values: number[]) => values.map((value, index) => {
+    const x = 42 + ((times[index] - xmin) / Math.max(xmax - xmin, 1e-9)) * 520;
+    const y = 145 - ((value - ymin) / span) * 120;
+    return `${index ? "L" : "M"} ${x.toFixed(2)} ${y.toFixed(2)}`;
+  }).join(" ");
+  return <section className="panel" style={{ minWidth: 0 }}>
+    <h3>{axis} · {channel.status}</h3>
+    <svg viewBox="0 0 580 185" role="img" aria-label={tf("Meraný záznam a model osi {0}", axis)} style={{ width: "100%", height: "auto", minHeight: 145 }}>
+      <path d="M42 25V145H562" fill="none" stroke="currentColor" opacity=".28" />
+      <path d={path(observed)} fill="none" stroke="#5798d2" strokeWidth="1.4" opacity=".66" />
+      <path d={path(predicted)} fill="none" stroke="#e94f43" strokeWidth="2.2" />
+      <text x="42" y="172" fontSize="11">{xmin.toFixed(2)} s</text><text x="520" y="172" fontSize="11">{xmax.toFixed(2)} s</text>
+      <text x="45" y="19" fontSize="10">{ymax.toPrecision(3)}</text><text x="45" y="159" fontSize="10">{ymin.toPrecision(3)}</text>
+      <line x1="315" y1="14" x2="335" y2="14" stroke="#5798d2" strokeWidth="2" /><text x="340" y="18" fontSize="10">{t("Meranie")}</text>
+      <line x1="420" y1="14" x2="440" y2="14" stroke="#e94f43" strokeWidth="2.5" /><text x="445" y="18" fontSize="10">{t("Human model")}</text>
+    </svg>
+    <p className="muted">{channel.transfer_function}</p>
+    {channel.fit?.training && <p className="muted">{tf("Fit {0}% · RMSE {1}", channel.fit.training.fit_pct?.toFixed?.(2) ?? "—", channel.fit.training.rmse?.toPrecision?.(4) ?? "—")}</p>}
+  </section>;
+}
+
+function HumanModelDetails({ measurementId }: { measurementId: string }) {
+  const [result, setResult] = useState<any>(null);
+  const [message, setMessage] = useState("");
+  useEffect(() => {
+    let active = true;
+    request<any>(`/api/admin/measurements/${measurementId}/human-models/latest`)
+      .then((value) => { if (active) { setResult(value); setMessage(""); } })
+      .catch((error) => { if (active) { setResult(null); setMessage(String(error)); } });
+    return () => { active = false; };
+  }, [measurementId]);
+  if (!result) return <section className="panel"><h3>{t("Human model")}</h3><p className="muted">{message || t("Načítavam model…")}</p></section>;
+  return <section className="participant-detail-section">
+    <div className="detail-header"><div><div className="eyebrow">{t("AKCEPTOVANÝ HUMAN MODEL")}</div><h3>{tf("Verzia {0} · {1}", result.revision, result.algorithm_version)}</h3></div></div>
+    {Object.entries(result.channels ?? {}).map(([axis, channel]: [string, any]) => <div key={axis} className="panel" style={{ marginBottom: 16 }}>
+      <HumanTransferFunction parameters={channel.fit.parameters} /><HumanModelCurve axis={axis} channel={channel} />
+      {channel.fit.warnings?.length > 0 && <p className="notice">{channel.fit.warnings.join(" · ")}</p>}
+    </div>)}
+  </section>;
+}
+
 function MeasurementDetailBody({ measurement, tests, onClose }: { measurement: Measurement; tests: TestDefinition[]; onClose: () => void }) {
   const isSimple = getMeasurementMode(measurement, tests) === "SIMPLE";
   return <>
     <div className="detail-window-bar"><div className="eyebrow">{t("DETAIL MERANIA ·")} {isSimple ? "SimPLE" : "SCoPE"}</div><div className="detail-header-actions"><button className="quiet compact" onClick={onClose}>{t("Zavrieť")}</button></div></div>
     <h2>{measurement.test_type}</h2><p className="muted">{measurement.source_file_name} · {formatDateTime(measurement.started_at)}</p>
     <div className="detail-grid"><div><span>{t("Vzorky")}</span><strong>{String(measurement.analysis_data?.sample_count ?? measurement.analysis_data?.simple_sample_count ?? "—")}</strong></div><div><span>{t("Trvanie")}</span><strong>{measurement.analysis_data?.duration_s ? `${Number(measurement.analysis_data.duration_s).toFixed(2)} s` : "—"}</strong></div><div><span>{t("Raw dáta")}</span><strong>{measurement.raw_sha256 ? tf("Archivované · {0}", formatBytes(measurement.raw_size_bytes)) : t("Nie sú dostupné")}</strong></div><div><span>{t("Merací režim")}</span><strong>{isSimple ? "SimPLE" : "SCoPE"}</strong></div></div>
-    {isSimple ? <SimpleAnalysisView analysis={measurement.analysis_data ?? {}} /> : <div className="results-layout"><div className="results-chart-column"><ResponseChart data={measurement.analysis_data?.normalized_step_response} /></div><ResponseMetrics data={measurement.analysis_data?.normalized_step_response} /></div>}
+    {measurement.compute_quality_status && measurement.compute_quality_status !== "unreviewed" && <p className={measurement.compute_quality_status === "unsuitable" ? "notice danger" : "notice"}>{tf("Kvalita pre compute: {0}", measurement.compute_quality_status)}{measurement.compute_quality_note ? ` · ${measurement.compute_quality_note}` : ""}</p>}
+    {isSimple ? <SimpleAnalysisView analysis={measurement.analysis_data ?? {}} /> : <><div className="results-layout"><div className="results-chart-column"><ResponseChart data={measurement.analysis_data?.normalized_step_response} /></div><ResponseMetrics data={measurement.analysis_data?.normalized_step_response} /></div>{measurement.human_model_status === "accepted" && <HumanModelDetails measurementId={measurement.id} />}</>}
   </>;
 }
 

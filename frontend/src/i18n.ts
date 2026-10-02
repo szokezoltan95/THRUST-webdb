@@ -762,6 +762,20 @@ export function t(value: string): string {
   return value.slice(0, value.indexOf(trimmed)) + translated + value.slice(value.indexOf(trimmed) + trimmed.length);
 }
 
+  "Human model": "Human model",
+  "AKCEPTOVANÝ HUMAN MODEL": "ACCEPTED HUMAN MODEL",
+  "Graf celého záznamu nie je k dispozícii.": "Full-recording plot is unavailable.",
+  "Meranie": "Measured data",
+  "Kvalita pre compute: {0}": "Compute data quality: {0}",
+  "Načítavam model…": "Loading model…",
+  "Meraný záznam a model osi {0}": "Measured recording and model for axis {0}",
+  "Fit {0}% · RMSE {1}": "Fit {0}% · RMSE {1}",
+  "Akceptovaný human model zatiaľ nie je uložený.": "No accepted human model is stored yet.",
+
+  "Model prijatý · verzia {0}": "Model accepted · revision {0}",
+  "Model nepočítaný": "Model not computed",
+  "Human model prijatý · v{0}": "Human model accepted · v{0}",
+  "Analýza uložená · human model chýba": "Analysis saved · human model missing",
 const englishLower = Object.fromEntries(Object.entries(english).map(([key, value]) => [key.toLocaleLowerCase("sk"), value]));
 
 /** Translate interpolated dialogs while keeping dynamic values outside the dictionary. */

@@ -18,7 +18,7 @@ from app.core.live_updates import publish_measurements_updated
 from app.core.live_updates import (client_for_disconnect, connected_clients_snapshot,
                                    notify_web_disconnect, request_measure_disconnect, unregister_client)
 from app.db.session import get_db
-from app.models import AdminSession, AdminUser, Measurement, Participant, TestDefinition, ParticipantGroup
+from app.models import AdminSession, AdminUser, Measurement, HumanModelResult, Participant, TestDefinition, ParticipantGroup
 from app.schemas.participant_group import ParticipantGroupCreate, ParticipantGroupUpdate
 from app.schemas.participant import ParticipantCreate, ParticipantResponse, ParticipantUpdate, RegisteredStudentResponse
 from app.schemas.user_admin import AccountPasswordReset, AccountRoleUpdate, AdminAccountResponse
@@ -666,11 +666,28 @@ async def create_measurement(
 async def list_measurements(
     auth: AuthContext = Depends(require_researcher),
     db: AsyncSession = Depends(get_db),
-) -> list[Measurement]:
+) -> list[dict]:
     """List measurements synchronized by THRUST or uploaded manually."""
     result = await db.scalars(select(Measurement).order_by(Measurement.started_at.desc()))
     excluded = set(await revoked_participant_consents(db)) if effective_role(auth.user) == "researcher" else set()
-    return [item for item in result if item.participant_id not in excluded]
+    visible = [item for item in result if item.participant_id not in excluded]
+    ids = [item.id for item in visible]
+    latest = {}
+    if ids:
+        models = await db.execute(select(HumanModelResult.measurement_id, HumanModelResult.revision).where(
+            HumanModelResult.measurement_id.in_(ids), HumanModelResult.review_status == "accepted"
+        ).order_by(HumanModelResult.measurement_id, HumanModelResult.revision.desc()))
+        for measurement_id, revision in models:
+            latest.setdefault(measurement_id, revision)
+    output = []
+    for item in visible:
+        revision = latest.get(item.id)
+        output.append({**MeasurementResponse.model_validate(item).model_dump(),
+                       "human_model_status": "accepted" if revision else "not_computed",
+                       "human_model_revision": revision,
+                       "compute_quality_status": item.compute_quality_status,
+                       "compute_quality_note": item.compute_quality_note})
+    return output
 
 
 @router.get("/measurements/{measurement_id}", response_model=MeasurementResponse)
@@ -678,13 +695,21 @@ async def measurement_detail(
     measurement_id: str,
     auth: AuthContext = Depends(require_researcher),
     db: AsyncSession = Depends(get_db),
-) -> Measurement:
+) -> dict:
     measurement = await db.get(Measurement, measurement_id)
     if measurement is None:
         raise HTTPException(status_code=404, detail="Meranie neexistuje.")
     if effective_role(auth.user) == "researcher" and measurement.participant_id in await revoked_participant_consents(db):
         raise HTTPException(status_code=404, detail="Meranie nie je dostupné.")
-    return measurement
+    revision = await db.scalar(select(HumanModelResult.revision).where(
+        HumanModelResult.measurement_id == measurement_id,
+        HumanModelResult.review_status == "accepted",
+    ).order_by(HumanModelResult.revision.desc()).limit(1))
+    return {**MeasurementResponse.model_validate(measurement).model_dump(),
+            "human_model_status": "accepted" if revision else "not_computed",
+            "human_model_revision": revision,
+            "compute_quality_status": measurement.compute_quality_status,
+            "compute_quality_note": measurement.compute_quality_note}
 
 
 @router.get("/measurements/{measurement_id}/raw")

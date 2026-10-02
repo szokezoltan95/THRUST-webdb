@@ -70,5 +70,9 @@ class MeasurementResponse(BaseModel):
     raw_sha256: str | None
     raw_size_bytes: int | None
     analysis_data: dict | None
+    human_model_status: str = "not_computed"
+    human_model_revision: int | None = None
+    compute_quality_status: str = "unreviewed"
+    compute_quality_note: str | None = None
 
     model_config = {"from_attributes": True}
