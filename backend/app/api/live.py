@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.dependencies import AuthContext, effective_role, require_admin, require_authenticated, require_user_csrf
 from app.core.live_updates import (
     connected_clients_snapshot,
+    measure_disconnect_pending,
     register_web_client,
     subscribe,
     unregister_client,
@@ -36,7 +37,8 @@ async def live_events(
 ) -> StreamingResponse:
     queue = subscribe()
     connection_id = f"web:{uuid4()}"
-    register_web_client(connection_id, auth.user.username, effective_role(auth.user), _client_ip(request))
+    register_web_client(connection_id, auth.user.username, effective_role(auth.user), _client_ip(request),
+                        auth.session.token_hash, queue)
 
     async def stream():
         try:
@@ -48,6 +50,8 @@ async def live_events(
                     yield ": keep-alive\n\n"
                     continue
                 yield f"event: {event_name}\ndata: {{}}\n\n"
+                if event_name == "force_logout":
+                    break
         finally:
             unsubscribe(queue)
             unregister_client(connection_id)
@@ -70,7 +74,7 @@ async def live_clients(
 
 
 class MeasurePresenceUpdate(BaseModel):
-    status: Literal["idle", "measuring", "disconnected"]
+    status: Literal["idle", "measuring", "disconnected", "disconnect_ack"]
     participant_id: str | None = None
     test_definition_id: str | None = None
 
@@ -83,6 +87,13 @@ async def update_measure_presence(
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, str]:
     client_id = f"measure:{auth.session.token_hash}"
+    if payload.status == "disconnect_ack":
+        if not measure_disconnect_pending(client_id):
+            raise HTTPException(status_code=409, detail="Odpojenie klienta nebolo vyžiadané.")
+        await db.delete(auth.session)
+        await db.commit()
+        unregister_client(client_id)
+        return {"status": "disconnect"}
     if payload.status == "disconnected":
         unregister_client(client_id)
         return {"status": "disconnected"}
@@ -115,5 +126,6 @@ async def update_measure_presence(
         status=payload.status,
         participant_code=participant_code,
         test=test_label,
+        session_hash=auth.session.token_hash,
     )
-    return {"status": payload.status}
+    return {"status": "disconnect_pending" if measure_disconnect_pending(client_id) else payload.status}

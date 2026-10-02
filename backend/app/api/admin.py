@@ -14,7 +14,8 @@ from app.core.config import settings
 from app.core.raw_logs import RawUploadInvalid, RawUploadTooLarge, decode_raw_upload
 from app.core.measurement_results import validate_measurement_result
 from app.core.live_updates import publish_measurements_updated
-from app.core.live_updates import connected_clients_snapshot
+from app.core.live_updates import (client_for_disconnect, connected_clients_snapshot,
+                                   notify_web_disconnect, request_measure_disconnect, unregister_client)
 from app.db.session import get_db
 from app.models import AdminSession, AdminUser, Measurement, Participant, TestDefinition, ParticipantGroup
 from app.schemas.participant_group import ParticipantGroupCreate, ParticipantGroupUpdate
@@ -717,6 +718,27 @@ async def connected_clients(
     auth: AuthContext = Depends(require_admin),
 ) -> list[dict]:
     return connected_clients_snapshot()
+
+
+@router.post("/clients/{client_id}/disconnect")
+async def disconnect_client(
+    client_id: str,
+    auth: AuthContext = Depends(require_csrf),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, str]:
+    client = client_for_disconnect(client_id)
+    if client is None or client["client_type"] not in {"web", "measure"}:
+        raise HTTPException(status_code=404, detail="Klient už nie je pripojený.")
+    if client["client_type"] == "measure":
+        request_measure_disconnect(client_id)
+        return {"status": "pending"}
+
+    session = await db.get(AdminSession, client["session_hash"])
+    if session is not None:
+        await db.delete(session)
+        await db.commit()
+    notify_web_disconnect(client_id)
+    return {"status": "disconnected"}
 
 
 @router.get("/overview")

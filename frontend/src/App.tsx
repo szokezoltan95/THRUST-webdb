@@ -554,6 +554,14 @@ export function App() {
       if (document.visibilityState === "visible") refresh();
     };
     stream.addEventListener("measurement_updated", refresh);
+    stream.addEventListener("force_logout", () => {
+      stream.close();
+      setUser(null);
+      setOverview(null);
+      setAccentTheme("blue");
+      setColorMode("dark");
+      window.alert(t("Správca odpojil tvoju reláciu WebDB. Prihlás sa znova."));
+    });
     document.addEventListener("visibilitychange", refreshWhenVisible);
     return () => {
       stream.close();
@@ -1134,7 +1142,7 @@ export function App() {
             <header className="topbar"><button type="button" className="mobile-menu-toggle" aria-label={mobileNavOpen ? t("Zavrieť menu") : t("Otvoriť menu")} aria-expanded={mobileNavOpen} onClick={() => setMobileNavOpen((open) => !open)}><span /><span /><span /></button><div className="topbar-title"><div className="eyebrow">{t("ADMINISTRÁCIA ·")} {user.role.toUpperCase()}</div><h1>{activeSection === "overview" ? t("Prehľad meraní") : activeSection === "participants" ? t("Účastníci a účty") : activeSection === "groups" ? t("Skupiny") : activeSection === "trends" ? t("Trendy") : activeSection === "reports" ? t("Exporty a reporty") : activeSection === "tests" ? t("Testy a konfigurácie") : activeSection === "welcome" ? t("Úvodná stránka") : activeSection === "clients" ? t("Pripojení klienti") : t("Merania a výsledky")}</h1></div><div className="header-actions"><AppearanceControls accentTheme={accentTheme} colorMode={colorMode} onAccentChange={(theme) => void saveAppearance(theme, colorMode)} onModeChange={(mode) => void saveAppearance(accentTheme, mode)} /><LanguageSwitcher /><span className="status-dot">{t("Systém online")}</span></div></header>
             <section className="workspace">
               {activeSection === "welcome" && (user.role === "admin" || user.role === "superadmin") && <WelcomeEditor csrfToken={user.csrf_token} initialLanguage={language} metrics={metrics} />}
-              {activeSection === "clients" && (user.role === "admin" || user.role === "superadmin") && <ClientMonitor />}
+              {activeSection === "clients" && (user.role === "admin" || user.role === "superadmin") && <ClientMonitor csrfToken={user.csrf_token} />}
               {activeSection === "overview" && <>
                 <div className="stats"><Metric label={t("Účastníci")} value={overview?.participant_count ?? "—"} /><Metric label={t("Merania")} value={overview?.measurement_count ?? "—"} /><Metric label={t("Čakajúce synchronizácie")} value="0" /></div>
                 <div className="empty"><span>01</span><div><h2>{t("Databáza je pripravená")}</h2><p>{t("Vyber sekciu vľavo alebo začni vytvorením účastníka.")}</p></div></div>
@@ -2085,6 +2093,7 @@ type ConnectedClient = {
   connected_for_seconds: number;
   last_seen_seconds: number;
   status: "idle" | "measuring";
+  disconnect_pending: boolean;
   participant_code: string | null;
   test: string | null;
 };
@@ -2093,10 +2102,31 @@ function formatDuration(seconds: number): string {
   return `${Math.floor(seconds / 60)} min`;
 }
 
-function ClientMonitor() {
+function ClientMonitor({ csrfToken }: { csrfToken: string }) {
   const [clients, setClients] = useState<ConnectedClient[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [disconnecting, setDisconnecting] = useState<string | null>(null);
+  async function disconnect(client: ConnectedClient) {
+    if (!window.confirm(client.client_type === "measure"
+      ? tf("Odpojiť THRUST-measure klienta {0} po dokončení aktuálneho merania?", client.username)
+      : tf("Odhlásiť webového klienta {0}?", client.username))) return;
+    setDisconnecting(client.client_id);
+    setError("");
+    try {
+      const result = await request<{ status: "pending" | "disconnected" }>(
+        `/api/admin/clients/${encodeURIComponent(client.client_id)}/disconnect`,
+        { method: "POST", headers: { "X-CSRF-Token": csrfToken } },
+      );
+      setClients(current => result.status === "pending"
+        ? current.map(item => item.client_id === client.client_id ? { ...item, disconnect_pending: true } : item)
+        : current.filter(item => item.client_id !== client.client_id));
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : t("Klienta sa nepodarilo odpojiť."));
+    } finally {
+      setDisconnecting(null);
+    }
+  }
   useEffect(() => {
     let active = true;
     let inFlight = false;
@@ -2142,6 +2172,11 @@ function ClientMonitor() {
           <div><dt>{t("IP adresa")}</dt><dd>{client.ip_address || "—"}</dd></div>
           <div><dt>{t("Posledná aktivita")}</dt><dd>{formatDuration(client.last_seen_seconds)} {t("dozadu")}</dd></div>
         </dl>
+        <div className="client-monitor-actions">
+          {client.disconnect_pending && <span className="muted">{t("Odpojenie po dokončení merania")}</span>}
+          <button type="button" className="quiet compact" disabled={client.disconnect_pending || disconnecting === client.client_id}
+            onClick={() => void disconnect(client)}>{disconnecting === client.client_id ? t("Odpájam…") : t("Odpojiť klienta")}</button>
+        </div>
       </article>)}</div>}
   </section>;
 }

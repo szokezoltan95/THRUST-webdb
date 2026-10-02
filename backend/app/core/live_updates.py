@@ -9,6 +9,8 @@ from typing import Any
 
 _subscribers: set[asyncio.Queue[str]] = set()
 _clients: dict[str, dict[str, Any]] = {}
+_web_queues: dict[str, asyncio.Queue[str]] = {}
+_pending_measure_disconnects: set[str] = set()
 _MEASURE_CLIENT_TTL_SECONDS = 35
 
 
@@ -32,13 +34,15 @@ def publish_measurements_updated() -> None:
             queue.put_nowait("measurement_updated")
 
 
-def register_web_client(client_id: str, username: str, role: str, ip_address: str | None) -> None:
+def register_web_client(client_id: str, username: str, role: str, ip_address: str | None,
+                        session_hash: str, queue: asyncio.Queue[str]) -> None:
     now = _utcnow()
     _clients[client_id] = {
         "client_id": client_id,
         "username": username,
         "role": role,
         "client_type": "web",
+        "session_hash": session_hash,
         "ip_address": ip_address,
         "connected_at": now,
         "last_seen_at": now,
@@ -46,6 +50,7 @@ def register_web_client(client_id: str, username: str, role: str, ip_address: st
         "participant_code": None,
         "test": None,
     }
+    _web_queues[client_id] = queue
 
 
 def update_measure_client(
@@ -56,6 +61,7 @@ def update_measure_client(
     status: str,
     participant_code: str | None,
     test: str | None,
+    session_hash: str,
 ) -> None:
     now = _utcnow()
     existing = _clients.get(client_id)
@@ -64,6 +70,7 @@ def update_measure_client(
         "username": username,
         "role": role,
         "client_type": "measure",
+        "session_hash": session_hash,
         "ip_address": ip_address,
         "connected_at": existing["connected_at"] if existing else now,
         "last_seen_at": now,
@@ -75,6 +82,34 @@ def update_measure_client(
 
 def unregister_client(client_id: str) -> None:
     _clients.pop(client_id, None)
+    _web_queues.pop(client_id, None)
+    _pending_measure_disconnects.discard(client_id)
+
+
+def client_for_disconnect(client_id: str) -> dict[str, Any] | None:
+    connected_clients_snapshot()
+    return _clients.get(client_id)
+
+
+def request_measure_disconnect(client_id: str) -> None:
+    _pending_measure_disconnects.add(client_id)
+
+
+def measure_disconnect_pending(client_id: str) -> bool:
+    return client_id in _pending_measure_disconnects
+
+
+def notify_web_disconnect(client_id: str) -> None:
+    client = _clients.get(client_id)
+    if client is None:
+        return
+    # Browser tabs may share the same cookie. Revoking it logs out all tabs.
+    for key, queue in tuple(_web_queues.items()):
+        if _clients.get(key, {}).get("session_hash") != client["session_hash"]:
+            continue
+        if queue.full():
+            queue.get_nowait()
+        queue.put_nowait("force_logout")
 
 
 def connected_clients_snapshot() -> list[dict[str, Any]]:
@@ -90,7 +125,8 @@ def connected_clients_snapshot() -> list[dict[str, Any]]:
     clients = []
     for value in _clients.values():
         clients.append({
-            **value,
+            **{key: item for key, item in value.items() if key != "session_hash"},
+            "disconnect_pending": value["client_id"] in _pending_measure_disconnects,
             "connected_at": value["connected_at"].isoformat(),
             "last_seen_at": value["last_seen_at"].isoformat(),
             "connected_for_seconds": max(0, int((now - value["connected_at"]).total_seconds())),

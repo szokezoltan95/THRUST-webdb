@@ -1441,6 +1441,7 @@ main[data-color-mode="light"] .test-attendance.completed { color: #167e53; backg
 .client-monitor-fields div { min-width: 0; }
 .client-monitor-fields dt { color: var(--text-muted); font-size: 12px; }
 .client-monitor-fields dd { margin: 4px 0 0; overflow-wrap: anywhere; font-weight: 600; }
+.client-monitor-actions { display: flex; justify-content: flex-end; align-items: center; gap: 12px; margin-top: 18px; flex-wrap: wrap; }
 @media (max-width: 540px) {
   .client-monitor-card-head { flex-direction: column; }
   .client-monitor-fields { grid-template-columns: 1fr; }

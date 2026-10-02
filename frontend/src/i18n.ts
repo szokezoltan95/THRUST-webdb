@@ -716,6 +716,13 @@ const english: Record<string, string> = {
   "Posledná aktivita": "Last activity",
   "dozadu": "ago",
   "Načítavam klientov…": "Loading clients…",
+  "Odpojiť klienta": "Disconnect client",
+  "Odpájam…": "Disconnecting…",
+  "Odpojenie po dokončení merania": "Disconnect after measurement finishes",
+  "Klienta sa nepodarilo odpojiť.": "Could not disconnect the client.",
+  "Odpojiť THRUST-measure klienta {0} po dokončení aktuálneho merania?": "Disconnect THRUST-measure client {0} after the current measurement finishes?",
+  "Odhlásiť webového klienta {0}?": "Sign out web client {0}?",
+  "Správca odpojil tvoju reláciu WebDB. Prihlás sa znova.": "An administrator disconnected your WebDB session. Sign in again.",
 };
 
 const STORAGE_KEY = "thrust-webdb-language";
