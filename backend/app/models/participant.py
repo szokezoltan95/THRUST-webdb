@@ -13,6 +13,8 @@ class Participant(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     participant_code: Mapped[str] = mapped_column(String(5), unique=True, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    research_withdrawn_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    gdpr_withdrawn_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     birth_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     pilot_experience: Mapped[str | None] = mapped_column(String(20), nullable=True)
     flight_hours_range: Mapped[str | None] = mapped_column(String(20), nullable=True)

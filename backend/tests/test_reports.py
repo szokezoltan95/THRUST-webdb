@@ -61,3 +61,20 @@ async def test_group_trends_return_member_mean_and_individual_series():
     assert by_name["Cohort"]["points"][0]["mean"] == 3
     assert by_name["Cohort"]["points"][0]["participant_count"] == 2
     assert by_name["Cohort"]["points"][0]["measurement_count"] == 2
+
+
+@pytest.mark.asyncio
+async def test_group_trends_exclude_withdrawn_participant():
+    p1 = Participant(id="p1", participant_code="AAAAA")
+    p2 = Participant(id="p2", participant_code="BBBBB", research_withdrawn_at=datetime(2026, 2, 1, tzinfo=timezone.utc))
+    group = ParticipantGroup(id="g1", name="Cohort", members=[p1, p2])
+    when = datetime(2026, 1, 5, tzinfo=timezone.utc)
+    rows = [Measurement(id=f"m{i}", participant_id=p.id, test_type="Scope v1", status="completed",
+                        started_at=when, analysis_data={"metrics": {"score": i * 2}})
+            for i, p in enumerate((p1, p2), start=1)]
+    db = _FakeDB([group], [p1, p2], rows)
+    result = await _trend_data(db, ["p1", "p2"], ["g1"], "score", "date", None, None)
+    by_name = {series["subject"]: series for series in result["series"]}
+    assert "BBBBB" not in by_name
+    assert by_name["Cohort"]["points"][0]["participant_count"] == 1
+    assert by_name["Cohort"]["points"][0]["mean"] == 2

@@ -95,7 +95,7 @@ type PublicMetrics = {
 
 type User = { username: string; role: string; csrf_token: string; email?: string | null; participant_id?: string | null; participant_code?: string | null; first_name?: string | null; last_name?: string | null; accent_theme?: AccentTheme; color_mode?: ColorMode };
 type Overview = { participant_count: number; measurement_count: number };
-type Participant = { id: string; participant_code: string; is_active: boolean; created_at: string; birth_date?: string | null; pilot_experience?: string | null; flight_hours_range?: string | null; pilot_certificate?: string | null; primary_uav_type?: string | null; simulator_experience?: string | null; self_rated_skill?: number | null; sex?: string | null; dominant_hand?: string | null; vision_correction?: string | null; vision_diopters_left?: number | null; vision_diopters_right?: number | null; rc_experience?: string | null; fpv_experience?: string | null; game_controller_experience?: string | null; video_game_experience?: string | null; }
+type Participant = { id: string; participant_code: string; is_active: boolean; created_at: string; revoked_consents?: Partial<Record<ConsentKind, string>>; birth_date?: string | null; pilot_experience?: string | null; flight_hours_range?: string | null; pilot_certificate?: string | null; primary_uav_type?: string | null; simulator_experience?: string | null; self_rated_skill?: number | null; sex?: string | null; dominant_hand?: string | null; vision_correction?: string | null; vision_diopters_left?: number | null; vision_diopters_right?: number | null; rc_experience?: string | null; fpv_experience?: string | null; game_controller_experience?: string | null; video_game_experience?: string | null; }
 type AdminAccount = { id: string; username: string; email: string | null; first_name: string | null; last_name: string | null; role: string; effective_role: string; is_active: boolean; participant_id: string | null; participant_code: string | null; created_at: string };
 type TestDefinition = { id: string; test_code: string; name: string; version: string; status: string; analysis_profile: string; configuration: Record<string, unknown>; is_active: boolean };
 type Measurement = { id: string; participant_id: string; test_definition_id: string | null; test_type: string; status: string; started_at: string; source_file_name: string | null; raw_sha256: string | null; raw_size_bytes: number | null; analysis_data: Record<string, unknown> | null };
@@ -1160,7 +1160,7 @@ export function App() {
                       const last = rows.length ? rows[0].started_at : null;
                       const account = adminAccounts.find((item) => item.participant_id === participant.id) || null;
                       return <div className="data-table-row" key={participant.id}>
-                        <strong>{participant.participant_code}</strong>
+                        <strong>{participant.participant_code}{(participant.revoked_consents?.research || participant.revoked_consents?.gdpr) && <small className="consent-review-badge">{t("Vyžaduje riešenie")}</small>}</strong>
                         <span>{account ? <><strong>{[account.first_name, account.last_name].filter(Boolean).join(" ") || account.username}</strong><small className="student-email">{account.email || account.username} · {account.effective_role}</small></> : <span className="muted">{user.role === "researcher" ? t("Osobný účet skrytý") : t("Manuálny účastník")}</span>}</span>
                         <span>{first ? formatDate(first) : "—"}</span>
                         <span>{last ? formatDate(last) : "—"}</span>
@@ -1185,6 +1185,13 @@ export function App() {
                   if (participantDialog === "detail") return <section className="browser-detail detail-modal-open participant-detail-modal">
                      <div className="detail-header"><div><div className="eyebrow">{t("DETAIL ÚČASTNÍKA")}</div><h2>{participant.participant_code}</h2></div><div className="detail-header-actions"><ModeSwitch value={resultMode} onChange={changeResultMode} /><button className="quiet compact" onClick={() => { setParticipantDialog(null); setSelectedMeasurementId(null); }}>{t("Zavrieť")}</button></div></div>
                      {accountMessage && <p className="notice">{accountMessage}</p>}
+
+                     {(participant.revoked_consents?.research || participant.revoked_consents?.gdpr) && <section className="participant-detail-section consent-review-panel"><div className="eyebrow">{t("VYŽADUJE RIEŠENIE")}</div><h3>{t("Odvolané súhlasy")}</h3>
+                       {participant.revoked_consents.research && <p>{t("Výskumný súhlas odvolaný")}: {formatDateTime(participant.revoked_consents.research)}</p>}
+                       {participant.revoked_consents.gdpr && <p>{t("Súhlas s osobnými údajmi odvolaný")}: {formatDateTime(participant.revoked_consents.gdpr)}</p>}
+                       <p className="muted">{t("Nové merania sú pozastavené a účastník je vynechaný z výskumných výstupov. Posúďte existujúce údaje a zvoľte primeraný krok; samotné odvolanie ich automaticky nevymazáva.")}</p>
+                       {user?.role === "superadmin" && <div className="actions">{linkedAccount && linkedAccount.effective_role !== "superadmin" && <button className="quiet compact" onClick={() => void anonymizeAccount(linkedAccount)}>{t("Deaktivovať a anonymizovať konto")}</button>}<button className="quiet compact danger" onClick={() => void permanentlyDeleteParticipant(participant, linkedAccount)}>{t("Trvalo vymazať všetko")}</button></div>}
+                     </section>}
 
                      <section className="participant-detail-section">
                        <div className="participant-section-heading"><div><div className="eyebrow">{t("SÚHRN VÝSLEDKOV")}</div><h3>{resultMode === "SCOPE" ? "SCoPE" : "SimPLE"}</h3></div></div>
@@ -1244,7 +1251,7 @@ export function App() {
                        </div>
                      </section>}
                      {user?.role === "superadmin" && (!linkedAccount || linkedAccount.effective_role !== "superadmin") && <div className="participant-purge-row"><p className="muted">{t("Úplné vymazanie odstráni konto, súhlasy, účastníka, merania aj archivované raw súbory.")}</p><button className="quiet compact danger" onClick={() => void permanentlyDeleteParticipant(participant, linkedAccount)}>{t("Trvalo vymazať všetko")}</button></div>}
-                     {(user?.role === "admin" || user?.role === "superadmin") && <section className="participant-detail-section participant-edit-section"><div className="participant-section-heading"><div><div className="eyebrow">{t("EDITÁCIA")}</div><h3>{t("Upraviť údaje účastníka")}</h3></div></div><ParticipantProfileEditor participant={participant} csrfToken={user.csrf_token} onSaved={(updated) => { setParticipants((items) => items.map((item) => item.id === updated.id ? updated : item)); setSelectedParticipant((current) => current ? { ...current, participant: updated } : current); setAccountMessage(t("Profil účastníka bol uložený.")); }} /></section>}
+                     {(user?.role === "admin" || user?.role === "superadmin") && <section className="participant-detail-section participant-edit-section"><div className="participant-section-heading"><div><div className="eyebrow">{t("EDITÁCIA")}</div><h3>{t("Upraviť údaje účastníka")}</h3></div></div><ParticipantProfileEditor participant={participant} csrfToken={user.csrf_token} onSaved={(updated) => { const withConsent = { ...updated, revoked_consents: participant.revoked_consents }; setParticipants((items) => items.map((item) => item.id === updated.id ? withConsent : item)); setSelectedParticipant((current) => current ? { ...current, participant: withConsent } : current); setAccountMessage(t("Profil účastníka bol uložený.")); }} /></section>}
                    </section>;
                    return <section className="browser-detail detail-modal-open participant-detail-modal">
                     <div className="detail-header"><div><div className="eyebrow">{t("MERANIA ÚČASTNÍKA")}</div><h2>{participant.participant_code}</h2></div><div className="detail-header-actions"><ModeSwitch value={resultMode} onChange={changeResultMode} /><button className="quiet compact" onClick={() => { setParticipantDialog(null); setSelectedMeasurementId(null); }}>{t("Zavrieť")}</button></div></div>
@@ -2325,7 +2332,7 @@ function StudentPortal({ user, onLogout, accentTheme, colorMode, onAppearanceCha
         headers: { "X-CSRF-Token": user.csrf_token },
       });
       setConsents(await request<ConsentStatuses>("/api/student/consents"));
-      setConsentMessage(tf("Súhlas „{0}“ bol odvolaný.", name));
+      setConsentMessage(tf("Súhlas „{0}“ bol odvolaný. Ďalšie merania sú pozastavené a existujúce údaje posúdi správca.", name));
     } catch (reason) {
       setConsentMessage(reason instanceof Error ? reason.message : t("Súhlas sa nepodarilo odvolať."));
     }

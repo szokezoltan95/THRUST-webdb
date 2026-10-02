@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import AuthContext, require_admin, require_csrf
 from app.core.config import settings
+from app.core.consent_guard import revoked_participant_consents
 from app.db.session import get_db
 from app.api.reports import _metric_map
 from app.api.student import (
@@ -49,11 +50,7 @@ async def _source_records(db: AsyncSession) -> tuple[list[Measurement], dict[str
     measurements = list(await db.scalars(
         select(Measurement).where(Measurement.status.in_(["completed", "recorded"])).order_by(Measurement.started_at)
     ))
-    revoked = set(await db.scalars(
-        select(AdminUser.participant_id)
-        .join(ResearchConsent, ResearchConsent.user_id == AdminUser.id)
-        .where(AdminUser.participant_id.is_not(None), ResearchConsent.consent_type == "research", ResearchConsent.revoked_at.is_not(None))
-    ))
+    revoked = set(await revoked_participant_consents(db))
     measurements = [item for item in measurements if item.participant_id not in revoked]
     tests = {test.id: test for test in await db.scalars(select(TestDefinition))}
     return measurements, tests

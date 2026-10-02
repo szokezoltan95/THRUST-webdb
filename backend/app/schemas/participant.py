@@ -87,6 +87,7 @@ class ParticipantResponse(BaseModel):
     participant_code: str
     is_active: bool
     created_at: datetime
+    revoked_consents: dict[str, datetime] = Field(default_factory=dict)
     birth_date: date | None = None
     pilot_experience: str | None = None
     flight_hours_range: str | None = None

@@ -13,6 +13,7 @@ from app.api.dependencies import AuthContext, effective_role, require_admin, req
 from app.core.config import settings
 from app.core.raw_logs import RawUploadInvalid, RawUploadTooLarge, decode_raw_upload
 from app.core.measurement_results import validate_measurement_result
+from app.core.consent_guard import require_active_consents, revoked_participant_consents
 from app.core.live_updates import publish_measurements_updated
 from app.core.live_updates import (client_for_disconnect, connected_clients_snapshot,
                                    notify_web_disconnect, request_measure_disconnect, unregister_client)
@@ -162,9 +163,12 @@ def normalize_test_configuration(source: dict, analysis_profile: str = "SCOPE_ST
 async def list_participants(
     auth: AuthContext = Depends(require_researcher),
     db: AsyncSession = Depends(get_db),
-) -> list[Participant]:
+) -> list[dict]:
     result = await db.scalars(select(Participant).order_by(Participant.created_at.desc()))
-    return list(result)
+    flags = await revoked_participant_consents(db)
+    return [{**ParticipantResponse.model_validate(item).model_dump(),
+             "revoked_consents": flags.get(item.id, {})} for item in result
+            if effective_role(auth.user) != "researcher" or item.id not in flags]
 
 
 @router.get("/users", response_model=list[AdminAccountResponse])
@@ -288,7 +292,6 @@ async def permanently_delete_participant(
     participant = await db.get(Participant, participant_id)
     if participant is None:
         raise HTTPException(status_code=404, detail="Účastník neexistuje.")
-
     linked_account = await db.scalar(select(AdminUser).where(AdminUser.participant_id == participant.id))
     if linked_account is not None and (
         linked_account.id == auth.user.id or effective_role(linked_account) == "superadmin"
@@ -572,11 +575,15 @@ async def participant_detail(
     participant = await db.get(Participant, participant_id)
     if participant is None:
         raise HTTPException(status_code=404, detail="Účastník neexistuje.")
+    flags = await revoked_participant_consents(db)
+    if effective_role(auth.user) == "researcher" and participant.id in flags:
+        raise HTTPException(status_code=404, detail="Účastník nie je dostupný.")
     measurements = await db.scalars(
         select(Measurement).where(Measurement.participant_id == participant_id).order_by(Measurement.started_at.desc())
     )
     return {
-        "participant": ParticipantResponse.model_validate(participant).model_dump(mode="json"),
+        "participant": {**ParticipantResponse.model_validate(participant).model_dump(mode="json"),
+                        "revoked_consents": flags.get(participant.id, {})},
         "measurements": [
             {
                 "id": item.id,
@@ -601,6 +608,7 @@ async def create_measurement(
     participant = await db.get(Participant, payload.participant_id)
     if participant is None or not participant.is_active:
         raise HTTPException(status_code=404, detail="Aktívny účastník neexistuje.")
+    await require_active_consents(db, participant.id)
     test = await db.get(TestDefinition, payload.test_definition_id)
     if test is None:
         raise HTTPException(status_code=404, detail="Typ testu neexistuje.")
@@ -661,7 +669,8 @@ async def list_measurements(
 ) -> list[Measurement]:
     """List measurements synchronized by THRUST or uploaded manually."""
     result = await db.scalars(select(Measurement).order_by(Measurement.started_at.desc()))
-    return list(result)
+    excluded = set(await revoked_participant_consents(db)) if effective_role(auth.user) == "researcher" else set()
+    return [item for item in result if item.participant_id not in excluded]
 
 
 @router.get("/measurements/{measurement_id}", response_model=MeasurementResponse)
@@ -673,6 +682,8 @@ async def measurement_detail(
     measurement = await db.get(Measurement, measurement_id)
     if measurement is None:
         raise HTTPException(status_code=404, detail="Meranie neexistuje.")
+    if effective_role(auth.user) == "researcher" and measurement.participant_id in await revoked_participant_consents(db):
+        raise HTTPException(status_code=404, detail="Meranie nie je dostupné.")
     return measurement
 
 
@@ -681,6 +692,8 @@ async def download_measurement_raw(measurement_id: str, auth: AuthContext = Depe
     measurement = await db.get(Measurement, measurement_id)
     if measurement is None:
         raise HTTPException(status_code=404, detail="Meranie neexistuje.")
+    if effective_role(auth.user) == "researcher" and measurement.participant_id in await revoked_participant_consents(db):
+        raise HTTPException(status_code=404, detail="Meranie nie je dostupné.")
     if not measurement.raw_storage_path:
         raise HTTPException(status_code=404, detail="Raw súbor nie je archivovaný.")
     storage_root = Path(settings.measurement_storage_path).resolve()
@@ -746,9 +759,10 @@ async def overview(
     auth: AuthContext = Depends(require_researcher),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
-    participants = await db.scalar(select(func.count()).select_from(Participant)) or 0
+    excluded = set(await revoked_participant_consents(db)) if effective_role(auth.user) == "researcher" else set()
+    participants = await db.scalar(select(func.count()).select_from(Participant).where(Participant.id.not_in(excluded))) or 0
     measurements = await db.scalar(
-        select(func.count()).select_from(Measurement).where(Measurement.raw_storage_path.is_not(None))
+        select(func.count()).select_from(Measurement).where(Measurement.raw_storage_path.is_not(None), Measurement.participant_id.not_in(excluded))
     ) or 0
     return {
         "username": auth.user.username,

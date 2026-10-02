@@ -14,6 +14,8 @@ from app.api.dependencies import AuthContext, require_authenticated, require_use
 from app.core.config import settings
 from app.core.raw_logs import RawUploadInvalid, RawUploadTooLarge, decode_raw_upload
 from app.core.measurement_results import validate_measurement_result
+from app.core.consent_guard import require_active_consents, revoked_participant_consents
+from app.core.live_updates import publish_measurements_updated
 from app.db.session import get_db
 from app.models import AdminUser, Measurement, Participant, ResearchConsent, TestDefinition
 from app.schemas.auth import StudentProfileResponse
@@ -272,17 +274,7 @@ async def comparison(
         .order_by(Measurement.started_at.desc())
     )
     own = [item for item in own_result if belongs_to_mode(item)]
-    revoked_participant_ids = set(
-        await db.scalars(
-            select(AdminUser.participant_id)
-            .join(ResearchConsent, ResearchConsent.user_id == AdminUser.id)
-            .where(
-                AdminUser.participant_id.is_not(None),
-                ResearchConsent.consent_type == "research",
-                ResearchConsent.revoked_at.is_not(None),
-            )
-        )
-    )
+    revoked_participant_ids = set(await revoked_participant_consents(db))
     cohort_result = await db.scalars(select(Measurement).where(Measurement.status.in_(["completed", "recorded"])))
     cohort = [
         item for item in cohort_result
@@ -409,6 +401,7 @@ async def create_measurement(
     test = await db.get(TestDefinition, payload.test_definition_id)
     if participant is None or not participant.is_active or test is None:
         raise HTTPException(status_code=404, detail="Aktívny účastník alebo test neexistuje.")
+    await require_active_consents(db, participant.id)
     try:
         raw_bytes = decode_raw_upload(
             payload.raw_log_base64,
@@ -494,7 +487,11 @@ async def _revoke_consent(auth: AuthContext, db: AsyncSession, consent_type: str
     )
     if consent is not None:
         consent.revoked_at = datetime.now(timezone.utc)
+        participant = await db.get(Participant, student.participant_id)
+        if participant is not None:
+            setattr(participant, f"{consent_type}_withdrawn_at", consent.revoked_at)
         await db.commit()
+        publish_measurements_updated()
 
 
 @router.post("/consent/{consent_type}/revoke", status_code=204)

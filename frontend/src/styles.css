@@ -584,6 +584,9 @@ header > .actions, .registration-header > .actions { margin-top: 0; align-items:
   grid-template-columns: minmax(95px, .75fr) minmax(190px, 1.5fr) minmax(110px, .9fr) minmax(110px, .9fr) 70px minmax(270px, 2fr);
 }
 .participant-table .row-actions { justify-content: flex-start; flex-wrap: wrap; align-items: center; }
+.consent-review-badge { display: block; width: max-content; margin-top: 5px; padding: 3px 7px; border: 1px solid #dc8762; border-radius: 4px; color: #ffc5a5; font-size: .68rem; }
+.consent-review-panel { border-left: 3px solid #dc8762; }
+.consent-review-panel p { margin: 10px 0; }
 .participant-table .row-actions select { max-width: 110px; background: var(--surface-input); border: 1px solid var(--line); color: var(--text-main); padding: 6px; }
 .role-label { padding: 4px 8px; color: var(--text-soft); border: 1px solid var(--line); border-radius: 4px; font-size: .75rem; }
 .student-email { display: block; color: var(--text-muted); font-size: .74rem; margin-top: 2px; }

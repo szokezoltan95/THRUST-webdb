@@ -2,6 +2,13 @@
 export type Language = "sk" | "en";
 
 const english: Record<string, string> = {
+  "Vyžaduje riešenie": "Action required",
+  "VYŽADUJE RIEŠENIE": "ACTION REQUIRED",
+  "Odvolané súhlasy": "Withdrawn consents",
+  "Súhlas „{0}“ bol odvolaný. Ďalšie merania sú pozastavené a existujúce údaje posúdi správca.": "Consent “{0}” was withdrawn. Further measurements are paused and an administrator will review existing data.",
+  "Výskumný súhlas odvolaný": "Research consent withdrawn",
+  "Súhlas s osobnými údajmi odvolaný": "Personal data consent withdrawn",
+  "Nové merania sú pozastavené a účastník je vynechaný z výskumných výstupov. Posúďte existujúce údaje a zvoľte primeraný krok; samotné odvolanie ich automaticky nevymazáva.": "New measurements are paused and this participant is excluded from research outputs. Review existing data and choose an appropriate action; withdrawal does not automatically delete the data.",
   "Oneskorenie reakcie": "Reaction delay",
   "Čas nábehu": "Rise time",
   "Presiahnutie cieľa": "Overshoot",

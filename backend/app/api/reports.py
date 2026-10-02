@@ -20,6 +20,7 @@ from starlette.background import BackgroundTask
 
 from app.api.dependencies import AuthContext, require_researcher, require_superadmin_csrf
 from app.core.config import settings
+from app.core.consent_guard import revoked_participant_consents
 from app.db.session import get_db
 from app.models import Measurement, Participant, ParticipantGroup, TestDefinition
 
@@ -47,11 +48,12 @@ async def _trend_data(
         raise HTTPException(status_code=422, detail="axis must be date or test")
     groups = list(await db.scalars(select(ParticipantGroup).options(selectinload(ParticipantGroup.members)).where(ParticipantGroup.id.in_(group_ids)))) if group_ids else []
     participants = list(await db.scalars(select(Participant).where(Participant.id.in_(participant_ids)))) if participant_ids else []
-    subject_members: dict[str, set[str]] = {f"participant:{p.id}": {p.id} for p in participants}
+    excluded = set(await revoked_participant_consents(db))
+    subject_members: dict[str, set[str]] = {f"participant:{p.id}": {p.id} - excluded for p in participants}
     subject_names = {f"participant:{p.id}": p.participant_code for p in participants}
     for group in groups:
         key = f"group:{group.id}"
-        subject_members[key] = {member.id for member in group.members}
+        subject_members[key] = {member.id for member in group.members} - excluded
         subject_names[key] = group.name
     if not subject_members:
         return {"metric": metric, "axis": axis, "series": []}
@@ -169,7 +171,8 @@ async def trend_csv(
 async def measurement_csv(measurement_ids: list[str] = Query(min_length=1),
                           auth: AuthContext = Depends(require_researcher),
                           db: AsyncSession = Depends(get_db)) -> StreamingResponse:
-    measurements = list(await db.scalars(select(Measurement).where(Measurement.id.in_(measurement_ids)).order_by(Measurement.started_at)))
+    excluded = set(await revoked_participant_consents(db))
+    measurements = [item for item in await db.scalars(select(Measurement).where(Measurement.id.in_(measurement_ids)).order_by(Measurement.started_at)) if item.participant_id not in excluded]
     stream = io.StringIO(newline="")
     writer = csv.writer(stream)
     writer.writerow(["measurement_id", "participant_id", "test_type", "started_at", "metric", "value"])
@@ -183,10 +186,11 @@ async def measurement_csv(measurement_ids: list[str] = Query(min_length=1),
 @router.get("/all-data.zip")
 async def all_data_zip(auth: AuthContext = Depends(require_superadmin_csrf),
                        db: AsyncSession = Depends(get_db)) -> FileResponse:
-    participants = list(await db.scalars(select(Participant).order_by(Participant.participant_code)))
+    excluded = set(await revoked_participant_consents(db))
+    participants = [item for item in await db.scalars(select(Participant).order_by(Participant.participant_code)) if item.id not in excluded]
     groups = list(await db.scalars(select(ParticipantGroup).options(selectinload(ParticipantGroup.members)).order_by(ParticipantGroup.name)))
     tests = list(await db.scalars(select(TestDefinition).order_by(TestDefinition.test_code, TestDefinition.version)))
-    measurements = list(await db.scalars(select(Measurement).order_by(Measurement.started_at)))
+    measurements = [item for item in await db.scalars(select(Measurement).order_by(Measurement.started_at)) if item.participant_id not in excluded]
     root = Path(settings.measurement_storage_path).resolve()
     tmp = tempfile.NamedTemporaryFile(prefix="thrust-export-", suffix=".zip", delete=False)
     tmp.close()
@@ -201,7 +205,7 @@ async def all_data_zip(auth: AuthContext = Depends(require_superadmin_csrf),
             key: getattr(item, key) for key in item.__table__.columns.keys()
         } for item in participants]))
         archive.writestr("groups.json", json_bytes([{"id": g.id, "name": g.name, "description": g.description,
-            "created_at": g.created_at, "participant_ids": [m.id for m in g.members]} for g in groups]))
+            "created_at": g.created_at, "participant_ids": [m.id for m in g.members if m.id not in excluded]} for g in groups]))
         archive.writestr("test_definitions.json", json_bytes([{
             key: getattr(item, key) for key in item.__table__.columns.keys()
         } for item in tests]))
