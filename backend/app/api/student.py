@@ -385,7 +385,7 @@ async def test_configuration(
     if test is None or not test.is_active:
         raise HTTPException(status_code=404, detail="Aktívny test neexistuje.")
     return {
-        "schema_version": "test-configuration-v1",
+        "schema_version": "test-configuration-v2",
         "test": TestDefinitionResponse.model_validate(test).model_dump(mode="json"),
     }
 

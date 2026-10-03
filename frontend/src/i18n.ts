@@ -730,6 +730,42 @@ const english: Record<string, string> = {
   "Odpojiť THRUST-measure klienta {0} po dokončení aktuálneho merania?": "Disconnect THRUST-measure client {0} after the current measurement finishes?",
   "Odhlásiť webového klienta {0}?": "Sign out web client {0}?",
   "Správca odpojil tvoju reláciu WebDB. Prihlás sa znova.": "An administrator disconnected your WebDB session. Sign in again.",
+  "Human model": "Human model",
+  "AKCEPTOVANÝ HUMAN MODEL": "ACCEPTED HUMAN MODEL",
+  "Graf celého záznamu nie je k dispozícii.": "Full-recording plot is unavailable.",
+  "Meranie": "Measured data",
+  "Kvalita pre compute: {0}": "Compute data quality: {0}",
+  "Načítavam model…": "Loading model…",
+  "Meraný záznam a model osi {0}": "Measured recording and model for axis {0}",
+  "Fit {0}% · RMSE {1}": "Fit {0}% · RMSE {1}",
+  "Akceptovaný human model zatiaľ nie je uložený.": "No accepted human model is stored yet.",
+  "Model prijatý · verzia {0}": "Model accepted · revision {0}",
+  "Model nepočítaný": "Model not computed",
+  "Human model prijatý · v{0}": "Human model accepted · v{0}",
+  "Analýza uložená · human model chýba": "Analysis saved · human model missing",
+  "VÝSLEDOK ÚLOH SCoPE": "SCoPE TASK RESULTS",
+  "Úspešnosť celkovo": "Overall success rate",
+  "Úspech ľavého gimbalu": "Left gimbal success",
+  "Úspech pravého gimbalu": "Right gimbal success",
+  "Neúspešné úlohy": "Unsuccessful tasks",
+  "Prerušená úloha · mimo počtu": "Interrupted task · excluded from count",
+  "Celkový úspech vyžaduje súvislé podržanie oboch gimbalov; čiastkový úspech gimbalu sa eviduje samostatne.": "Overall success requires holding both gimbals continuously; individual gimbal successes are recorded separately.",
+  "Meranie bolo prerušené; rozpracovaná úloha sa nezapočítala ako neúspech.": "The measurement was interrupted; its in-progress task was not counted as a failure.",
+  "Režim časovania": "Timing mode",
+  "Pôvodný · ďalší cieľ po úspechu": "Original · advance after success",
+  "Pevná dĺžka každej úlohy": "Fixed duration per task",
+  "Výdrž v cieli · minimum (s)": "Target hold · minimum (s)",
+  "Výdrž v cieli · maximum (s)": "Target hold · maximum (s)",
+  "Dĺžka úlohy · minimum (s)": "Task duration · minimum (s)",
+  "Dĺžka úlohy · maximum (s)": "Task duration · maximum (s)",
+  "Výdrž pre úspech (s)": "Hold required for success (s)",
+  "Počet úloh v teste": "Number of tasks in test",
+  "Úspech posunie cieľ ďalej. Nesplnená úloha sa po 5 sekundách zaznamená ako neúspešná; test vždy obsahuje nastavený počet úloh.": "Success advances to the next target. An unsuccessful task is recorded after 5 seconds; the test always runs the configured number of tasks.",
+  "Cieľ sa zmení po uplynutí času bez ohľadu na úspech. Úspech vyžaduje súvislú výdrž v zóne; účastník ďalej sleduje cieľ až do zmeny.": "The target changes when the timer expires regardless of success. Success requires a continuous hold in the zone; participants keep tracking the target until it changes.",
+  "Samostatná farba zóny pre každý gimbal podľa polohy páčky": "Color each gimbal zone independently based on stick position",
+  "Čas držania musí spĺňať 0 < minimum ≤ maximum ≤ 5 sekúnd.": "Hold time must satisfy 0 < minimum ≤ maximum ≤ 5 seconds.",
+  "Dĺžka úlohy musí byť v rozsahu 3 až 5 sekúnd a úspešná výdrž kladná.": "Task duration must be 3 to 5 seconds and the success hold must be positive.",
+  "Počet úloh musí byť kladné celé číslo.": "Task count must be a positive integer.",
 };
 
 const STORAGE_KEY = "thrust-webdb-language";
@@ -762,20 +798,6 @@ export function t(value: string): string {
   return value.slice(0, value.indexOf(trimmed)) + translated + value.slice(value.indexOf(trimmed) + trimmed.length);
 }
 
-  "Human model": "Human model",
-  "AKCEPTOVANÝ HUMAN MODEL": "ACCEPTED HUMAN MODEL",
-  "Graf celého záznamu nie je k dispozícii.": "Full-recording plot is unavailable.",
-  "Meranie": "Measured data",
-  "Kvalita pre compute: {0}": "Compute data quality: {0}",
-  "Načítavam model…": "Loading model…",
-  "Meraný záznam a model osi {0}": "Measured recording and model for axis {0}",
-  "Fit {0}% · RMSE {1}": "Fit {0}% · RMSE {1}",
-  "Akceptovaný human model zatiaľ nie je uložený.": "No accepted human model is stored yet.",
-
-  "Model prijatý · verzia {0}": "Model accepted · revision {0}",
-  "Model nepočítaný": "Model not computed",
-  "Human model prijatý · v{0}": "Human model accepted · v{0}",
-  "Analýza uložená · human model chýba": "Analysis saved · human model missing",
 const englishLower = Object.fromEntries(Object.entries(english).map(([key, value]) => [key.toLocaleLowerCase("sk"), value]));
 
 /** Translate interpolated dialogs while keeping dynamic values outside the dictionary. */

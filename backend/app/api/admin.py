@@ -115,6 +115,40 @@ def normalize_test_configuration(source: dict, analysis_profile: str = "SCOPE_ST
     if profile.startswith("SCOPE"):
         if isinstance(configuration.get("difficulty"), str):
             configuration["difficulty"] = configuration["difficulty"].lower()
+        if "timing_version" in configuration:
+            timing_version = configuration["timing_version"]
+            if isinstance(timing_version, bool) or not isinstance(timing_version, int) or timing_version not in (1, 2):
+                raise HTTPException(status_code=422, detail="Neznáma verzia časovania SCoPE.")
+        if configuration.get("timing_version", 1) == 2:
+            mode = configuration.get("timing_mode", "original")
+            if mode not in ("original", "fixed_duration"):
+                raise HTTPException(status_code=422, detail="Neplatný režim časovania SCoPE.")
+            ranges = (
+                ("hold_time_min_s", "hold_time_max_s", 1.0, 1.0),
+                ("task_duration_min_s", "task_duration_max_s", 3.0, 5.0),
+            )
+            try:
+                for low_key, high_key, low_default, high_default in ranges:
+                    low = float(configuration.get(low_key, low_default))
+                    high = float(configuration.get(high_key, high_default))
+                    if not math.isfinite(low) or not math.isfinite(high) or low <= 0 or low > high or high > 5:
+                        raise ValueError
+                if mode == "fixed_duration" and (
+                    float(configuration.get("task_duration_min_s", 3.0)) < 3.0
+                    or float(configuration.get("task_duration_max_s", 5.0)) > 5.0
+                ):
+                    raise ValueError
+                if mode == "fixed_duration" and float(configuration.get("success_hold_s", 1.0)) > float(configuration.get("task_duration_min_s", 3.0)):
+                    raise ValueError
+                success_hold = float(configuration.get("success_hold_s", 1.0))
+                raw_tasks = configuration.get("max_completed_actions", 50)
+                if isinstance(raw_tasks, bool) or not isinstance(raw_tasks, int):
+                    raise ValueError
+                tasks = raw_tasks
+                if not math.isfinite(success_hold) or success_hold <= 0 or success_hold > 5 or tasks < 1:
+                    raise ValueError
+            except (TypeError, ValueError, OverflowError) as exc:
+                raise HTTPException(status_code=422, detail="Neplatné časové rozsahy alebo počet úloh SCoPE.") from exc
     elif profile.startswith("SIMPLE"):
         # Each image is kept in the persistent measurement volume, never as a server path in JSON.
         for key in ("visual", "gui_gimbal_size", "gui_stick_size", "target_zone_radius_px", "sampling_hz", "zoom_px_per_m"):
@@ -433,7 +467,7 @@ async def test_configuration(
     if test is None:
         raise HTTPException(status_code=404, detail="Typ testu neexistuje.")
     return {
-        "schema_version": "test-configuration-v1",
+        "schema_version": "test-configuration-v2",
         "test": TestDefinitionResponse.model_validate(test).model_dump(mode="json"),
     }
 

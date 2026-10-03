@@ -1301,7 +1301,7 @@ export function App() {
                       analysis: m.analysis_data ? 1 : 0,
                     }[column as "participant" | "test" | "date" | "analysis"])).map((m) => <label className="measurement-item" key={m.id}>
                       <input type="checkbox" checked={reportMeasurementIds.includes(m.id)} onChange={(event) => setReportMeasurementIds((ids) => event.target.checked ? [...ids, m.id] : ids.filter((id) => id !== m.id))} />
-                      <strong>{participantCodeFor(m.participant_id)}</strong><span>{m.test_type}</span><span>{formatDateTime(m.started_at)}</span><small>{m.human_model_status === "accepted" ? tf("Human model prijatý · v{0}", m.human_model_revision ?? "—") : (m.analysis_data ? t("Analýza uložená · human model chýba") : t("Bez uloženej analýzy"))}</small>
+                      <strong>{participantCodeFor(m.participant_id)}</strong><span>{m.test_type}</span><span>{formatDateTime(m.started_at)}</span><small>{m.status === "incomplete" ? t("Nedokončené meranie") : m.human_model_status === "accepted" ? tf("Human model prijatý · v{0}", m.human_model_revision ?? "—") : (m.analysis_data ? t("Analýza uložená · human model chýba") : t("Bez uloženej analýzy"))}</small>
                     </label>)}
                   </div>
                   <div className="actions report-actions"><button className="quiet" disabled={!reportMeasurementIds.length} onClick={() => void downloadProtectedFile(`/api/admin/reports/measurements.csv?${reportMeasurementIds.map((id) => `measurement_ids=${encodeURIComponent(id)}`).join("&")}`, "thrust-measurements.csv")}>{t("Stiahnuť tabuľku CSV")}</button>{reportMeasurementIds.length === 1 && (() => { const id = reportMeasurementIds[0]; const selected = measurements.find((m) => m.id === id); return <><a className="quiet" href={`/api/admin/measurements/${id}/raw`}>{t("Stiahnuť raw TSV/GZIP")}</a><button className="quiet" onClick={() => { if (selected) { const blob = new Blob([JSON.stringify(selected, null, 2)], { type: "application/json" }); const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = `measurement-${id}.json`; link.click(); URL.revokeObjectURL(link.href); } }}>{t("Stiahnuť JSON analýzy")}</button></>; })()}</div>
@@ -1589,6 +1589,26 @@ function ResponseMetrics({ data }: { data: unknown }) {
   return <section className="metrics-summary"><div className="eyebrow">{t("VYPOČÍTANÉ UKAZOVATELE")}</div><p className="muted metrics-note">{t("Základné ukazovatele vypočítané THRUST-measure a uložené spolu s meraním.")}</p><div className="metrics-table"><div className="metrics-head"><span>{t("Osa")}</span><span>{t("Oneskorenie")}</span><span>{t("Náběh 10–90 %")}</span><span>{t("Overshoot")}</span><span>{t("Ustálenie")}</span><span>{t("Chyba")}</span><span>{t("RMSE")}</span><span>{t("Priem. SD")}</span></div>{available.map((name) => { const m = metricsFor(responseChannel(response?.channels, name)); return <div className="metrics-row" key={name}><strong style={{ color: RESPONSE_COLORS[name] }}>{name}</strong><span>{formatMetric(m.reaction_s, " s")}</span><span>{formatMetric(m.rise_s, " s")}</span><span>{formatMetric(m.overshoot_pct, " %")}</span><span>{formatMetric(m.settling_s, " s")}</span><span>{formatMetric(m.steady_state_error_pct, " %")}</span><span>{formatMetric(m.rmse)}</span><span>{formatMetric(m.mean_std)}</span></div>; })}</div></section>;
 }
 
+function ScopeTaskSummary({ analysis }: { analysis: Record<string, unknown> }) {
+  const summary = analysis.session_summary && typeof analysis.session_summary === "object"
+    ? analysis.session_summary as Record<string, unknown> : {};
+  const events = Array.isArray(analysis.events) ? analysis.events as Record<string, unknown>[] : [];
+  const realized = events.filter((event) => Number(event.result_code) === 1 || Number(event.result_code) === 2);
+  const successes = realized.length ? realized.filter((event) => event.success === true).length : Number(summary.completed ?? 0);
+  const attempts = realized.length ? realized.length : Number(summary.attempts ?? (successes + Number(summary.mistakes ?? 0)));
+  if (!attempts) return null;
+  const left = realized.length ? realized.filter((event) => event.left_success === true).length : null;
+  const right = realized.length ? realized.filter((event) => event.right_success === true).length : null;
+  const interrupted = events.filter((event) => Number(event.result_code) === 3).length;
+  return <section className="scope-task-summary"><div className="eyebrow">{t("VÝSLEDOK ÚLOH SCoPE")}</div><div className="scope-task-summary-grid">
+    <div><span>{t("Úspešnosť celkovo")}</span><strong>{Math.round(100 * successes / attempts)}% <small>({successes}/{attempts})</small></strong></div>
+    {left !== null && <div><span>{t("Úspech ľavého gimbalu")}</span><strong>{Math.round(100 * left / attempts)}% <small>({left}/{attempts})</small></strong></div>}
+    {right !== null && <div><span>{t("Úspech pravého gimbalu")}</span><strong>{Math.round(100 * right / attempts)}% <small>({right}/{attempts})</small></strong></div>}
+    <div><span>{t("Neúspešné úlohy")}</span><strong>{Math.max(0, attempts - successes)}</strong></div>
+    {interrupted > 0 && <div><span>{t("Prerušená úloha · mimo počtu")}</span><strong>{interrupted}</strong></div>}
+  </div><p className="muted">{t("Celkový úspech vyžaduje súvislé podržanie oboch gimbalov; čiastkový úspech gimbalu sa eviduje samostatne.")}</p></section>;
+}
+
 type SimpleTraceChannel = { mean?: number[]; time_s?: number[] };
 
 function SimpleTrace({ name, channel, color }: { name: string; channel?: SimpleTraceChannel; color: string }) {
@@ -1677,6 +1697,9 @@ type ActionSettings = {
 type ScopeConfiguration = {
   [key: string]: unknown;
   action_timeout_s: number; hold_time_s: number; fps: number; stick_max: number;
+  timing_version: number; timing_mode: "original" | "fixed_duration";
+  hold_time_min_s: number; hold_time_max_s: number; task_duration_min_s: number;
+  task_duration_max_s: number; success_hold_s: number; independent_zone_colors: boolean;
   max_completed_actions: number; countdown_s: number; fullscreen: boolean; topmost: boolean;
   action_settings: ActionSettings;
   gui_gimbal_size: number; gui_stick_zone: number; gui_stick_radius: number;
@@ -1697,7 +1720,9 @@ const makeDefaultActionSettings = (): ActionSettings => ({
   single_gimbal_probability: 0.5,
 });
 const initialScopeConfiguration: ScopeConfiguration = {
-  debug_output: false, action_timeout_s: 3, hold_time_s: 0.5, fps: 100, stick_max: 1000,
+  debug_output: false, action_timeout_s: 5, hold_time_s: 1, timing_version: 2, timing_mode: "original",
+  hold_time_min_s: 1, hold_time_max_s: 1, task_duration_min_s: 3, task_duration_max_s: 5,
+  success_hold_s: 1, independent_zone_colors: false, fps: 100, stick_max: 1000,
   max_completed_actions: 50, countdown_s: 3, seed: null,
   action_settings: makeDefaultActionSettings(),
   fullscreen: true, topmost: true,
@@ -1775,8 +1800,9 @@ function MeasurementDetailBody({ measurement, tests, onClose }: { measurement: M
     <div className="detail-window-bar"><div className="eyebrow">{t("DETAIL MERANIA ·")} {isSimple ? "SimPLE" : "SCoPE"}</div><div className="detail-header-actions"><button className="quiet compact" onClick={onClose}>{t("Zavrieť")}</button></div></div>
     <h2>{measurement.test_type}</h2><p className="muted">{measurement.source_file_name} · {formatDateTime(measurement.started_at)}</p>
     <div className="detail-grid"><div><span>{t("Vzorky")}</span><strong>{String(measurement.analysis_data?.sample_count ?? measurement.analysis_data?.simple_sample_count ?? "—")}</strong></div><div><span>{t("Trvanie")}</span><strong>{measurement.analysis_data?.duration_s ? `${Number(measurement.analysis_data.duration_s).toFixed(2)} s` : "—"}</strong></div><div><span>{t("Raw dáta")}</span><strong>{measurement.raw_sha256 ? tf("Archivované · {0}", formatBytes(measurement.raw_size_bytes)) : t("Nie sú dostupné")}</strong></div><div><span>{t("Merací režim")}</span><strong>{isSimple ? "SimPLE" : "SCoPE"}</strong></div></div>
+    {measurement.status === "incomplete" && <p className="notice danger">{t("Meranie bolo prerušené; rozpracovaná úloha sa nezapočítala ako neúspech.")}</p>}
     {measurement.compute_quality_status && measurement.compute_quality_status !== "unreviewed" && <p className={measurement.compute_quality_status === "unsuitable" ? "notice danger" : "notice"}>{tf("Kvalita pre compute: {0}", measurement.compute_quality_status)}{measurement.compute_quality_note ? ` · ${measurement.compute_quality_note}` : ""}</p>}
-    {isSimple ? <SimpleAnalysisView analysis={measurement.analysis_data ?? {}} /> : <><div className="results-layout"><div className="results-chart-column"><ResponseChart data={measurement.analysis_data?.normalized_step_response} /></div><ResponseMetrics data={measurement.analysis_data?.normalized_step_response} /></div>{measurement.human_model_status === "accepted" && <HumanModelDetails measurementId={measurement.id} />}</>}
+    {isSimple ? <SimpleAnalysisView analysis={measurement.analysis_data ?? {}} /> : <><ScopeTaskSummary analysis={measurement.analysis_data ?? {}} /><div className="results-layout"><div className="results-chart-column"><ResponseChart data={measurement.analysis_data?.normalized_step_response} /></div><ResponseMetrics data={measurement.analysis_data?.normalized_step_response} /></div>{measurement.human_model_status === "accepted" && <HumanModelDetails measurementId={measurement.id} />}</>}
   </>;
 }
 
@@ -2008,7 +2034,7 @@ function GimbalPreview({ configuration, onPick }: { configuration: ScopeConfigur
       <circle cx={x + 110} cy="162" r={stickRadius} fill={color("stick_fill")} stroke={color("stick_outline")} strokeWidth={6 * scale} onClick={(event) => { event.stopPropagation(); onPick("stick_fill"); }} className="preview-clickable" />
     </g>;
   };
-  return <div className="gimbal-preview"><svg viewBox="0 0 620 345" role="img" aria-label={t("Interaktívny náhľad SCoPE")}><rect width="620" height="345" fill={color("screen_background")} onClick={() => onPick("screen_background")} className="preview-clickable" />{gimbal(55, "left")}{gimbal(345, "right")}<text x="310" y="22" textAnchor="middle" fill={color("label_color")} onClick={() => onPick("label_color")} className="preview-clickable">{t("Action: [0, 0, 0, 0]")}</text><text x="310" y="330" textAnchor="middle" fill={color("label_color")} onClick={() => onPick("label_color")} className="preview-clickable">{t("Completed: 0 · Mistakes: 0")}</text><text x="310" y="162" textAnchor="middle" fill={color("prompt_color")} fontSize="22" onClick={() => onPick("prompt_color")} className="preview-clickable">{t("Press button on RC")}</text></svg><div className="preview-help">{t("Kliknutie na prvok okamžite otvorí výber jeho farby.")}</div></div>;
+  return <div className="gimbal-preview"><svg viewBox="0 0 620 345" role="img" aria-label={t("Interaktívny náhľad SCoPE")}><rect width="620" height="345" fill={color("screen_background")} onClick={() => onPick("screen_background")} className="preview-clickable" />{gimbal(55, "left")}{gimbal(345, "right")}<text x="310" y="22" textAnchor="middle" fill={color("label_color")} onClick={() => onPick("label_color")} className="preview-clickable">{t("Action: [0, 0, 0, 0]")}</text><text x="310" y="330" textAnchor="middle" fill={color("label_color")} onClick={() => onPick("label_color")} className="preview-clickable">{t("Tasks: 0/50 · Success: 0 · Missed: 0")}</text><text x="310" y="162" textAnchor="middle" fill={color("prompt_color")} fontSize="22" onClick={() => onPick("prompt_color")} className="preview-clickable">{t("Press button on RC")}</text></svg><div className="preview-help">{t("Kliknutie na prvok okamžite otvorí výber jeho farby.")}</div></div>;
 }
 
 function TestEditor({ test, onClose, onSaved }: { test: TestDefinition; onClose: () => void; onSaved: (test: TestDefinition) => void }) {
@@ -2045,6 +2071,19 @@ function TestEditor({ test, onClose, onSaved }: { test: TestDefinition; onClose:
     ["stick_outline", t("Obrys páčky")], ["label_color", t("Popisy")], ["prompt_color", t("Výzva")],
   ] as const;
   function validate(): string | null {
+    if (!Number.isInteger(configuration.max_completed_actions) || configuration.max_completed_actions < 1)
+      return t("Počet úloh musí byť kladné celé číslo.");
+    if (configuration.timing_version !== 2)
+      return t("Ulož tento test z editora, aby sa použil nový verziovaný režim časovania.");
+    if (configuration.timing_mode === "original" &&
+        (!Number.isFinite(configuration.hold_time_min_s) || !Number.isFinite(configuration.hold_time_max_s) ||
+         configuration.hold_time_min_s <= 0 || configuration.hold_time_min_s > configuration.hold_time_max_s || configuration.hold_time_max_s > 5))
+      return t("Čas držania musí spĺňať 0 < minimum ≤ maximum ≤ 5 sekúnd.");
+    if (configuration.timing_mode === "fixed_duration" &&
+        (!Number.isFinite(configuration.task_duration_min_s) || !Number.isFinite(configuration.task_duration_max_s) ||
+         configuration.task_duration_min_s < 3 || configuration.task_duration_min_s > configuration.task_duration_max_s || configuration.task_duration_max_s > 5 ||
+         !Number.isFinite(configuration.success_hold_s) || configuration.success_hold_s <= 0 || configuration.success_hold_s > configuration.task_duration_min_s))
+      return t("Dĺžka úlohy musí byť v rozsahu 3 až 5 sekúnd a úspešná výdrž kladná.");
     if (!Number.isInteger(actionSettings.points_per_axis) || actionSettings.points_per_axis < 2 || actionSettings.points_per_axis > 101)
       return t("Počet bodov na os musí byť celé číslo od 2 do 101.");
     if (actionSettings.min_changed_axes < 1 || actionSettings.min_changed_axes > 4 ||
@@ -2104,9 +2143,18 @@ function TestEditor({ test, onClose, onSaved }: { test: TestDefinition; onClose:
           <div className="eyebrow">{t("PRIEBEH MERANIA")}</div><h3>{t("Základné parametre")}</h3>
           <div className="field-grid">
             <label>{t("Vzorkovacia frekvencia (Hz)")}<input type="number" min="10" max="1000" value={configuration.fps} onChange={(event) => setValue("fps", Number(event.target.value))} /></label>
-            <label>{t("Počet cieľov")}<input type="number" min="1" value={configuration.max_completed_actions} onChange={(event) => setValue("max_completed_actions", Number(event.target.value))} /></label>
-            <label>{t("Timeout cieľa (s)")}<input type="number" min=".1" step=".1" value={configuration.action_timeout_s} onChange={(event) => setValue("action_timeout_s", Number(event.target.value))} /></label>
-            <label>{t("Čas podržania v zóne (s)")}<input type="number" min=".1" step=".1" value={configuration.hold_time_s} onChange={(event) => setValue("hold_time_s", Number(event.target.value))} /></label>
+            <label>{t("Režim časovania")}<select value={configuration.timing_mode} onChange={(event) => setValue("timing_mode", event.target.value)}><option value="original">{t("Pôvodný · ďalší cieľ po úspechu")}</option><option value="fixed_duration">{t("Pevná dĺžka každej úlohy")}</option></select></label>
+            {configuration.timing_mode === "original" ? <>
+              <label>{t("Výdrž v cieli · minimum (s)")}<input type="number" min=".1" step=".1" value={configuration.hold_time_min_s} onChange={(event) => setValue("hold_time_min_s", Number(event.target.value))} /></label>
+              <label>{t("Výdrž v cieli · maximum (s)")}<input type="number" min={configuration.hold_time_min_s} max="5" step=".1" value={configuration.hold_time_max_s} onChange={(event) => setValue("hold_time_max_s", Number(event.target.value))} /></label>
+              <p className="muted">{t("Úspech posunie cieľ ďalej. Nesplnená úloha sa po 5 sekundách zaznamená ako neúspešná; test vždy obsahuje nastavený počet úloh.")}</p>
+            </> : <>
+              <label>{t("Dĺžka úlohy · minimum (s)")}<input type="number" min="3" step=".1" value={configuration.task_duration_min_s} onChange={(event) => setValue("task_duration_min_s", Number(event.target.value))} /></label>
+              <label>{t("Dĺžka úlohy · maximum (s)")}<input type="number" min={configuration.task_duration_min_s} max="5" step=".1" value={configuration.task_duration_max_s} onChange={(event) => setValue("task_duration_max_s", Number(event.target.value))} /></label>
+              <label>{t("Výdrž pre úspech (s)")}<input type="number" min=".1" max={configuration.task_duration_min_s} step=".1" value={configuration.success_hold_s} onChange={(event) => setValue("success_hold_s", Number(event.target.value))} /></label>
+              <p className="muted">{t("Cieľ sa zmení po uplynutí času bez ohľadu na úspech. Úspech vyžaduje súvislú výdrž v zóne; účastník ďalej sleduje cieľ až do zmeny.")}</p>
+            </>}
+            <label>{t("Počet úloh v teste")}<input type="number" min="1" step="1" value={configuration.max_completed_actions} onChange={(event) => setValue("max_completed_actions", Number(event.target.value))} /></label>
             <label>{t("Odpočet pred štartom (s)")}<input type="number" min="0" value={configuration.countdown_s} onChange={(event) => setValue("countdown_s", Number(event.target.value))} /></label>
             <label>{t("Maximálna hodnota páčky")}<input type="number" min="100" value={configuration.stick_max} onChange={(event) => setValue("stick_max", Number(event.target.value))} /></label>
             <label>{t("Náhodný seed")}<input value={configuration.seed == null ? "" : String(configuration.seed)} onChange={(event) => setValue("seed", event.target.value.trim() === "" ? null : Number(event.target.value))} placeholder={t("automaticky")} /></label>
@@ -2143,6 +2191,7 @@ function TestEditor({ test, onClose, onSaved }: { test: TestDefinition; onClose:
         </section>}
         {selectedPanel === "colors" && <section className="config-card">
           <div className="eyebrow">{t("VZHĽAD")}</div><h3>{t("Farby prvkov")}</h3>
+          <label className="toggle-row"><input type="checkbox" checked={configuration.independent_zone_colors} onChange={(event) => setValue("independent_zone_colors", event.target.checked)} /> {t("Samostatná farba zóny pre každý gimbal podľa polohy páčky")}</label>
           <div className="selected-color"><span>{colorFields.find(([key]) => key === selectedColor)?.[1] ?? selectedColor}</span><input ref={colorInput} type="color" value={String(configuration[selectedColor] ?? "#ffffff")} onChange={(event) => setValue(selectedColor, event.target.value)} /><code>{String(configuration[selectedColor])}</code></div>
           <div className="color-list">{colorFields.map(([key, label]) => <button type="button" className={selectedColor === key ? "color-item selected" : "color-item"} key={key} onClick={() => pickColor(key)}><span>{label}</span><i style={{ background: String(configuration[key]) }} /><code>{String(configuration[key])}</code></button>)}</div>
         </section>}
@@ -2490,7 +2539,7 @@ function StudentPortal({ user, onLogout, accentTheme, colorMode, onAppearanceCha
       <section className="panel">
         <div className="student-result-heading"><div><div className="eyebrow">{t("VÝSLEDKY")}</div><h2>{t("Moje merania ·")} {mode === "SCOPE" ? "SCoPE" : "SimPLE"}</h2></div><ModeSwitch value={mode} onChange={(selected) => { setMode(selected); setSelectedMeasurementId(null); }} /></div>
         {visibleMeasurements.length ? <div className="table-wrap"><table><thead><tr><th><SortHeader label={t("Test")} active={studentMeasurementSort.column === "test"} direction={studentMeasurementSort.direction} onClick={() => setStudentMeasurementSort((current) => nextSort(current, "test"))} /></th><th><SortHeader label={t("Stav")} active={studentMeasurementSort.column === "status"} direction={studentMeasurementSort.direction} onClick={() => setStudentMeasurementSort((current) => nextSort(current, "status"))} /></th><th><SortHeader label={t("Dátum a čas")} active={studentMeasurementSort.column === "date"} direction={studentMeasurementSort.direction} onClick={() => setStudentMeasurementSort((current) => nextSort(current, "date"))} /></th><th><SortHeader label={t("Veľkosť súboru")} active={studentMeasurementSort.column === "size"} direction={studentMeasurementSort.direction} onClick={() => setStudentMeasurementSort((current) => nextSort(current, "size"))} /></th><th>{t("Výsledky")}</th></tr></thead><tbody>{visibleMeasurements.map((m) => <tr key={m.id}><td>{m.test_type}</td><td>{m.status}</td><td>{formatDateTime(m.started_at)}</td><td>{formatBytes(m.raw_size_bytes)}</td><td><button type="button" className="quiet compact" onClick={() => setSelectedMeasurementId(m.id === selectedMeasurementId ? null : m.id)}>{m.id === selectedMeasurementId ? t("Skryť") : t("Zobraziť")}</button></td></tr>)}</tbody></table></div> : <p className="muted">{t("Zatiaľ nemáš uložené meranie")} {mode === "SCOPE" ? "SCoPE" : "SimPLE"}.</p>}
-        {selectedMeasurement && <div className="student-result-detail"><h3>{selectedMeasurement.test_type} · {formatDateTime(selectedMeasurement.started_at)}</h3>{mode === "SIMPLE" ? <SimpleAnalysisView analysis={selectedMeasurement.analysis_data ?? {}} /> : selectedMeasurement.analysis_data?.normalized_step_response ? <><ResponseChart data={selectedMeasurement.analysis_data.normalized_step_response} /><ResponseMetrics data={selectedMeasurement.analysis_data.normalized_step_response} /></> : <p className="muted">{t("Toto meranie nemá uloženú analýzu odozvy.")}</p>}</div>}
+        {selectedMeasurement && <div className="student-result-detail"><h3>{selectedMeasurement.test_type} · {formatDateTime(selectedMeasurement.started_at)}</h3>{mode === "SIMPLE" ? <SimpleAnalysisView analysis={selectedMeasurement.analysis_data ?? {}} /> : selectedMeasurement.analysis_data?.normalized_step_response ? <><ScopeTaskSummary analysis={selectedMeasurement.analysis_data ?? {}} /><ResponseChart data={selectedMeasurement.analysis_data.normalized_step_response} /><ResponseMetrics data={selectedMeasurement.analysis_data.normalized_step_response} /></> : <p className="muted">{t("Toto meranie nemá uloženú analýzu odozvy.")}</p>}</div>}
       </section>
       <section className="panel">
         <div className="student-result-heading"><div><div className="eyebrow">{t("ANONYMIZOVANÉ POROVNANIE ·")} {mode === "SCOPE" ? "SCoPE" : "SimPLE"}</div><h2>{t("Výsledok v porovnaní so skupinou")}</h2></div></div>

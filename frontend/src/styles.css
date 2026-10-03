@@ -1582,3 +1582,9 @@ main[data-color-mode="light"] .test-state-inactive { color: #52616e; }
   .welcome-featured-heading { flex-direction: column; }
   .welcome-featured-card { padding: 12px; }
 }
+.scope-task-summary { margin: 16px 0; padding: 16px; border: 1px solid var(--border, #2d3a4b); border-radius: 12px; background: color-mix(in srgb, var(--panel, #111827) 82%, transparent); }
+.scope-task-summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 12px 0; }
+.scope-task-summary-grid > div { display: grid; gap: 4px; padding: 10px 12px; border-radius: 9px; background: color-mix(in srgb, var(--surface, #1f2937) 75%, transparent); }
+.scope-task-summary-grid span { color: var(--text-soft, #9ca3af); font-size: .78rem; }
+.scope-task-summary-grid strong { font-size: 1.2rem; }
+.scope-task-summary-grid small { color: var(--text-soft, #9ca3af); font-size: .78rem; font-weight: 500; }

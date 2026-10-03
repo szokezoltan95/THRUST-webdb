@@ -1,7 +1,7 @@
 import pytest
 from fastapi import HTTPException
 
-from app.api.admin import deactivate_test, finalize_test, reactivate_test, update_test
+from app.api.admin import deactivate_test, finalize_test, normalize_test_configuration, reactivate_test, update_test
 from app.models import TestDefinition
 from app.schemas.test_definition import TestDefinitionUpdate
 
@@ -47,3 +47,34 @@ async def test_deactivation_keeps_definition_and_can_be_reversed() -> None:
     await reactivate_test(test.id, auth=None, db=db)
     assert test.is_active is True
     assert db.commits == 2
+
+
+def test_scope_timing_v2_accepts_balanced_fixed_duration_settings() -> None:
+    config = normalize_test_configuration({
+        "timing_version": 2,
+        "timing_mode": "fixed_duration",
+        "task_duration_min_s": 3,
+        "task_duration_max_s": 5,
+        "success_hold_s": 1,
+        "max_completed_actions": 40,
+    })
+    assert config["timing_mode"] == "fixed_duration"
+    assert config["task_duration_max_s"] == 5
+
+
+def test_scope_timing_v2_rejects_duration_outside_protocol_range() -> None:
+    with pytest.raises(HTTPException) as exc:
+        normalize_test_configuration({
+            "timing_version": 2,
+            "timing_mode": "fixed_duration",
+            "task_duration_min_s": 2,
+            "task_duration_max_s": 5,
+        })
+    assert exc.value.status_code == 422
+
+
+def test_legacy_scope_configuration_remains_unchanged() -> None:
+    assert normalize_test_configuration({"action_timeout_s": 3, "hold_time_s": 0.5}) == {
+        "action_timeout_s": 3,
+        "hold_time_s": 0.5,
+    }
