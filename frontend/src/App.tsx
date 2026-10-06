@@ -1435,7 +1435,7 @@ function RegistrationPage({ onSubmit, onBack, onLogin, onResearcherRegister, err
       <Brand />
       <div className="actions"><LanguageSwitcher /><button type="button" className="quiet" onClick={onBack}>{t("Späť na hlavnú stránku")}</button><button type="button" className="quiet" onClick={onResearcherRegister}>{t("Registrácia výskumníka")}</button><button type="button" className="quiet" onClick={onLogin}>{t("Už mám účet · Prihlásiť sa")}</button></div>
     </header>
-    <section className="registration-content">
+    <section className="registration-content student-registration-content">
       <aside className="registration-heading"><div className="eyebrow">{t("NOVÝ ŠTUDENTSKÝ ÚČET")}</div><h1>{t("Vytvor si účet")}</h1><p className="lead">{t("Najprv si vytvor účet. Po registrácii môžeš doplniť krátky profil a hneď uvidíš svoju osobnú stránku s výsledkami.")}</p><ol className="registration-steps"><li><span>1</span>{t("Účet")}</li><li><span>2</span>{t("Doplnenie profilu")}</li></ol></aside>
       <form className="registration-form" onSubmit={onSubmit}>
         <section className="registration-card registration-account-fields">
@@ -2393,6 +2393,7 @@ function StudentPortal({ user, onLogout, accentTheme, colorMode, onAppearanceCha
   const [error, setError] = useState("");
   const [consentMessage, setConsentMessage] = useState("");
   const [editingProfile, setEditingProfile] = useState(false);
+  const [onboardingOpen, setOnboardingOpen] = useState(false);
   const [profileMessage, setProfileMessage] = useState("");
 
   useEffect(() => {
@@ -2474,7 +2475,7 @@ function StudentPortal({ user, onLogout, accentTheme, colorMode, onAppearanceCha
       <p className="lead">{t("Tvoje účastnícke ID:")} <strong>{user.participant_code || "—"}</strong></p>
       <div className="stats"><Metric label={t("Moje merania")} value={visibleMeasurements.length} /><Metric label={t("Skupina")} value={comparison?.cohort_participant_count ?? "—"} /><Metric label={t("Porovnanie")} value={comparison?.available ? t("dostupné") : t("čaká na limit")} /></div>
       {error && <p className="error">{error}</p>}
-      {profileReminder && profile && <div className="notice student-profile-reminder"><span>{t("Účet je vytvorený. Ak chceš, doplň si nepovinné otázky o skúsenostiach s ovládaním a UAV; môžeš to urobiť aj neskôr.")}</span><div><button type="button" className="primary compact" onClick={() => { setEditingProfile(true); document.getElementById("student-profile-panel")?.scrollIntoView({ behavior: "smooth", block: "center" }); }}>{t("Doplniť profil")}</button><button type="button" className="quiet compact" onClick={onDismissProfileReminder}>{t("Neskôr")}</button></div></div>}
+      {profileReminder && profile && <div className="notice student-profile-reminder"><span>{t("Účet je vytvorený. Ak chceš, doplň si nepovinné otázky o skúsenostiach s ovládaním a UAV; môžeš to urobiť aj neskôr.")}</span><div><button type="button" className="primary compact" onClick={() => { setOnboardingOpen(true); document.getElementById("student-profile-panel")?.scrollIntoView({ behavior: "smooth", block: "center" }); }}>{t("Vyplniť profil")}</button><button type="button" className="quiet compact" onClick={onDismissProfileReminder}>{t("Neskôr")}</button></div></div>}
       <section className="panel">
         <div className="student-result-heading"><div><div className="eyebrow">{t("VÝSLEDKY")}</div><h2>{t("Moje merania ·")} {mode === "SCOPE" ? "SCoPE" : "SimPLE"}</h2></div><ModeSwitch value={mode} onChange={(selected) => { setMode(selected); setSelectedMeasurementId(null); }} /></div>
         {visibleMeasurements.length ? <div className="table-wrap"><table><thead><tr><th><SortHeader label={t("Test")} active={studentMeasurementSort.column === "test"} direction={studentMeasurementSort.direction} onClick={() => setStudentMeasurementSort((current) => nextSort(current, "test"))} /></th><th><SortHeader label={t("Stav")} active={studentMeasurementSort.column === "status"} direction={studentMeasurementSort.direction} onClick={() => setStudentMeasurementSort((current) => nextSort(current, "status"))} /></th><th><SortHeader label={t("Dátum a čas")} active={studentMeasurementSort.column === "date"} direction={studentMeasurementSort.direction} onClick={() => setStudentMeasurementSort((current) => nextSort(current, "date"))} /></th><th><SortHeader label={t("Veľkosť súboru")} active={studentMeasurementSort.column === "size"} direction={studentMeasurementSort.direction} onClick={() => setStudentMeasurementSort((current) => nextSort(current, "size"))} /></th><th>{t("Výsledky")}</th></tr></thead><tbody>{visibleMeasurements.map((m) => <tr key={m.id}><td>{m.test_type}</td><td>{m.status}</td><td>{formatDateTime(m.started_at)}</td><td>{formatBytes(m.raw_size_bytes)}</td><td><button type="button" className="quiet compact" onClick={() => setSelectedMeasurementId(m.id === selectedMeasurementId ? null : m.id)}>{m.id === selectedMeasurementId ? t("Skryť") : t("Zobraziť")}</button></td></tr>)}</tbody></table></div> : <p className="muted">{t("Zatiaľ nemáš uložené meranie")} {mode === "SCOPE" ? "SCoPE" : "SimPLE"}.</p>}
@@ -2505,10 +2506,12 @@ function StudentPortal({ user, onLogout, accentTheme, colorMode, onAppearanceCha
       </section>
       {profile && <section id="student-profile-panel" className="panel student-profile-panel">
         <div className="profile-panel-heading"><div><div className="eyebrow">{t("PROFIL PILOTA")}</div><h2>{t("Moje údaje")}</h2><p className="muted">{t("Prezývka a nepovinné odpovede o tvojich skúsenostiach.")}</p></div>
-          <button className="quiet compact" onClick={() => { setEditingProfile((value) => !value); setProfileMessage(""); }}>{editingProfile ? t("Zrušiť úpravy") : t("Upraviť údaje")}</button>
+          <button className="quiet compact" onClick={() => { setProfileMessage(""); if (onboardingOpen) { setOnboardingOpen(false); return; } setEditingProfile((value) => !value); }}>{onboardingOpen ? t("Zrušiť vyplnenie") : editingProfile ? t("Zrušiť úpravy") : t("Upraviť údaje")}</button>
         </div>
         {profileMessage && <p className="notice">{profileMessage}</p>}
-        {editingProfile
+        {onboardingOpen
+          ? <StudentProfileOnboarding profile={profile} csrfToken={user.csrf_token} onSkip={() => { setOnboardingOpen(false); onDismissProfileReminder(); }} onSaved={(updated) => { setProfile(updated); setOnboardingOpen(false); setProfileMessage(t("Údaje profilu boli uložené.")); onDismissProfileReminder(); }} />
+          : editingProfile
           ? <ParticipantProfileEditor studentProfile={profile} csrfToken={user.csrf_token} onStudentSaved={(updated) => { setProfile(updated); setEditingProfile(false); setProfileMessage(t("Údaje profilu boli uložené.")); onDismissProfileReminder(); }} />
           : <InfoTable rows={[
             ["E-mail", profile.email || profile.username],
@@ -2530,6 +2533,128 @@ function StudentPortal({ user, onLogout, accentTheme, colorMode, onAppearanceCha
     <SiteFooter />
   </main>;
 }
+type ProfileBinaryKey = "gamepad_used" | "pc_joystick_used" | "rc_transmitter_used" | "uav_flown" | "uav_los" | "uav_fpv" | "uav_stabilized_mode" | "uav_manual_mode";
+type StudentOnboardingAnswers = { birth_year: number | ""; dominant_hand: string; } & Record<ProfileBinaryKey, boolean | null>;
+
+function ProfileExperienceQuestion({ name, label, value, onChange }: {
+  name: ProfileBinaryKey;
+  label: string;
+  value: boolean | null;
+  onChange: (name: ProfileBinaryKey, value: boolean) => void;
+}) {
+  return <fieldset className="profile-experience-question">
+    <legend>{t(label)}</legend>
+    <div className="profile-experience-options">
+      {[true, false].map((answer) => <label key={String(answer)} className={value === answer ? "selected" : ""}>
+        <input type="radio" name={name} value={String(answer)} checked={value === answer} onChange={() => onChange(name, answer)} />
+        <span>{answer ? t("Áno") : t("Nie")}</span>
+      </label>)}
+    </div>
+  </fieldset>;
+}
+
+function StudentProfileOnboarding({ profile, csrfToken, onSaved, onSkip }: {
+  profile: StudentProfile;
+  csrfToken: string;
+  onSaved: (updated: StudentProfile) => void;
+  onSkip: () => void;
+}) {
+  const years = Array.from({ length: new Date().getFullYear() - 1899 }, (_, index) => new Date().getFullYear() - index);
+  const [answers, setAnswers] = useState<StudentOnboardingAnswers>(() => ({
+    birth_year: profile.birth_year ?? "",
+    dominant_hand: profile.dominant_hand ?? "",
+    gamepad_used: profile.gamepad_used,
+    pc_joystick_used: profile.pc_joystick_used,
+    rc_transmitter_used: profile.rc_transmitter_used,
+    uav_flown: profile.uav_flown,
+    uav_los: profile.uav_los,
+    uav_fpv: profile.uav_fpv,
+    uav_stabilized_mode: profile.uav_stabilized_mode,
+    uav_manual_mode: profile.uav_manual_mode,
+  }));
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  function updateBoolean(name: ProfileBinaryKey, value: boolean) {
+    setAnswers((current) => {
+      const next = { ...current, [name]: value };
+      if (name === "uav_flown" && !value) {
+        next.uav_los = null;
+        next.uav_fpv = null;
+        next.uav_stabilized_mode = null;
+        next.uav_manual_mode = null;
+      }
+      return next;
+    });
+  }
+
+  async function save(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSaving(true);
+    setError("");
+    try {
+      const updated = await request<StudentProfile>("/api/student/profile", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken },
+        body: JSON.stringify({
+          birth_year: answers.birth_year === "" ? null : answers.birth_year,
+          dominant_hand: answers.dominant_hand || null,
+          gamepad_used: answers.gamepad_used,
+          pc_joystick_used: answers.pc_joystick_used,
+          rc_transmitter_used: answers.rc_transmitter_used,
+          uav_flown: answers.uav_flown,
+          uav_los: answers.uav_los,
+          uav_fpv: answers.uav_fpv,
+          uav_stabilized_mode: answers.uav_stabilized_mode,
+          uav_manual_mode: answers.uav_manual_mode,
+        }),
+      });
+      onSaved(updated);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : t("Profil sa nepodarilo uložiť."));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return <form className="profile-onboarding" onSubmit={save}>
+    <div className="profile-onboarding-intro">
+      <div className="eyebrow">{t("KRÁTKY PROFIL · NEPOVINNÉ")}</div>
+      <h3>{t("Ako sa cítiš za ovládačom?")}</h3>
+      <p className="muted">{t("Odpovede môžeš kedykoľvek zmeniť. Ak niektorú otázku nechceš zodpovedať, jednoducho ju preskoč.")}</p>
+    </div>
+    <div className="profile-onboarding-demographics">
+      <label>{t("Rok narodenia")}<select value={answers.birth_year} onChange={(event) => setAnswers((current) => ({ ...current, birth_year: event.target.value ? Number(event.target.value) : "" }))}><option value="">{t("Nevyplnené")}</option>{years.map((year) => <option key={year} value={year}>{year}</option>)}</select></label>
+      <label>{t("Dominantná ruka")}<select value={answers.dominant_hand} onChange={(event) => setAnswers((current) => ({ ...current, dominant_hand: event.target.value }))}><option value="">{t("Nevyplnené")}</option><option value="right">{t("Pravá")}</option><option value="left">{t("Ľavá")}</option><option value="both">{t("Obe ruky")}</option><option value="prefer_not_to_say">{t("Nechcem uviesť")}</option></select></label>
+    </div>
+    <section className="profile-onboarding-section">
+      <h4>{t("Skúsenosti s ovládačmi")}</h4>
+      <div className="profile-onboarding-questions">
+        <ProfileExperienceQuestion name="gamepad_used" label="Používal(a) si už herný gamepad?" value={answers.gamepad_used} onChange={updateBoolean} />
+        <ProfileExperienceQuestion name="pc_joystick_used" label="Používal(a) si už PC joystick?" value={answers.pc_joystick_used} onChange={updateBoolean} />
+        <ProfileExperienceQuestion name="rc_transmitter_used" label="Používal(a) si už RC vysielač?" value={answers.rc_transmitter_used} onChange={updateBoolean} />
+      </div>
+    </section>
+    <section className="profile-onboarding-section">
+      <h4>{t("Skúsenosti s UAV")}</h4>
+      <div className="profile-onboarding-questions">
+        <ProfileExperienceQuestion name="uav_flown" label="Lietal(a) si už niekedy s UAV?" value={answers.uav_flown} onChange={updateBoolean} />
+      </div>
+      {answers.uav_flown === true && <div className="profile-uav-followups">
+        <p className="muted">{t("Akým spôsobom alebo v akom režime?")}</p>
+        <div className="profile-onboarding-questions">
+          <ProfileExperienceQuestion name="uav_los" label="Priamy vizuálny dohľad (LOS)" value={answers.uav_los} onChange={updateBoolean} />
+          <ProfileExperienceQuestion name="uav_fpv" label="Lietanie cez FPV" value={answers.uav_fpv} onChange={updateBoolean} />
+          <ProfileExperienceQuestion name="uav_stabilized_mode" label="Stabilizovaný režim (GPS/Angle)" value={answers.uav_stabilized_mode} onChange={updateBoolean} />
+          <ProfileExperienceQuestion name="uav_manual_mode" label="Manuálny alebo acro/rate režim" value={answers.uav_manual_mode} onChange={updateBoolean} />
+        </div>
+      </div>}
+    </section>
+    {error && <p className="error">{error}</p>}
+    <div className="profile-onboarding-actions"><button type="button" className="quiet" onClick={onSkip}>{t("Preskočiť na neskôr")}</button><button type="submit" className="primary" disabled={saving}>{saving ? t("Ukladám…") : t("Uložiť profil")}</button></div>
+  </form>;
+}
+
 function ParticipantProfileEditor({ participant, studentProfile, csrfToken, onSaved, onStudentSaved }: {
   participant?: Participant;
   studentProfile?: StudentProfile;
