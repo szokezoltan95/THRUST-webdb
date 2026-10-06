@@ -780,6 +780,51 @@ header > .actions, .registration-header > .actions { margin-top: 0; align-items:
 .registration-account-fields > .form-grid,
 .registration-form .profile-questionnaire > .form-grid { align-items: start; }
 
+/* Student registration: account credentials and a compact optional pilot profile. */
+.registration-content {
+  display: grid;
+  grid-template-columns: minmax(190px, 250px) minmax(0, 1fr);
+  align-items: start;
+  gap: clamp(24px, 5vw, 56px);
+  width: min(1080px, calc(100% - 48px));
+}
+.registration-heading { position: static; max-width: none; margin: 8px 0 0; }
+.registration-heading h1 { font-size: clamp(1.8rem, 3vw, 2.35rem); }
+.registration-form { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+.registration-form .registration-card { padding: 24px; }
+.registration-form .registration-account-fields { gap: 14px; }
+.registration-section-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.registration-section-heading h2 { margin: 6px 0 0; }
+.registration-section-heading + .muted { margin: 0; }
+.registration-optional { flex: 0 0 auto; padding: 5px 10px; border-radius: 20px; background: var(--surface-highlight); color: var(--text-soft); font-size: .76rem; }
+.registration-steps { display: grid; gap: 12px; list-style: none; margin: 28px 0 0; padding: 0; }
+.registration-steps li { display: flex; align-items: center; gap: 10px; color: var(--text-soft); font-size: .88rem; }
+.registration-steps li span { display: grid; place-items: center; width: 25px; height: 25px; border: 1px solid var(--line); border-radius: 50%; color: var(--accent); }
+.registration-questions { display: grid; gap: 0; margin-top: 2px; }
+.registration-binary-question { display: flex; align-items: center; justify-content: space-between; gap: 18px; min-width: 0; margin: 0; padding: 11px 0; border: 0; border-top: 1px solid var(--line); }
+.registration-binary-question legend { float: none; width: auto; max-width: 70%; padding: 0; color: var(--text-soft); font-size: .88rem; }
+.registration-binary-options { display: flex; flex: 0 0 auto; gap: 7px; }
+.registration-form .registration-binary-options label { display: flex; grid-template-columns: auto auto; align-items: center; gap: 6px; min-height: 36px; padding: 5px 10px; border: 1px solid var(--line); border-radius: 8px; color: var(--text-main); font-size: .82rem; }
+.registration-form .registration-binary-options input[type="radio"] { display: inline-block; width: 15px; min-width: 15px; min-height: 15px; margin: 0; padding: 0; border: 0; border-radius: 50%; background: transparent; accent-color: var(--accent); }
+.registration-uav-questions { margin: 4px 0 2px 12px; padding-left: 14px; border-left: 2px solid rgba(var(--accent-rgb), .35); }
+.profile-editor-questions { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.registration-form .registration-consents { gap: 14px; }
+.registration-actions .muted { max-width: 620px; }
+@media (max-width: 820px) {
+  .registration-content { grid-template-columns: minmax(0, 1fr); gap: 22px; }
+  .registration-heading { margin: 0; }
+  .registration-steps { display: flex; gap: 18px; margin-top: 17px; }
+  .registration-heading h1 { font-size: 1.8rem; }
+}
+@media (max-width: 560px) {
+  .registration-content { width: calc(100% - 24px); }
+  .registration-form .registration-card { padding: 18px; }
+  .registration-form .form-grid, .profile-editor-questions { grid-template-columns: 1fr; }
+  .registration-binary-question { align-items: flex-start; flex-direction: column; gap: 8px; }
+  .registration-binary-question legend { max-width: 100%; }
+  .registration-actions { align-items: stretch; flex-direction: column; }
+}
+
 /* Tables scroll as a unit on narrow screens and keep each row aligned to its header. */
 .participant-table,
 .test-table,

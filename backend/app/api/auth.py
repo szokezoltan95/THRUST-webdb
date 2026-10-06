@@ -83,22 +83,16 @@ async def register(
 
     participant = Participant(
         participant_code=participant_code,
-        birth_date=payload.birth_date,
-        pilot_experience=payload.pilot_experience,
-        flight_hours_range=payload.flight_hours_range,
-        pilot_certificate=payload.pilot_certificate,
-        primary_uav_type=payload.primary_uav_type,
-        simulator_experience=payload.simulator_experience,
-        self_rated_skill=payload.self_rated_skill,
-        sex=payload.sex,
+        birth_year=payload.birth_year,
         dominant_hand=payload.dominant_hand,
-        vision_correction=payload.vision_correction,
-        vision_diopters_left=payload.vision_diopters_left,
-        vision_diopters_right=payload.vision_diopters_right,
-        rc_experience=payload.rc_experience,
-        fpv_experience=payload.fpv_experience,
-        game_controller_experience=payload.game_controller_experience,
-        video_game_experience=payload.video_game_experience,
+        gamepad_used=payload.gamepad_used,
+        pc_joystick_used=payload.pc_joystick_used,
+        rc_transmitter_used=payload.rc_transmitter_used,
+        uav_flown=payload.uav_flown,
+        uav_los=payload.uav_los,
+        uav_fpv=payload.uav_fpv,
+        uav_stabilized_mode=payload.uav_stabilized_mode,
+        uav_manual_mode=payload.uav_manual_mode,
     )
     db.add(participant)
     await db.flush()
@@ -107,8 +101,6 @@ async def register(
         email=email,
         password_hash=hash_password(payload.password),
         role="student",
-        first_name=payload.first_name,
-        last_name=payload.last_name,
         participant_id=participant.id,
     )
     db.add(user)

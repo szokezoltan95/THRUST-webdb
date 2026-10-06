@@ -95,15 +95,15 @@ type PublicMetrics = {
 
 type User = { username: string; role: string; csrf_token: string; email?: string | null; participant_id?: string | null; participant_code?: string | null; first_name?: string | null; last_name?: string | null; accent_theme?: AccentTheme; color_mode?: ColorMode };
 type Overview = { participant_count: number; measurement_count: number };
-type Participant = { id: string; participant_code: string; is_active: boolean; created_at: string; revoked_consents?: Partial<Record<ConsentKind, string>>; birth_date?: string | null; pilot_experience?: string | null; flight_hours_range?: string | null; pilot_certificate?: string | null; primary_uav_type?: string | null; simulator_experience?: string | null; self_rated_skill?: number | null; sex?: string | null; dominant_hand?: string | null; vision_correction?: string | null; vision_diopters_left?: number | null; vision_diopters_right?: number | null; rc_experience?: string | null; fpv_experience?: string | null; game_controller_experience?: string | null; video_game_experience?: string | null; }
-type AdminAccount = { id: string; username: string; email: string | null; first_name: string | null; last_name: string | null; role: string; effective_role: string; is_active: boolean; participant_id: string | null; participant_code: string | null; created_at: string };
+type Participant = { id: string; participant_code: string; is_active: boolean; created_at: string; revoked_consents?: Partial<Record<ConsentKind, string>>; birth_year?: number | null; dominant_hand?: string | null; gamepad_used?: boolean | null; pc_joystick_used?: boolean | null; rc_transmitter_used?: boolean | null; uav_flown?: boolean | null; uav_los?: boolean | null; uav_fpv?: boolean | null; uav_stabilized_mode?: boolean | null; uav_manual_mode?: boolean | null; }
+type AdminAccount = { id: string; username: string; email: string | null; first_name?: string | null; last_name?: string | null; role: string; effective_role: string; is_active: boolean; participant_id: string | null; participant_code: string | null; created_at: string };
 type TestDefinition = { id: string; test_code: string; name: string; version: string; status: string; analysis_profile: string; configuration: Record<string, unknown>; is_active: boolean };
 type Measurement = { id: string; participant_id: string; test_definition_id: string | null; test_type: string; status: string; started_at: string; source_file_name: string | null; raw_sha256: string | null; raw_size_bytes: number | null; analysis_data: Record<string, unknown> | null; human_model_status?: string; human_model_revision?: number | null; compute_quality_status?: string; compute_quality_note?: string | null };
 type ParticipantDetail = { participant: Participant; measurements: { id: string; test_type: string; status: string; started_at: string; raw_data_available?: boolean; raw_size_bytes?: number | null }[] };
 type AdminSection = "overview" | "participants" | "groups" | "trends" | "reports" | "tests" | "measurements" | "welcome" | "clients";
 type ParticipantGroup = { id: string; name: string; description: string | null; created_at: string; participant_ids: string[]; participant_codes: string[] };
 type StudentMeasurement = { id: string; test_type: string; status: string; started_at: string; raw_size_bytes: number | null; analysis_data: Record<string, unknown> | null };
-type StudentProfile = { username: string; email: string | null; role: string; participant_code: string; first_name: string; last_name: string; created_at: string; birth_date: string | null; pilot_experience: string | null; flight_hours_range: string | null; pilot_certificate: string | null; primary_uav_type: string | null; simulator_experience: string | null; self_rated_skill: number | null; sex?: string | null; dominant_hand?: string | null; vision_correction?: string | null; vision_diopters_left?: number | null; vision_diopters_right?: number | null; rc_experience?: string | null; fpv_experience?: string | null; game_controller_experience?: string | null; video_game_experience?: string | null; }
+type StudentProfile = { username: string; email: string | null; role: string; participant_code: string; created_at: string; birth_year: number | null; dominant_hand: string | null; gamepad_used: boolean | null; pc_joystick_used: boolean | null; rc_transmitter_used: boolean | null; uav_flown: boolean | null; uav_los: boolean | null; uav_fpv: boolean | null; uav_stabilized_mode: boolean | null; uav_manual_mode: boolean | null; }
 type StudentComparison = { available: boolean; minimum_group_size: number; cohort_participant_count: number; own_measurement_count: number; metrics: ComparisonMetric[]; response_curve: ComparisonResponseCurve | null };
 
 type MeasurementMode = "SCOPE" | "SIMPLE";
@@ -844,36 +844,28 @@ export function App() {
       setError(t("Heslá sa nezhodujú."));
       return;
     }
-    const birthDateInput = String(data.get("birth_date") || "").trim();
-    const birthDate = birthDateInput ? parseFormattedDate(birthDateInput) : null;
-    if (birthDateInput && !birthDate) {
-      setError(t("Vyber platný dátum narodenia."));
-      return;
-    }
+    const optionalBoolean = (name: string) => {
+      const value = data.get(name);
+      return value === "true" ? true : value === "false" ? false : null;
+    };
     try {
       const signedIn = await request<User>("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          email: data.get("email"), first_name: data.get("first_name"), last_name: data.get("last_name"),
+          email: data.get("email"),
           password: data.get("password"), research_consent: data.get("research_consent") === "on",
           gdpr_consent: data.get("gdpr_consent") === "on",
-          birth_date: birthDate,
-          sex: data.get("sex") || null,
+          birth_year: data.get("birth_year") ? Number(data.get("birth_year")) : null,
           dominant_hand: data.get("dominant_hand") || null,
-          vision_correction: data.get("vision_correction") || null,
-          vision_diopters_left: data.get("vision_diopters_left") ? Number(data.get("vision_diopters_left")) : null,
-          vision_diopters_right: data.get("vision_diopters_right") ? Number(data.get("vision_diopters_right")) : null,
-          rc_experience: data.get("rc_experience") || null,
-          fpv_experience: data.get("fpv_experience") || null,
-          game_controller_experience: data.get("game_controller_experience") || null,
-          video_game_experience: data.get("video_game_experience") || null,
-          pilot_experience: data.get("pilot_experience") || null,
-          flight_hours_range: data.get("flight_hours_range") || null,
-          pilot_certificate: data.get("pilot_certificate") || null,
-          primary_uav_type: data.get("primary_uav_type") || null,
-          simulator_experience: data.get("simulator_experience") || null,
-          self_rated_skill: data.get("self_rated_skill") ? Number(data.get("self_rated_skill")) : null,
+          gamepad_used: optionalBoolean("gamepad_used"),
+          pc_joystick_used: optionalBoolean("pc_joystick_used"),
+          rc_transmitter_used: optionalBoolean("rc_transmitter_used"),
+          uav_flown: optionalBoolean("uav_flown"),
+          uav_los: optionalBoolean("uav_los"),
+          uav_fpv: optionalBoolean("uav_fpv"),
+          uav_stabilized_mode: optionalBoolean("uav_stabilized_mode"),
+          uav_manual_mode: optionalBoolean("uav_manual_mode"),
           consent_version: consentTexts?.research.version || "research-v4",
           gdpr_consent_version: consentTexts?.gdpr.version || "gdpr-v3",
           consent_language: language,
@@ -1223,21 +1215,16 @@ export function App() {
                            [t("E-mail / rola"), linkedAccount ? `${linkedAccount.email || linkedAccount.username} · ${linkedAccount.effective_role}` : "—"],
                          ]} />
                          <InfoTable rows={[
-                           [t("Dátum narodenia"), participant.birth_date ? formatDate(participant.birth_date) : t("Neuvedené")],
-                           [t("Pohlavie"), profileLabel(participant.sex)],
+                           [t("Rok narodenia"), participant.birth_year ?? t("Neuvedené")],
                            [t("Dominantná ruka"), profileLabel(participant.dominant_hand)],
-                           [t("Zraková korekcia"), profileLabel(participant.vision_correction)],
-                           [t("Dioptrie ľavé / pravé"), `${participant.vision_diopters_left ?? "—"} / ${participant.vision_diopters_right ?? "—"} D`],
-                           [t("Skúsenosť s pilotovaním"), profileLabel(participant.pilot_experience)],
-                           [t("Letové hodiny"), profileLabel(participant.flight_hours_range)],
-                           [t("Osvedčenie"), profileLabel(participant.pilot_certificate)],
-                           [t("Typ UAV"), profileLabel(participant.primary_uav_type)],
-                           [t("Simulátor"), profileLabel(participant.simulator_experience)],
-                           [t("RC ovládanie"), profileLabel(participant.rc_experience)],
-                           ["FPV", profileLabel(participant.fpv_experience)],
-                           [t("Herný ovládač"), profileLabel(participant.game_controller_experience)],
-                           [t("Video / počítačové hry"), profileLabel(participant.video_game_experience)],
-                           [t("Sebahodnotenie zručností"), participant.self_rated_skill ?? t("Neuvedené")],
+                           [t("Herný gamepad"), yesNoLabel(participant.gamepad_used)],
+                           [t("PC joystick"), yesNoLabel(participant.pc_joystick_used)],
+                           [t("RC vysielač"), yesNoLabel(participant.rc_transmitter_used)],
+                           [t("Lietal(a) s UAV"), yesNoLabel(participant.uav_flown)],
+                           [t("LOS"), yesNoLabel(participant.uav_los)],
+                           [t("FPV"), yesNoLabel(participant.uav_fpv)],
+                           [t("Stabilizovaný režim"), yesNoLabel(participant.uav_stabilized_mode)],
+                           [t("Manuálny / acro režim"), yesNoLabel(participant.uav_manual_mode)],
                          ]} />
                        </div>
                      </section>
@@ -1444,6 +1431,15 @@ export function App() {
 }
 
 
+function RegistrationBooleanQuestion({ name, label, onChange }: { name: string; label: string; onChange?: (value: boolean) => void }) {
+  return <fieldset className="registration-binary-question">
+    <legend>{t(label)}</legend>
+    <div className="registration-binary-options">
+      {[true, false].map((value) => <label key={String(value)}><input type="radio" name={name} value={String(value)} onChange={() => onChange?.(value)} /><span>{value ? t("Áno") : t("Nie")}</span></label>)}
+    </div>
+  </fieldset>;
+}
+
 function RegistrationPage({ onSubmit, onBack, onLogin, onResearcherRegister, error, consentTexts, onOpenConsent }: {
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onBack: () => void;
@@ -1453,44 +1449,53 @@ function RegistrationPage({ onSubmit, onBack, onLogin, onResearcherRegister, err
   consentTexts: ConsentDocuments | null;
   onOpenConsent: (kind: ConsentKind) => void;
 }) {
+  const [uavFlown, setUavFlown] = useState(false);
+  const years = Array.from({ length: new Date().getFullYear() - 1899 }, (_, index) => new Date().getFullYear() - index);
   return <main className="registration-page">
     <header className="registration-header">
       <Brand />
       <div className="actions"><LanguageSwitcher /><button type="button" className="quiet" onClick={onBack}>{t("Späť na hlavnú stránku")}</button><button type="button" className="quiet" onClick={onResearcherRegister}>{t("Registrácia výskumníka")}</button><button type="button" className="quiet" onClick={onLogin}>{t("Už mám účet · Prihlásiť sa")}</button></div>
     </header>
     <section className="registration-content">
-      <div className="registration-heading"><div className="eyebrow">{t("NOVÝ ŠTUDENTSKÝ ÚČET")}</div><h1>{t("Vytvor si účet")}</h1><p className="lead">{t("Po registrácii dostaneš svoje Participant ID. Výskumník ho použije pri meraní v lokálnom THRUSTe.")}</p></div>
+      <aside className="registration-heading"><div className="eyebrow">{t("NOVÝ ŠTUDENTSKÝ ÚČET")}</div><h1>{t("Vytvor si účet")}</h1><p className="lead">{t("Po registrácii dostaneš svoje Participant ID. Výskumník ho použije pri meraní v lokálnom THRUSTe.")}</p><ol className="registration-steps"><li><span>1</span>{t("Účet")}</li><li><span>2</span>{t("Profil")}</li></ol></aside>
       <form className="registration-form" onSubmit={onSubmit}>
         <section className="registration-card registration-account-fields">
-          <div className="eyebrow">{t("PRIHLASOVACIE ÚDAJE")}</div><h2>{t("Účet")}</h2><p className="muted">{t("Účet má na začiatku rolu študenta. Oprávnenia môže zmeniť iba superadmin.")}</p>
-          <div className="form-grid"><label>{t("Meno")}<input name="first_name" autoComplete="given-name" required /></label><label>{t("Priezvisko")}<input name="last_name" autoComplete="family-name" required /></label></div>
+          <div><div className="eyebrow">{t("PRIHLASOVACIE ÚDAJE")}</div><h2>{t("Účet")}</h2><p className="muted">{t("Prihlasuj sa e-mailom a heslom. Meno a priezvisko nepotrebujeme.")}</p></div>
           <label>{t("E-mail")}<input name="email" type="email" autoComplete="email" required /></label>
           <div className="form-grid"><label>{t("Heslo")}<input name="password" type="password" minLength={10} autoComplete="new-password" required /></label><label>{t("Zopakovať heslo")}<input name="password_confirmation" type="password" minLength={10} autoComplete="new-password" required /></label></div>
         </section>
         <section className="registration-card profile-questionnaire">
-          <div><div className="eyebrow">{t("PROFIL PILOTA · NEPOVINNÉ")}</div><h2>{t("Skúsenosti a zručnosti")}</h2><p className="muted">{t("Všetky odpovede sú nepovinné. Použijú sa na štatistické vyhodnotenie; môžeš ich preskočiť.")}</p></div>
-          <div className="form-grid"><label>{t("Dátum narodenia")}<input name="birth_date" type="date" autoComplete="bday" /></label><label>{t("Pohlavie")}<select name="sex" defaultValue=""><option value="">{t("Nevyplnené")}</option><option value="female">{t("Žena")}</option><option value="male">{t("Muž")}</option><option value="intersex">{t("Intersex")}</option><option value="other">{t("Iné")}</option><option value="prefer_not_to_say">{t("Nechcem uviesť")}</option></select></label></div>
-          <div className="form-grid"><label>{t("Dominantná ruka")}<select name="dominant_hand" defaultValue=""><option value="">{t("Nevyplnené")}</option><option value="right">{t("Pravá")}</option><option value="left">{t("Ľavá")}</option><option value="both">{t("Obe ruky")}</option><option value="prefer_not_to_say">{t("Nechcem uviesť")}</option></select></label><label>{t("Zraková korekcia")}<select name="vision_correction" defaultValue=""><option value="">{t("Nevyplnené")}</option><option value="none">{t("Bez korekcie")}</option><option value="glasses">{t("Okuliare")}</option><option value="contact_lenses">{t("Kontaktné šošovky")}</option><option value="both">{t("Okuliare aj šošovky")}</option><option value="other">{t("Iná korekcia")}</option><option value="prefer_not_to_say">{t("Nechcem uviesť")}</option></select></label></div>
-          <div><span className="muted">{t("Približné dioptrie, nepovinné (D)")}</span><div className="form-grid"><label>{t("Ľavé oko")}<input name="vision_diopters_left" type="number" min="-30" max="30" step="0.25" /></label><label>{t("Pravé oko")}<input name="vision_diopters_right" type="number" min="-30" max="30" step="0.25" /></label></div></div>
-          <div className="form-grid"><label>{t("Skúsenosť s pilotovaním dronu")}<select name="pilot_experience" defaultValue=""><option value="">{t("Nevyplnené")}</option><option value="none">{t("Žiadna")}</option><option value="under_1_year">{t("Menej ako 1 rok")}</option><option value="1_3_years">{t("1–3 roky")}</option><option value="3_5_years">{t("3–5 rokov")}</option><option value="over_5_years">{t("Viac ako 5 rokov")}</option></select></label><label>{t("Odhadovaný počet letových hodín")}<select name="flight_hours_range" defaultValue=""><option value="">{t("Nevyplnené")}</option><option value="0">0</option><option value="under_10">{t("Menej ako 10")}</option><option value="10_50">10–50</option><option value="51_200">51–200</option><option value="201_500">201–500</option><option value="over_500">{t("Viac ako 500")}</option></select></label></div>
-          <div className="form-grid"><label>{t("Osvedčenie / licencia")}<select name="pilot_certificate" defaultValue=""><option value="">{t("Nevyplnené")}</option><option value="none">{t("Žiadne")}</option><option value="a1_a3">{t("A1/A3")}</option><option value="a2">{t("A2")}</option><option value="sts">{t("STS")}</option><option value="other">{t("Iné")}</option></select></label><label>{t("Najčastejší typ UAV")}<select name="primary_uav_type" defaultValue=""><option value="">{t("Nevyplnené")}</option><option value="multirotor">{t("Multikoptéra")}</option><option value="fixed_wing">{t("Pevné krídlo")}</option><option value="helicopter">{t("Vrtuľník")}</option><option value="vtol">{t("VTOL")}</option><option value="other">{t("Iný / neviem")}</option></select></label></div>
-          <div className="form-grid"><label>{t("Skúsenosť s leteckým simulátorom")}<select name="simulator_experience" defaultValue=""><option value="">{t("Nevyplnené")}</option><option value="none">{t("Žiadna")}</option><option value="under_10">{t("Menej ako 10 hodín")}</option><option value="10_50">{t("10–50 hodín")}</option><option value="51_200">{t("51–200 hodín")}</option><option value="over_200">{t("Viac ako 200 hodín")}</option></select></label><label>{t("Skúsenosť s RC ovládaním")}<select name="rc_experience" defaultValue=""><option value="">{t("Nevyplnené")}</option><option value="none">{t("Žiadna")}</option><option value="under_1_year">{t("Menej ako 1 rok")}</option><option value="1_3_years">{t("1–3 roky")}</option><option value="3_5_years">{t("3–5 rokov")}</option><option value="over_5_years">{t("Viac ako 5 rokov")}</option></select></label></div>
-          <div className="form-grid"><label>{t("Skúsenosť s FPV")}<select name="fpv_experience" defaultValue=""><option value="">{t("Nevyplnené")}</option><option value="none">{t("Žiadna")}</option><option value="under_1_year">{t("Menej ako 1 rok")}</option><option value="1_3_years">{t("1–3 roky")}</option><option value="3_5_years">{t("3–5 rokov")}</option><option value="over_5_years">{t("Viac ako 5 rokov")}</option></select></label><label>{t("Skúsenosť s gamepadom / herným ovládačom")}<select name="game_controller_experience" defaultValue=""><option value="">{t("Nevyplnené")}</option><option value="none">{t("Žiadna")}</option><option value="under_1_year">{t("Menej ako 1 rok")}</option><option value="1_3_years">{t("1–3 roky")}</option><option value="3_5_years">{t("3–5 rokov")}</option><option value="over_5_years">{t("Viac ako 5 rokov")}</option></select></label></div>
-          <div className="form-grid"><label>{t("Video / počítačové hry (hodiny za týždeň)")}<select name="video_game_experience" defaultValue=""><option value="">{t("Nevyplnené")}</option><option value="none">{t("Nikdy")}</option><option value="under_2">{t("Menej ako 2")}</option><option value="2_5">2–5</option><option value="6_10">6–10</option><option value="over_10">{t("Viac ako 10")}</option></select></label><label>{t("Sebahodnotenie pilotných zručností")}<select name="self_rated_skill" defaultValue=""><option value="">{t("Nevyplnené")}</option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option></select></label></div>
+          <div className="registration-section-heading"><div><div className="eyebrow">{t("PROFIL ÚČASTNÍKA")}</div><h2>{t("Skúsenosti s ovládaním")}</h2></div><span className="registration-optional">{t("Nepovinné")}</span></div>
+          <p className="muted">{t("Krátke profilové otázky na štatistické vyhodnotenie. Môžeš ich preskočiť a neskôr upraviť v profile.")}</p>
+          <div className="form-grid">
+            <label>{t("Rok narodenia")}<select name="birth_year" defaultValue=""><option value="">{t("Vyber rok")}</option>{years.map((year) => <option key={year} value={year}>{year}</option>)}</select></label>
+            <label>{t("Dominantná ruka")}<select name="dominant_hand" defaultValue=""><option value="">{t("Nevyplnené")}</option><option value="right">{t("Pravá")}</option><option value="left">{t("Ľavá")}</option><option value="both">{t("Obe ruky")}</option><option value="prefer_not_to_say">{t("Nechcem uviesť")}</option></select></label>
+          </div>
+          <div className="registration-questions">
+            <RegistrationBooleanQuestion name="gamepad_used" label="Používal(a) si niekedy herný gamepad?" />
+            <RegistrationBooleanQuestion name="pc_joystick_used" label="Používal(a) si niekedy PC joystick?" />
+            <RegistrationBooleanQuestion name="rc_transmitter_used" label="Používal(a) si niekedy RC vysielač?" />
+            <RegistrationBooleanQuestion name="uav_flown" label="Lietal(a) si niekedy s UAV?" onChange={setUavFlown} />
+            {uavFlown && <div className="registration-uav-questions">
+              <RegistrationBooleanQuestion name="uav_los" label="Lietal(a) si pri priamom vizuálnom dohľade (LOS)?" />
+              <RegistrationBooleanQuestion name="uav_fpv" label="Lietal(a) si pomocou FPV?" />
+              <RegistrationBooleanQuestion name="uav_stabilized_mode" label="Používal(a) si stabilizovaný režim, napríklad GPS/Angle?" />
+              <RegistrationBooleanQuestion name="uav_manual_mode" label="Používal(a) si manuálny alebo acro/rate režim?" />
+            </div>}
+          </div>
         </section>
         <section className="registration-card registration-consents">
-          <div className="eyebrow">{t("SÚHLASY A DOKONČENIE")}</div>
+          <div><div className="eyebrow">{t("SÚHLASY A DOKONČENIE")}</div><h2>{t("Pred vytvorením účtu")}</h2></div>
           <label className="consent"><input name="research_consent" type="checkbox" required /> <span>{t("Súhlasím s použitím pseudonymizovaných údajov na výskumné účely.")} <a href="#consent-research" onClick={(event) => { event.preventDefault(); onOpenConsent("research"); }}>{t("Zobraziť text výskumného súhlasu")}</a></span></label>
           <label className="consent"><input name="gdpr_consent" type="checkbox" required /> <span>{t("Súhlasím so spracovaním osobných údajov pre vytvorenie a správu účtu.")} <a href="#consent-gdpr" onClick={(event) => { event.preventDefault(); onOpenConsent("gdpr"); }}>{t("Zobraziť informácie a GDPR súhlas")}</a></span></label>
           {error && <p className="error">{error}</p>}
-          <div className="registration-actions"><span className="muted">{t("Profilové otázky sú nepovinné. Oba súhlasy sú potrebné na registráciu.")}</span><button type="submit" className="primary" disabled={!consentTexts}>{t("Vytvoriť účet")}</button></div>
+          <div className="registration-actions"><span className="muted">{t("Výskumné otázky môžeš preskočiť. Oba súhlasy sú potrebné na registráciu.")}</span><button type="submit" className="primary" disabled={!consentTexts}>{t("Vytvoriť účet")}</button></div>
         </section>
       </form>
     </section>
     <SiteFooter />
   </main>;
 }
-
 type NormalizedChannel = { mean?: number[]; median?: number[]; std?: number[]; metrics?: Record<string, number | null> };
 type NormalizedResponse = { time_s?: number[]; channels?: Record<string, NormalizedChannel> };
 
@@ -2503,7 +2508,7 @@ function StudentPortal({ user, onLogout, accentTheme, colorMode, onAppearanceCha
     <header><Brand colorMode={colorMode} /><div className="header-actions"><AppearanceControls accentTheme={accentTheme} colorMode={colorMode} onAccentChange={(theme) => onAppearanceChange(theme, colorMode)} onModeChange={(mode) => onAppearanceChange(accentTheme, mode)} /><LanguageSwitcher /><button className="quiet" onClick={onLogout}>{t("Odhlásiť")}</button></div></header>
     <section className="public student-content">
       <div className="eyebrow">{t("OSOBNÝ PROFIL")}</div>
-      <h1>{t("Ahoj,")} {profile?.first_name || user.first_name || user.username}.</h1>
+      <h1>{t("Ahoj,")} {user.participant_code || user.username}.</h1>
       <p className="lead">{t("Tvoje účastnícke ID:")} <strong>{user.participant_code || "—"}</strong></p>
       <div className="stats"><Metric label={t("Moje merania")} value={visibleMeasurements.length} /><Metric label={t("Skupina")} value={comparison?.cohort_participant_count ?? "—"} /><Metric label={t("Porovnanie")} value={comparison?.available ? t("dostupné") : t("čaká na limit")} /></div>
       {error && <p className="error">{error}</p>}
@@ -2515,25 +2520,18 @@ function StudentPortal({ user, onLogout, accentTheme, colorMode, onAppearanceCha
         {editingProfile
           ? <ParticipantProfileEditor studentProfile={profile} csrfToken={user.csrf_token} onStudentSaved={(updated) => { setProfile(updated); setEditingProfile(false); setProfileMessage(t("Údaje profilu boli uložené.")); }} />
           : <InfoTable rows={[
-            ["Meno", profile.first_name],
-            ["Priezvisko", profile.last_name],
             ["E-mail", profile.email || profile.username],
             ["Participant ID", profile.participant_code],
-            [t("Dátum narodenia"), profile.birth_date ? formatDate(profile.birth_date) : t("Neuvedené")],
-            [t("Pohlavie"), profileLabel(profile.sex)],
+            [t("Rok narodenia"), profile.birth_year ?? t("Neuvedené")],
             [t("Dominantná ruka"), profileLabel(profile.dominant_hand)],
-            [t("Zraková korekcia"), profileLabel(profile.vision_correction)],
-            [t("Dioptrie ľavé / pravé"), `${profile.vision_diopters_left ?? "—"} / ${profile.vision_diopters_right ?? "—"} D`],
-            [t("Skúsenosť s pilotovaním"), profileLabel(profile.pilot_experience)],
-            [t("Letové hodiny"), profileLabel(profile.flight_hours_range)],
-            [t("Osvedčenie"), profileLabel(profile.pilot_certificate)],
-            [t("Typ UAV"), profileLabel(profile.primary_uav_type)],
-            [t("Skúsenosť so simulátorom"), profileLabel(profile.simulator_experience)],
-            [t("RC ovládanie"), profileLabel(profile.rc_experience)],
-            ["FPV", profileLabel(profile.fpv_experience)],
-            [t("Herný ovládač"), profileLabel(profile.game_controller_experience)],
-            [t("Video / počítačové hry"), profileLabel(profile.video_game_experience)],
-            [t("Sebahodnotenie zručností"), profile.self_rated_skill ?? t("Neuvedené")],
+            [t("Herný gamepad"), yesNoLabel(profile.gamepad_used)],
+            [t("PC joystick"), yesNoLabel(profile.pc_joystick_used)],
+            [t("RC vysielač"), yesNoLabel(profile.rc_transmitter_used)],
+            [t("Lietal(a) s UAV"), yesNoLabel(profile.uav_flown)],
+            [t("LOS"), yesNoLabel(profile.uav_los)],
+            [t("FPV"), yesNoLabel(profile.uav_fpv)],
+            [t("Stabilizovaný režim"), yesNoLabel(profile.uav_stabilized_mode)],
+            [t("Manuálny / acro režim"), yesNoLabel(profile.uav_manual_mode)],
           ]} />}
       </section>}
       <section className="panel">
@@ -2580,48 +2578,35 @@ function ParticipantProfileEditor({ participant, studentProfile, csrfToken, onSa
   const [message, setMessage] = useState("");
   const values = studentProfile ?? participant;
   if (!values) return null;
+  const years = Array.from({ length: new Date().getFullYear() - 1899 }, (_, index) => new Date().getFullYear() - index);
 
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSaving(true);
     setMessage("");
     const form = new FormData(event.currentTarget);
-    const birthDateInput = String(form.get("birth_date") || "").trim();
-    const birthDate = birthDateInput ? parseFormattedDate(birthDateInput) : null;
-    if (birthDateInput && !birthDate) {
-      setMessage(t("Dátum zadaj vo formáte yyyy/MMM/dd, napríklad 2001/Feb/09."));
-      setSaving(false);
-      return;
-    }
+    const optionalBoolean = (name: string) => {
+      const value = form.get(name);
+      return value === "true" ? true : value === "false" ? false : null;
+    };
     const profileData = {
-      birth_date: birthDate,
-      pilot_experience: form.get("pilot_experience") || null,
-      flight_hours_range: form.get("flight_hours_range") || null,
-      pilot_certificate: form.get("pilot_certificate") || null,
-      primary_uav_type: form.get("primary_uav_type") || null,
-      simulator_experience: form.get("simulator_experience") || null,
-      self_rated_skill: form.get("self_rated_skill") ? Number(form.get("self_rated_skill")) : null,
-      sex: form.get("sex") || null,
+      birth_year: form.get("birth_year") ? Number(form.get("birth_year")) : null,
       dominant_hand: form.get("dominant_hand") || null,
-      vision_correction: form.get("vision_correction") || null,
-      vision_diopters_left: form.get("vision_diopters_left") ? Number(form.get("vision_diopters_left")) : null,
-      vision_diopters_right: form.get("vision_diopters_right") ? Number(form.get("vision_diopters_right")) : null,
-      rc_experience: form.get("rc_experience") || null,
-      fpv_experience: form.get("fpv_experience") || null,
-      game_controller_experience: form.get("game_controller_experience") || null,
-      video_game_experience: form.get("video_game_experience") || null,
+      gamepad_used: optionalBoolean("gamepad_used"),
+      pc_joystick_used: optionalBoolean("pc_joystick_used"),
+      rc_transmitter_used: optionalBoolean("rc_transmitter_used"),
+      uav_flown: optionalBoolean("uav_flown"),
+      uav_los: optionalBoolean("uav_los"),
+      uav_fpv: optionalBoolean("uav_fpv"),
+      uav_stabilized_mode: optionalBoolean("uav_stabilized_mode"),
+      uav_manual_mode: optionalBoolean("uav_manual_mode"),
     };
     try {
       if (studentProfile) {
         const updated = await request<StudentProfile>("/api/student/profile", {
           method: "PATCH",
           headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken },
-          body: JSON.stringify({
-            ...profileData,
-            first_name: form.get("first_name"),
-            last_name: form.get("last_name"),
-            email: form.get("email"),
-          }),
+          body: JSON.stringify({ ...profileData, email: form.get("email") }),
         });
         onStudentSaved?.(updated);
       } else if (participant) {
@@ -2640,28 +2625,33 @@ function ParticipantProfileEditor({ participant, studentProfile, csrfToken, onSa
     }
   }
 
+  const booleanSelect = (name: string, label: string, value?: boolean | null) => <label key={name}>{t(label)}<select name={name} defaultValue={value == null ? "" : String(value)}><option value="">{t("Nevyplnené")}</option><option value="true">{t("Áno")}</option><option value="false">{t("Nie")}</option></select></label>;
+
   return <form className="participant-profile-editor panel" onSubmit={save}>
-    <div><div className="eyebrow">{studentProfile ? t("MOJE ÚDAJE") : t("PROFIL ÚČASTNÍKA")}</div><h3>{studentProfile ? t("Osobné údaje a skúsenosti") : t("Parametre a skúsenosti")}</h3></div>
-    {studentProfile && <div className="form-grid">
-      <label>{t("Meno")}<input name="first_name" defaultValue={studentProfile.first_name} maxLength={120} required /></label>
-      <label>{t("Priezvisko")}<input name="last_name" defaultValue={studentProfile.last_name} maxLength={120} required /></label>
-      <label className="profile-email-field">{t("E-mail")}<input name="email" type="email" defaultValue={studentProfile.email ?? studentProfile.username} maxLength={255} required /></label>
-    </div>}
+    <div><div className="eyebrow">{studentProfile ? t("MOJE ÚDAJE") : t("PROFIL ÚČASTNÍKA")}</div><h3>{studentProfile ? t("Moje údaje") : t("Profil účastníka")}</h3></div>
+    {studentProfile && <label className="profile-email-field">{t("E-mail")}<input name="email" type="email" defaultValue={studentProfile.email ?? studentProfile.username} maxLength={255} required /></label>}
     {participant && <label className="checkbox-line"><input name="is_active" type="checkbox" defaultChecked={participant.is_active} /> {t("Aktívny účastník")}</label>}
-    <div className="form-grid"><label>{t("Dátum narodenia")}<input name="birth_date" type="date" defaultValue={values.birth_date ?? ""} /></label><label>{t("Pohlavie")}<select name="sex" defaultValue={values.sex ?? ""}><option value="">{t("Nevyplnené")}</option><option value="female">{t("Žena")}</option><option value="male">{t("Muž")}</option><option value="intersex">{t("Intersex")}</option><option value="other">{t("Iné")}</option><option value="prefer_not_to_say">{t("Nechcem uviesť")}</option></select></label></div>
-    <div className="form-grid"><label>{t("Dominantná ruka")}<select name="dominant_hand" defaultValue={values.dominant_hand ?? ""}><option value="">{t("Nevyplnené")}</option><option value="right">{t("Pravá")}</option><option value="left">{t("Ľavá")}</option><option value="both">{t("Obe ruky")}</option><option value="prefer_not_to_say">{t("Nechcem uviesť")}</option></select></label><label>{t("Zraková korekcia")}<select name="vision_correction" defaultValue={values.vision_correction ?? ""}><option value="">{t("Nevyplnené")}</option><option value="none">{t("Bez korekcie")}</option><option value="glasses">{t("Okuliare")}</option><option value="contact_lenses">{t("Kontaktné šošovky")}</option><option value="both">{t("Okuliare aj šošovky")}</option><option value="other">{t("Iná korekcia")}</option><option value="prefer_not_to_say">{t("Nechcem uviesť")}</option></select></label></div>
-    <div className="form-grid"><label>{t("Dioptrie ľavé oko")}<input name="vision_diopters_left" type="number" min="-30" max="30" step="0.25" defaultValue={values.vision_diopters_left ?? ""} /></label><label>{t("Dioptrie pravé oko")}<input name="vision_diopters_right" type="number" min="-30" max="30" step="0.25" defaultValue={values.vision_diopters_right ?? ""} /></label></div>
-    <div className="form-grid"><label>{t("Skúsenosť s pilotovaním")}<select name="pilot_experience" defaultValue={values.pilot_experience ?? ""}><option value="">{t("Nevyplnené")}</option><option value="none">{t("Žiadna")}</option><option value="under_1_year">{t("Menej ako 1 rok")}</option><option value="1_3_years">{t("1–3 roky")}</option><option value="3_5_years">{t("3–5 rokov")}</option><option value="over_5_years">{t("Viac ako 5 rokov")}</option></select></label><label>{t("Letové hodiny")}<select name="flight_hours_range" defaultValue={values.flight_hours_range ?? ""}><option value="">{t("Nevyplnené")}</option><option value="0">0</option><option value="under_10">{t("Menej ako 10")}</option><option value="10_50">10–50</option><option value="51_200">51–200</option><option value="201_500">201–500</option><option value="over_500">{t("Viac ako 500")}</option></select></label></div>
-    <div className="form-grid"><label>{t("Osvedčenie")}<select name="pilot_certificate" defaultValue={values.pilot_certificate ?? ""}><option value="">{t("Nevyplnené")}</option><option value="none">{t("Žiadne")}</option><option value="a1_a3">{t("A1/A3")}</option><option value="a2">{t("A2")}</option><option value="sts">{t("STS")}</option><option value="other">{t("Iné")}</option></select></label><label>{t("Typ UAV")}<select name="primary_uav_type" defaultValue={values.primary_uav_type ?? ""}><option value="">{t("Nevyplnené")}</option><option value="multirotor">{t("Multikoptéra")}</option><option value="fixed_wing">{t("Pevné krídlo")}</option><option value="helicopter">{t("Vrtuľník")}</option><option value="vtol">{t("VTOL")}</option><option value="other">{t("Iný / neviem")}</option></select></label></div>
-    <div className="form-grid"><label>{t("Skúsenosť so simulátorom")}<select name="simulator_experience" defaultValue={values.simulator_experience ?? ""}><option value="">{t("Nevyplnené")}</option><option value="none">{t("Žiadna")}</option><option value="under_10">{t("Menej ako 10 hodín")}</option><option value="10_50">{t("10–50 hodín")}</option><option value="51_200">{t("51–200 hodín")}</option><option value="over_200">{t("Viac ako 200 hodín")}</option></select></label><label>{t("Skúsenosť s RC ovládaním")}<select name="rc_experience" defaultValue={values.rc_experience ?? ""}><option value="">{t("Nevyplnené")}</option><option value="none">{t("Žiadna")}</option><option value="under_1_year">{t("Menej ako 1 rok")}</option><option value="1_3_years">{t("1–3 roky")}</option><option value="3_5_years">{t("3–5 rokov")}</option><option value="over_5_years">{t("Viac ako 5 rokov")}</option></select></label></div>
-    <div className="form-grid"><label>{t("FPV")}<select name="fpv_experience" defaultValue={values.fpv_experience ?? ""}><option value="">{t("Nevyplnené")}</option><option value="none">{t("Žiadna")}</option><option value="under_1_year">{t("Menej ako 1 rok")}</option><option value="1_3_years">{t("1–3 roky")}</option><option value="3_5_years">{t("3–5 rokov")}</option><option value="over_5_years">{t("Viac ako 5 rokov")}</option></select></label><label>{t("Herný ovládač / gamepad")}<select name="game_controller_experience" defaultValue={values.game_controller_experience ?? ""}><option value="">{t("Nevyplnené")}</option><option value="none">{t("Žiadna")}</option><option value="under_1_year">{t("Menej ako 1 rok")}</option><option value="1_3_years">{t("1–3 roky")}</option><option value="3_5_years">{t("3–5 rokov")}</option><option value="over_5_years">{t("Viac ako 5 rokov")}</option></select></label></div>
-    <div className="form-grid"><label>{t("Video / počítačové hry")}<select name="video_game_experience" defaultValue={values.video_game_experience ?? ""}><option value="">{t("Nevyplnené")}</option><option value="none">{t("Nikdy")}</option><option value="under_2">{t("Menej ako 2 h/týždeň")}</option><option value="2_5">{t("2–5 h/týždeň")}</option><option value="6_10">{t("6–10 h/týždeň")}</option><option value="over_10">{t("Viac ako 10 h/týždeň")}</option></select></label><label>{t("Sebahodnotenie zručností")}<select name="self_rated_skill" defaultValue={values.self_rated_skill?.toString() ?? ""}><option value="">{t("Nevyplnené")}</option>{[1, 2, 3, 4, 5].map((value) => <option key={value} value={value}>{value}</option>)}</select></label></div>
+    <div className="form-grid">
+      <label>{t("Rok narodenia")}<select name="birth_year" defaultValue={values.birth_year ?? ""}><option value="">{t("Nevyplnené")}</option>{years.map((year) => <option key={year} value={year}>{year}</option>)}</select></label>
+      <label>{t("Dominantná ruka")}<select name="dominant_hand" defaultValue={values.dominant_hand ?? ""}><option value="">{t("Nevyplnené")}</option><option value="right">{t("Pravá")}</option><option value="left">{t("Ľavá")}</option><option value="both">{t("Obe ruky")}</option><option value="prefer_not_to_say">{t("Nechcem uviesť")}</option></select></label>
+    </div>
+    <div className="registration-questions profile-editor-questions">
+      {booleanSelect("gamepad_used", "Herný gamepad", values.gamepad_used)}
+      {booleanSelect("pc_joystick_used", "PC joystick", values.pc_joystick_used)}
+      {booleanSelect("rc_transmitter_used", "RC vysielač", values.rc_transmitter_used)}
+      {booleanSelect("uav_flown", "Lietal(a) s UAV", values.uav_flown)}
+      {booleanSelect("uav_los", "Priamy vizuálny dohľad (LOS)", values.uav_los)}
+      {booleanSelect("uav_fpv", "FPV", values.uav_fpv)}
+      {booleanSelect("uav_stabilized_mode", "Stabilizovaný režim", values.uav_stabilized_mode)}
+      {booleanSelect("uav_manual_mode", "Manuálny / acro režim", values.uav_manual_mode)}
+    </div>
     <div className="profile-editor-actions"><span className="muted">{message}</span><button className="primary compact" disabled={saving}>{saving ? t("Ukladám…") : t("Uložiť údaje")}</button></div>
   </form>;
 }
 
 function profileLabel(value?: string | null) {
-  const labels: Record<string, string> = { none: t("Žiadna"), under_1_year: t("Menej ako 1 rok"), "1_3_years": t("1–3 roky"), "3_5_years": t("3–5 rokov"), over_5_years: t("Viac ako 5 rokov"), "0": "0", under_10: t("Menej ako 10"), "10_50": "10–50", "51_200": "51–200", "201_500": "201–500", over_500: t("Viac ako 500"), over_200: t("Viac ako 200"), under_2: t("Menej ako 2 h/týždeň"), "2_5": t("2–5 h/týždeň"), "6_10": t("6–10 h/týždeň"), over_10: t("Viac ako 10 h/týždeň"), a1_a3: "A1/A3", a2: "A2", sts: "STS", multirotor: t("Multikoptéra"), fixed_wing: t("Pevné krídlo"), helicopter: t("Vrtuľník"), vtol: "VTOL", female: t("Žena"), male: t("Muž"), intersex: "Intersex", right: t("Pravá"), left: t("Ľavá"), both: t("Obe"), glasses: t("Okuliare"), contact_lenses: t("Kontaktné šošovky"), prefer_not_to_say: t("Nechcem uviesť"), other: t("Iné") };
+  const labels: Record<string, string> = { right: t("Pravá"), left: t("Ľavá"), both: t("Obe ruky"), prefer_not_to_say: t("Nechcem uviesť") };
   return value ? labels[value] ?? value : t("Neuvedené");
 }
+function yesNoLabel(value?: boolean | null) { return value == null ? t("Neuvedené") : value ? t("Áno") : t("Nie"); }
 function formatMetricMap(values: Record<string, number>) { return Object.entries(values).map(([key, value]) => `${key}: ${value.toFixed(2)}`).join(" · ") || t("bez dostupných metrík"); }

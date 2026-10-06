@@ -1,7 +1,7 @@
-from datetime import date, datetime, timezone
+from datetime import datetime, timezone
 from uuid import uuid4
 
-from sqlalchemy import Boolean, Date, DateTime, Float, Integer, String
+from sqlalchemy import Boolean, DateTime, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -15,22 +15,16 @@ class Participant(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     research_withdrawn_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     gdpr_withdrawn_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    birth_date: Mapped[date | None] = mapped_column(Date, nullable=True)
-    pilot_experience: Mapped[str | None] = mapped_column(String(20), nullable=True)
-    flight_hours_range: Mapped[str | None] = mapped_column(String(20), nullable=True)
-    pilot_certificate: Mapped[str | None] = mapped_column(String(20), nullable=True)
-    primary_uav_type: Mapped[str | None] = mapped_column(String(20), nullable=True)
-    simulator_experience: Mapped[str | None] = mapped_column(String(20), nullable=True)
-    self_rated_skill: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    sex: Mapped[str | None] = mapped_column(String(24), nullable=True)
+    birth_year: Mapped[int | None] = mapped_column(Integer, nullable=True)
     dominant_hand: Mapped[str | None] = mapped_column(String(24), nullable=True)
-    vision_correction: Mapped[str | None] = mapped_column(String(24), nullable=True)
-    vision_diopters_left: Mapped[float | None] = mapped_column(Float, nullable=True)
-    vision_diopters_right: Mapped[float | None] = mapped_column(Float, nullable=True)
-    rc_experience: Mapped[str | None] = mapped_column(String(20), nullable=True)
-    fpv_experience: Mapped[str | None] = mapped_column(String(20), nullable=True)
-    game_controller_experience: Mapped[str | None] = mapped_column(String(20), nullable=True)
-    video_game_experience: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    gamepad_used: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    pc_joystick_used: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    rc_transmitter_used: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    uav_flown: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    uav_los: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    uav_fpv: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    uav_stabilized_mode: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    uav_manual_mode: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
     )

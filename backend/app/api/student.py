@@ -39,25 +39,17 @@ def student_profile_response(student: AdminUser, participant: Participant) -> St
         email=student.email,
         role=student.role,
         participant_code=participant.participant_code,
-        first_name=student.first_name or "",
-        last_name=student.last_name or "",
         created_at=participant.created_at,
-        birth_date=participant.birth_date,
-        pilot_experience=participant.pilot_experience,
-        flight_hours_range=participant.flight_hours_range,
-        pilot_certificate=participant.pilot_certificate,
-        primary_uav_type=participant.primary_uav_type,
-        simulator_experience=participant.simulator_experience,
-        self_rated_skill=participant.self_rated_skill,
-        sex=participant.sex,
+        birth_year=participant.birth_year,
         dominant_hand=participant.dominant_hand,
-        vision_correction=participant.vision_correction,
-        vision_diopters_left=participant.vision_diopters_left,
-        vision_diopters_right=participant.vision_diopters_right,
-        rc_experience=participant.rc_experience,
-        fpv_experience=participant.fpv_experience,
-        game_controller_experience=participant.game_controller_experience,
-        video_game_experience=participant.video_game_experience,
+        gamepad_used=participant.gamepad_used,
+        pc_joystick_used=participant.pc_joystick_used,
+        rc_transmitter_used=participant.rc_transmitter_used,
+        uav_flown=participant.uav_flown,
+        uav_los=participant.uav_los,
+        uav_fpv=participant.uav_fpv,
+        uav_stabilized_mode=participant.uav_stabilized_mode,
+        uav_manual_mode=participant.uav_manual_mode,
     )
 
 
@@ -70,7 +62,7 @@ async def profile(
     # The authenticated user is loaded without its optional participant relationship.
     # Resolve it explicitly so async SQLAlchemy does not attempt unsupported lazy I/O.
     participant = await db.get(Participant, student.participant_id)
-    if participant is None or student.first_name is None or student.last_name is None:
+    if participant is None:
         raise HTTPException(status_code=409, detail="Student profile is incomplete.")
     return student_profile_response(student, participant)
 
@@ -87,9 +79,8 @@ async def update_profile(
         raise HTTPException(status_code=404, detail="Profil účastníka neexistuje.")
 
     updates = payload.model_dump(exclude_unset=True)
-    if any(updates.get(field) is None for field in ("first_name", "last_name", "email") if field in updates):
-        raise HTTPException(status_code=400, detail="Meno, priezvisko a e-mail nesmú byť prázdne.")
-
+    if "email" in updates and updates["email"] is None:
+        raise HTTPException(status_code=400, detail="E-mail nesmie byť prázdny.")
     if "email" in updates:
         email = str(payload.email).strip().lower()
         existing = await db.scalar(
@@ -104,9 +95,6 @@ async def update_profile(
         student.username = email
         updates.pop("email")
 
-    for field in ("first_name", "last_name"):
-        if field in updates:
-            setattr(student, field, updates.pop(field))
     for field, value in updates.items():
         setattr(participant, field, value)
 
