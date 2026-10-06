@@ -26,6 +26,7 @@ def response_for_user(user: AdminUser, csrf_token: str, participant_code: str | 
     return UserResponse(
         username=user.username,
         email=user.email,
+        nickname=user.nickname,
         role=effective_role(user),
         csrf_token=csrf_token,
         participant_id=user.participant_id,
@@ -99,6 +100,7 @@ async def register(
     user = AdminUser(
         username=email,
         email=email,
+        nickname=payload.nickname,
         password_hash=hash_password(payload.password),
         role="student",
         participant_id=participant.id,

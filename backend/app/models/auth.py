@@ -25,6 +25,7 @@ class AdminUser(Base):
     accent_theme: Mapped[str] = mapped_column(String(20), nullable=False, default="blue", server_default="blue")
     color_mode: Mapped[str] = mapped_column(String(10), nullable=False, default="dark", server_default="dark")
     email: Mapped[str | None] = mapped_column(String(255), unique=True, nullable=True)
+    nickname: Mapped[str | None] = mapped_column(String(40), nullable=True)
     first_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
     last_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
     participant_id: Mapped[str | None] = mapped_column(ForeignKey("participants.id", ondelete="SET NULL"), nullable=True, unique=True)

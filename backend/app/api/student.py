@@ -37,6 +37,7 @@ def student_profile_response(student: AdminUser, participant: Participant) -> St
     return StudentProfileResponse(
         username=student.username,
         email=student.email,
+        nickname=student.nickname,
         role=student.role,
         participant_code=participant.participant_code,
         created_at=participant.created_at,
@@ -94,6 +95,9 @@ async def update_profile(
         student.email = email
         student.username = email
         updates.pop("email")
+
+    if "nickname" in updates:
+        student.nickname = updates.pop("nickname")
 
     for field, value in updates.items():
         setattr(participant, field, value)

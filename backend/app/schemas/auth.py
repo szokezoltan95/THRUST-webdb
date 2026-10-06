@@ -15,11 +15,18 @@ class LoginRequest(BaseModel):
 class RegistrationRequest(ParticipantProfileFields):
     consent_language: Literal["sk", "en"] = "sk"
     email: EmailStr
+    nickname: str | None = Field(default=None, max_length=40)
     password: str = Field(min_length=10, max_length=1024)
     research_consent: bool
     gdpr_consent: bool
     gdpr_consent_version: str = Field(default="gdpr-v1", min_length=1, max_length=30)
     consent_version: str = Field(default="research-v1", min_length=1, max_length=30)
+
+    @field_validator("nickname")
+    @classmethod
+    def trim_nickname(cls, value: str | None) -> str | None:
+        value = value.strip() if value is not None else None
+        return value or None
 
 
 class ResearcherRegistrationRequest(BaseModel):
@@ -44,6 +51,7 @@ class ResearcherRegistrationRequest(BaseModel):
 class UserResponse(BaseModel):
     username: str
     email: str | None = None
+    nickname: str | None = None
     role: str
     csrf_token: str
     participant_id: str | None = None
@@ -62,6 +70,7 @@ class AppearancePreferences(BaseModel):
 class StudentProfileResponse(ParticipantProfileFields):
     username: str
     email: str | None
+    nickname: str | None = None
     role: str
     participant_code: str
     created_at: datetime

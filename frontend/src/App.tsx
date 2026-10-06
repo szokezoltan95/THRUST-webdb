@@ -93,7 +93,7 @@ type PublicMetrics = {
   publishable: boolean;
 };
 
-type User = { username: string; role: string; csrf_token: string; email?: string | null; participant_id?: string | null; participant_code?: string | null; first_name?: string | null; last_name?: string | null; accent_theme?: AccentTheme; color_mode?: ColorMode };
+type User = { username: string; role: string; csrf_token: string; email?: string | null; nickname?: string | null; participant_id?: string | null; participant_code?: string | null; first_name?: string | null; last_name?: string | null; accent_theme?: AccentTheme; color_mode?: ColorMode };
 type Overview = { participant_count: number; measurement_count: number };
 type Participant = { id: string; participant_code: string; is_active: boolean; created_at: string; revoked_consents?: Partial<Record<ConsentKind, string>>; birth_year?: number | null; dominant_hand?: string | null; gamepad_used?: boolean | null; pc_joystick_used?: boolean | null; rc_transmitter_used?: boolean | null; uav_flown?: boolean | null; uav_los?: boolean | null; uav_fpv?: boolean | null; uav_stabilized_mode?: boolean | null; uav_manual_mode?: boolean | null; }
 type AdminAccount = { id: string; username: string; email: string | null; first_name?: string | null; last_name?: string | null; role: string; effective_role: string; is_active: boolean; participant_id: string | null; participant_code: string | null; created_at: string };
@@ -103,7 +103,7 @@ type ParticipantDetail = { participant: Participant; measurements: { id: string;
 type AdminSection = "overview" | "participants" | "groups" | "trends" | "reports" | "tests" | "measurements" | "welcome" | "clients";
 type ParticipantGroup = { id: string; name: string; description: string | null; created_at: string; participant_ids: string[]; participant_codes: string[] };
 type StudentMeasurement = { id: string; test_type: string; status: string; started_at: string; raw_size_bytes: number | null; analysis_data: Record<string, unknown> | null };
-type StudentProfile = { username: string; email: string | null; role: string; participant_code: string; created_at: string; birth_year: number | null; dominant_hand: string | null; gamepad_used: boolean | null; pc_joystick_used: boolean | null; rc_transmitter_used: boolean | null; uav_flown: boolean | null; uav_los: boolean | null; uav_fpv: boolean | null; uav_stabilized_mode: boolean | null; uav_manual_mode: boolean | null; }
+type StudentProfile = { username: string; email: string | null; nickname: string | null; role: string; participant_code: string; created_at: string; birth_year: number | null; dominant_hand: string | null; gamepad_used: boolean | null; pc_joystick_used: boolean | null; rc_transmitter_used: boolean | null; uav_flown: boolean | null; uav_los: boolean | null; uav_fpv: boolean | null; uav_stabilized_mode: boolean | null; uav_manual_mode: boolean | null; }
 type StudentComparison = { available: boolean; minimum_group_size: number; cohort_participant_count: number; own_measurement_count: number; metrics: ComparisonMetric[]; response_curve: ComparisonResponseCurve | null };
 
 type MeasurementMode = "SCOPE" | "SIMPLE";
@@ -386,6 +386,7 @@ export function App() {
   const [consentTexts, setConsentTexts] = useState<ConsentDocuments | null>(null);
   const [consentDialog, setConsentDialog] = useState<ConsentKind | null>(null);
   const [activeConsentDocument, setActiveConsentDocument] = useState<ConsentDocument | null>(null);
+  const [studentProfileReminder, setStudentProfileReminder] = useState(false);
   const [error, setError] = useState("");
   const [activeSection, setActiveSection] = useState<AdminSection>("overview");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => localStorage.getItem("thrust-webdb-sidebar-collapsed") === "true");
@@ -844,33 +845,21 @@ export function App() {
       setError(t("Heslá sa nezhodujú."));
       return;
     }
-    const optionalBoolean = (name: string) => {
-      const value = data.get(name);
-      return value === "true" ? true : value === "false" ? false : null;
-    };
     try {
       const signedIn = await request<User>("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           email: data.get("email"),
+          nickname: data.get("nickname") || null,
           password: data.get("password"), research_consent: data.get("research_consent") === "on",
           gdpr_consent: data.get("gdpr_consent") === "on",
-          birth_year: data.get("birth_year") ? Number(data.get("birth_year")) : null,
-          dominant_hand: data.get("dominant_hand") || null,
-          gamepad_used: optionalBoolean("gamepad_used"),
-          pc_joystick_used: optionalBoolean("pc_joystick_used"),
-          rc_transmitter_used: optionalBoolean("rc_transmitter_used"),
-          uav_flown: optionalBoolean("uav_flown"),
-          uav_los: optionalBoolean("uav_los"),
-          uav_fpv: optionalBoolean("uav_fpv"),
-          uav_stabilized_mode: optionalBoolean("uav_stabilized_mode"),
-          uav_manual_mode: optionalBoolean("uav_manual_mode"),
           consent_version: consentTexts?.research.version || "research-v4",
           gdpr_consent_version: consentTexts?.gdpr.version || "gdpr-v3",
           consent_language: language,
         }),
       });
+      setStudentProfileReminder(true);
       applySignedInUser(signedIn); leaveRegistration();
     } catch (reason) { setError(reason instanceof Error ? reason.message : t("Registrácia zlyhala.")); }
   }
@@ -1003,6 +992,7 @@ export function App() {
     if (!user) return;
     await request<void>("/api/auth/logout", { method: "POST", headers: { "X-CSRF-Token": user.csrf_token } });
     setUser(null);
+    setStudentProfileReminder(false);
     setAccentTheme("blue");
     setColorMode("dark");
     setOverview(null);
@@ -1108,7 +1098,7 @@ export function App() {
     setDraggedNavItem(null);
   }
 
-  if (user?.role === "student") return <StudentPortal user={user} onLogout={logout} accentTheme={accentTheme} colorMode={colorMode} onAppearanceChange={(theme, mode) => void saveAppearance(theme, mode)} />;
+  if (user?.role === "student") return <StudentPortal user={user} onLogout={logout} accentTheme={accentTheme} colorMode={colorMode} onAppearanceChange={(theme, mode) => void saveAppearance(theme, mode)} profileReminder={studentProfileReminder} onDismissProfileReminder={() => setStudentProfileReminder(false)} />;
   if (isRegisterPage && !user) return <>
     <RegistrationPage onSubmit={register} onBack={leaveRegistration} onLogin={() => { leaveRegistration(); setLoginOpen(true); }} onResearcherRegister={openResearcherRegistration} error={error} consentTexts={consentTexts} onOpenConsent={setConsentDialog} />
     {consentDialog && consentTexts && <ConsentTextDialog kind={consentDialog} document={activeConsentDocument || consentTexts[consentDialog]} onClose={() => { setConsentDialog(null); setActiveConsentDocument(null); }} />}
@@ -1431,15 +1421,6 @@ export function App() {
 }
 
 
-function RegistrationBooleanQuestion({ name, label, onChange }: { name: string; label: string; onChange?: (value: boolean) => void }) {
-  return <fieldset className="registration-binary-question">
-    <legend>{t(label)}</legend>
-    <div className="registration-binary-options">
-      {[true, false].map((value) => <label key={String(value)}><input type="radio" name={name} value={String(value)} onChange={() => onChange?.(value)} /><span>{value ? t("Áno") : t("Nie")}</span></label>)}
-    </div>
-  </fieldset>;
-}
-
 function RegistrationPage({ onSubmit, onBack, onLogin, onResearcherRegister, error, consentTexts, onOpenConsent }: {
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onBack: () => void;
@@ -1449,47 +1430,26 @@ function RegistrationPage({ onSubmit, onBack, onLogin, onResearcherRegister, err
   consentTexts: ConsentDocuments | null;
   onOpenConsent: (kind: ConsentKind) => void;
 }) {
-  const [uavFlown, setUavFlown] = useState(false);
-  const years = Array.from({ length: new Date().getFullYear() - 1899 }, (_, index) => new Date().getFullYear() - index);
   return <main className="registration-page">
     <header className="registration-header">
       <Brand />
       <div className="actions"><LanguageSwitcher /><button type="button" className="quiet" onClick={onBack}>{t("Späť na hlavnú stránku")}</button><button type="button" className="quiet" onClick={onResearcherRegister}>{t("Registrácia výskumníka")}</button><button type="button" className="quiet" onClick={onLogin}>{t("Už mám účet · Prihlásiť sa")}</button></div>
     </header>
     <section className="registration-content">
-      <aside className="registration-heading"><div className="eyebrow">{t("NOVÝ ŠTUDENTSKÝ ÚČET")}</div><h1>{t("Vytvor si účet")}</h1><p className="lead">{t("Po registrácii dostaneš svoje Participant ID. Výskumník ho použije pri meraní v lokálnom THRUSTe.")}</p><ol className="registration-steps"><li><span>1</span>{t("Účet")}</li><li><span>2</span>{t("Profil")}</li></ol></aside>
+      <aside className="registration-heading"><div className="eyebrow">{t("NOVÝ ŠTUDENTSKÝ ÚČET")}</div><h1>{t("Vytvor si účet")}</h1><p className="lead">{t("Najprv si vytvor účet. Po registrácii môžeš doplniť krátky profil a hneď uvidíš svoju osobnú stránku s výsledkami.")}</p><ol className="registration-steps"><li><span>1</span>{t("Účet")}</li><li><span>2</span>{t("Doplnenie profilu")}</li></ol></aside>
       <form className="registration-form" onSubmit={onSubmit}>
         <section className="registration-card registration-account-fields">
           <div><div className="eyebrow">{t("PRIHLASOVACIE ÚDAJE")}</div><h2>{t("Účet")}</h2><p className="muted">{t("Prihlasuj sa e-mailom a heslom. Meno a priezvisko nepotrebujeme.")}</p></div>
           <label>{t("E-mail")}<input name="email" type="email" autoComplete="email" required /></label>
+          <label>{t("Prezývka (nepovinné)")}<input name="nickname" type="text" autoComplete="nickname" maxLength={40} /></label>
           <div className="form-grid"><label>{t("Heslo")}<input name="password" type="password" minLength={10} autoComplete="new-password" required /></label><label>{t("Zopakovať heslo")}<input name="password_confirmation" type="password" minLength={10} autoComplete="new-password" required /></label></div>
-        </section>
-        <section className="registration-card profile-questionnaire">
-          <div className="registration-section-heading"><div><div className="eyebrow">{t("PROFIL ÚČASTNÍKA")}</div><h2>{t("Skúsenosti s ovládaním")}</h2></div><span className="registration-optional">{t("Nepovinné")}</span></div>
-          <p className="muted">{t("Krátke profilové otázky na štatistické vyhodnotenie. Môžeš ich preskočiť a neskôr upraviť v profile.")}</p>
-          <div className="form-grid">
-            <label>{t("Rok narodenia")}<select name="birth_year" defaultValue=""><option value="">{t("Vyber rok")}</option>{years.map((year) => <option key={year} value={year}>{year}</option>)}</select></label>
-            <label>{t("Dominantná ruka")}<select name="dominant_hand" defaultValue=""><option value="">{t("Nevyplnené")}</option><option value="right">{t("Pravá")}</option><option value="left">{t("Ľavá")}</option><option value="both">{t("Obe ruky")}</option><option value="prefer_not_to_say">{t("Nechcem uviesť")}</option></select></label>
-          </div>
-          <div className="registration-questions">
-            <RegistrationBooleanQuestion name="gamepad_used" label="Používal(a) si niekedy herný gamepad?" />
-            <RegistrationBooleanQuestion name="pc_joystick_used" label="Používal(a) si niekedy PC joystick?" />
-            <RegistrationBooleanQuestion name="rc_transmitter_used" label="Používal(a) si niekedy RC vysielač?" />
-            <RegistrationBooleanQuestion name="uav_flown" label="Lietal(a) si niekedy s UAV?" onChange={setUavFlown} />
-            {uavFlown && <div className="registration-uav-questions">
-              <RegistrationBooleanQuestion name="uav_los" label="Lietal(a) si pri priamom vizuálnom dohľade (LOS)?" />
-              <RegistrationBooleanQuestion name="uav_fpv" label="Lietal(a) si pomocou FPV?" />
-              <RegistrationBooleanQuestion name="uav_stabilized_mode" label="Používal(a) si stabilizovaný režim, napríklad GPS/Angle?" />
-              <RegistrationBooleanQuestion name="uav_manual_mode" label="Používal(a) si manuálny alebo acro/rate režim?" />
-            </div>}
-          </div>
         </section>
         <section className="registration-card registration-consents">
           <div><div className="eyebrow">{t("SÚHLASY A DOKONČENIE")}</div><h2>{t("Pred vytvorením účtu")}</h2></div>
           <label className="consent"><input name="research_consent" type="checkbox" required /> <span>{t("Súhlasím s použitím pseudonymizovaných údajov na výskumné účely.")} <a href="#consent-research" onClick={(event) => { event.preventDefault(); onOpenConsent("research"); }}>{t("Zobraziť text výskumného súhlasu")}</a></span></label>
           <label className="consent"><input name="gdpr_consent" type="checkbox" required /> <span>{t("Súhlasím so spracovaním osobných údajov pre vytvorenie a správu účtu.")} <a href="#consent-gdpr" onClick={(event) => { event.preventDefault(); onOpenConsent("gdpr"); }}>{t("Zobraziť informácie a GDPR súhlas")}</a></span></label>
           {error && <p className="error">{error}</p>}
-          <div className="registration-actions"><span className="muted">{t("Výskumné otázky môžeš preskočiť. Oba súhlasy sú potrebné na registráciu.")}</span><button type="submit" className="primary" disabled={!consentTexts}>{t("Vytvoriť účet")}</button></div>
+          <div className="registration-actions"><span className="muted">{t("Profil účastníka môžeš doplniť po registrácii. Oba súhlasy sú potrebné na vytvorenie účtu.")}</span><button type="submit" className="primary" disabled={!consentTexts}>{t("Vytvoriť účet")}</button></div>
         </section>
       </form>
     </section>
@@ -2410,12 +2370,14 @@ function StudentComparisonCharts({ comparison }: { comparison: StudentComparison
 }
 
 
-function StudentPortal({ user, onLogout, accentTheme, colorMode, onAppearanceChange }: {
+function StudentPortal({ user, onLogout, accentTheme, colorMode, onAppearanceChange, profileReminder, onDismissProfileReminder }: {
   user: User;
   onLogout: () => Promise<void>;
   accentTheme: AccentTheme;
   colorMode: ColorMode;
   onAppearanceChange: (theme: AccentTheme, mode: ColorMode) => void;
+  profileReminder: boolean;
+  onDismissProfileReminder: () => void;
 }) {
   const { language } = useLanguage();
   const [profile, setProfile] = useState<StudentProfile | null>(null);
@@ -2508,32 +2470,11 @@ function StudentPortal({ user, onLogout, accentTheme, colorMode, onAppearanceCha
     <header><Brand colorMode={colorMode} /><div className="header-actions"><AppearanceControls accentTheme={accentTheme} colorMode={colorMode} onAccentChange={(theme) => onAppearanceChange(theme, colorMode)} onModeChange={(mode) => onAppearanceChange(accentTheme, mode)} /><LanguageSwitcher /><button className="quiet" onClick={onLogout}>{t("Odhlásiť")}</button></div></header>
     <section className="public student-content">
       <div className="eyebrow">{t("OSOBNÝ PROFIL")}</div>
-      <h1>{t("Ahoj,")} {user.participant_code || user.username}.</h1>
+      <h1>{t("Ahoj,")} {profile?.nickname || user.nickname || user.participant_code || user.username}.</h1>
       <p className="lead">{t("Tvoje účastnícke ID:")} <strong>{user.participant_code || "—"}</strong></p>
       <div className="stats"><Metric label={t("Moje merania")} value={visibleMeasurements.length} /><Metric label={t("Skupina")} value={comparison?.cohort_participant_count ?? "—"} /><Metric label={t("Porovnanie")} value={comparison?.available ? t("dostupné") : t("čaká na limit")} /></div>
       {error && <p className="error">{error}</p>}
-      {profile && <section className="panel student-profile-panel">
-        <div className="profile-panel-heading"><div><div className="eyebrow">{t("PROFIL PILOTA")}</div><h2>{t("Moje údaje")}</h2><p className="muted">{t("Osobné údaje a odpovede z registrácie.")}</p></div>
-          <button className="quiet compact" onClick={() => { setEditingProfile((value) => !value); setProfileMessage(""); }}>{editingProfile ? t("Zrušiť úpravy") : t("Upraviť údaje")}</button>
-        </div>
-        {profileMessage && <p className="notice">{profileMessage}</p>}
-        {editingProfile
-          ? <ParticipantProfileEditor studentProfile={profile} csrfToken={user.csrf_token} onStudentSaved={(updated) => { setProfile(updated); setEditingProfile(false); setProfileMessage(t("Údaje profilu boli uložené.")); }} />
-          : <InfoTable rows={[
-            ["E-mail", profile.email || profile.username],
-            ["Participant ID", profile.participant_code],
-            [t("Rok narodenia"), profile.birth_year ?? t("Neuvedené")],
-            [t("Dominantná ruka"), profileLabel(profile.dominant_hand)],
-            [t("Herný gamepad"), yesNoLabel(profile.gamepad_used)],
-            [t("PC joystick"), yesNoLabel(profile.pc_joystick_used)],
-            [t("RC vysielač"), yesNoLabel(profile.rc_transmitter_used)],
-            [t("Lietal(a) s UAV"), yesNoLabel(profile.uav_flown)],
-            [t("LOS"), yesNoLabel(profile.uav_los)],
-            [t("FPV"), yesNoLabel(profile.uav_fpv)],
-            [t("Stabilizovaný režim"), yesNoLabel(profile.uav_stabilized_mode)],
-            [t("Manuálny / acro režim"), yesNoLabel(profile.uav_manual_mode)],
-          ]} />}
-      </section>}
+      {profileReminder && profile && <div className="notice student-profile-reminder"><span>{t("Účet je vytvorený. Ak chceš, doplň si nepovinné otázky o skúsenostiach s ovládaním a UAV; môžeš to urobiť aj neskôr.")}</span><div><button type="button" className="primary compact" onClick={() => { setEditingProfile(true); document.getElementById("student-profile-panel")?.scrollIntoView({ behavior: "smooth", block: "center" }); }}>{t("Doplniť profil")}</button><button type="button" className="quiet compact" onClick={onDismissProfileReminder}>{t("Neskôr")}</button></div></div>}
       <section className="panel">
         <div className="student-result-heading"><div><div className="eyebrow">{t("VÝSLEDKY")}</div><h2>{t("Moje merania ·")} {mode === "SCOPE" ? "SCoPE" : "SimPLE"}</h2></div><ModeSwitch value={mode} onChange={(selected) => { setMode(selected); setSelectedMeasurementId(null); }} /></div>
         {visibleMeasurements.length ? <div className="table-wrap"><table><thead><tr><th><SortHeader label={t("Test")} active={studentMeasurementSort.column === "test"} direction={studentMeasurementSort.direction} onClick={() => setStudentMeasurementSort((current) => nextSort(current, "test"))} /></th><th><SortHeader label={t("Stav")} active={studentMeasurementSort.column === "status"} direction={studentMeasurementSort.direction} onClick={() => setStudentMeasurementSort((current) => nextSort(current, "status"))} /></th><th><SortHeader label={t("Dátum a čas")} active={studentMeasurementSort.column === "date"} direction={studentMeasurementSort.direction} onClick={() => setStudentMeasurementSort((current) => nextSort(current, "date"))} /></th><th><SortHeader label={t("Veľkosť súboru")} active={studentMeasurementSort.column === "size"} direction={studentMeasurementSort.direction} onClick={() => setStudentMeasurementSort((current) => nextSort(current, "size"))} /></th><th>{t("Výsledky")}</th></tr></thead><tbody>{visibleMeasurements.map((m) => <tr key={m.id}><td>{m.test_type}</td><td>{m.status}</td><td>{formatDateTime(m.started_at)}</td><td>{formatBytes(m.raw_size_bytes)}</td><td><button type="button" className="quiet compact" onClick={() => setSelectedMeasurementId(m.id === selectedMeasurementId ? null : m.id)}>{m.id === selectedMeasurementId ? t("Skryť") : t("Zobraziť")}</button></td></tr>)}</tbody></table></div> : <p className="muted">{t("Zatiaľ nemáš uložené meranie")} {mode === "SCOPE" ? "SCoPE" : "SimPLE"}.</p>}
@@ -2562,6 +2503,28 @@ function StudentPortal({ user, onLogout, accentTheme, colorMode, onAppearanceCha
         </div>
         {consentMessage && <p className="notice">{consentMessage}</p>}
       </section>
+      {profile && <section id="student-profile-panel" className="panel student-profile-panel">
+        <div className="profile-panel-heading"><div><div className="eyebrow">{t("PROFIL PILOTA")}</div><h2>{t("Moje údaje")}</h2><p className="muted">{t("Prezývka a nepovinné odpovede o tvojich skúsenostiach.")}</p></div>
+          <button className="quiet compact" onClick={() => { setEditingProfile((value) => !value); setProfileMessage(""); }}>{editingProfile ? t("Zrušiť úpravy") : t("Upraviť údaje")}</button>
+        </div>
+        {profileMessage && <p className="notice">{profileMessage}</p>}
+        {editingProfile
+          ? <ParticipantProfileEditor studentProfile={profile} csrfToken={user.csrf_token} onStudentSaved={(updated) => { setProfile(updated); setEditingProfile(false); setProfileMessage(t("Údaje profilu boli uložené.")); onDismissProfileReminder(); }} />
+          : <InfoTable rows={[
+            ["E-mail", profile.email || profile.username],
+            ["Participant ID", profile.participant_code],
+            [t("Rok narodenia"), profile.birth_year ?? t("Neuvedené")],
+            [t("Dominantná ruka"), profileLabel(profile.dominant_hand)],
+            [t("Herný gamepad"), yesNoLabel(profile.gamepad_used)],
+            [t("PC joystick"), yesNoLabel(profile.pc_joystick_used)],
+            [t("RC vysielač"), yesNoLabel(profile.rc_transmitter_used)],
+            [t("Lietal(a) s UAV"), yesNoLabel(profile.uav_flown)],
+            [t("LOS"), yesNoLabel(profile.uav_los)],
+            [t("FPV"), yesNoLabel(profile.uav_fpv)],
+            [t("Stabilizovaný režim"), yesNoLabel(profile.uav_stabilized_mode)],
+            [t("Manuálny / acro režim"), yesNoLabel(profile.uav_manual_mode)],
+          ]} />}
+      </section>}
     </section>
     {consentDialog && consentTexts && <ConsentTextDialog kind={consentDialog} document={activeConsentDocument || consentTexts[consentDialog]} onClose={() => { setConsentDialog(null); setActiveConsentDocument(null); }} />}
     <SiteFooter />
@@ -2606,7 +2569,7 @@ function ParticipantProfileEditor({ participant, studentProfile, csrfToken, onSa
         const updated = await request<StudentProfile>("/api/student/profile", {
           method: "PATCH",
           headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken },
-          body: JSON.stringify({ ...profileData, email: form.get("email") }),
+          body: JSON.stringify({ ...profileData, email: form.get("email"), nickname: form.get("nickname") || null }),
         });
         onStudentSaved?.(updated);
       } else if (participant) {
@@ -2630,6 +2593,7 @@ function ParticipantProfileEditor({ participant, studentProfile, csrfToken, onSa
   return <form className="participant-profile-editor panel" onSubmit={save}>
     <div><div className="eyebrow">{studentProfile ? t("MOJE ÚDAJE") : t("PROFIL ÚČASTNÍKA")}</div><h3>{studentProfile ? t("Moje údaje") : t("Profil účastníka")}</h3></div>
     {studentProfile && <label className="profile-email-field">{t("E-mail")}<input name="email" type="email" defaultValue={studentProfile.email ?? studentProfile.username} maxLength={255} required /></label>}
+    {studentProfile && <label>{t("Prezývka (nepovinné)")}<input name="nickname" type="text" defaultValue={studentProfile.nickname ?? ""} maxLength={40} autoComplete="nickname" /></label>}
     {participant && <label className="checkbox-line"><input name="is_active" type="checkbox" defaultChecked={participant.is_active} /> {t("Aktívny účastník")}</label>}
     <div className="form-grid">
       <label>{t("Rok narodenia")}<select name="birth_year" defaultValue={values.birth_year ?? ""}><option value="">{t("Nevyplnené")}</option>{years.map((year) => <option key={year} value={year}>{year}</option>)}</select></label>

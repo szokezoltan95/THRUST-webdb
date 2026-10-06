@@ -43,6 +43,13 @@ class ParticipantUpdate(ParticipantProfileFields):
 
 class StudentProfileUpdate(ParticipantProfileFields):
     email: EmailStr | None = None
+    nickname: str | None = Field(default=None, max_length=40)
+
+    @field_validator("nickname")
+    @classmethod
+    def trim_nickname(cls, value: str | None) -> str | None:
+        value = value.strip() if value is not None else None
+        return value or None
 
 
 class ParticipantResponse(ParticipantProfileFields):
