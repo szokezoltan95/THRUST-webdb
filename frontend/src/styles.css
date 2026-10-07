@@ -1693,3 +1693,28 @@ main[data-color-mode="light"] .test-state-inactive { color: #52616e; }
 .privacy-request-card form { display: grid; gap: 10px; }
 .forced-password-page { width: min(760px, calc(100% - 36px)); }
 @media (max-width: 700px) { .privacy-placeholder-grid { grid-template-columns: 1fr; } .privacy-request-card { grid-template-columns: 1fr; } }
+
+
+/* Clear, compact navigation for the student area. */
+.student-page-nav { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 22px 0 26px; }
+.student-page-card { display: flex; align-items: center; gap: 14px; min-height: 82px; padding: 15px 18px; border: 1px solid var(--line); border-radius: 14px; color: var(--text-main); background: var(--surface); text-align: left; cursor: pointer; transition: border-color .16s ease, background .16s ease, transform .16s ease; }
+.student-page-card:hover { border-color: var(--accent); transform: translateY(-1px); }
+.student-page-card.active { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, var(--surface)); box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 24%, transparent); }
+.student-page-card-icon { display: grid; place-items: center; flex: 0 0 42px; width: 42px; height: 42px; border-radius: 12px; background: color-mix(in srgb, var(--accent) 14%, var(--surface-raised)); color: var(--accent); font-size: 1.3rem; }
+.student-page-card > span:last-child { display: grid; gap: 4px; }
+.student-page-card strong { font-size: 1rem; }
+.student-page-card small { color: var(--text-muted); font-size: .82rem; }
+.account-page-intro { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 17px 20px; }
+.account-page-intro h2 { margin: 3px 0 0; font-size: 1.2rem; }
+.account-page-intro p { max-width: 520px; margin: 0; }
+.account-section-nav, .privacy-section-nav { display: flex; flex-wrap: wrap; gap: 6px; margin: 14px 0 18px; padding: 5px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.account-section-nav button, .privacy-section-nav button { flex: 1 1 auto; min-height: 40px; padding: 8px 13px; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--text-soft); font: inherit; font-weight: 600; cursor: pointer; }
+.account-section-nav button:hover, .privacy-section-nav button:hover { color: var(--text-main); background: var(--surface-raised); }
+.account-section-nav button.active, .privacy-section-nav button.active { border-color: color-mix(in srgb, var(--accent) 40%, transparent); background: color-mix(in srgb, var(--accent) 13%, var(--surface)); color: var(--accent); }
+@media (max-width: 640px) {
+  .student-page-nav { grid-template-columns: 1fr; gap: 8px; margin: 17px 0 20px; }
+  .student-page-card { min-height: 70px; padding: 12px 14px; }
+  .account-page-intro { align-items: flex-start; flex-direction: column; gap: 8px; }
+  .account-section-nav, .privacy-section-nav { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .account-section-nav button, .privacy-section-nav button { padding: 8px 9px; font-size: .88rem; }
+}
