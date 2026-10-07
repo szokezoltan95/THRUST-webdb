@@ -552,6 +552,7 @@ const english: Record<string, string> = {
   "Nepovinné": "Optional",
   "Krátke profilové otázky na štatistické vyhodnotenie. Môžeš ich preskočiť a neskôr upraviť v profile.": "A few short questions for statistical analysis. You can skip them and update them later in your profile.",
   "Rok narodenia": "Year of birth",
+  "Biologické pohlavie": "Biological sex",
   "Vyber rok": "Select a year",
   "Používal(a) si niekedy herný gamepad?": "Have you ever used a game controller?",
   "Používal(a) si niekedy PC joystick?": "Have you ever used a PC joystick?",

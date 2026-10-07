@@ -95,7 +95,7 @@ type PublicMetrics = {
 
 type User = { username: string; role: string; csrf_token: string; email?: string | null; nickname?: string | null; participant_id?: string | null; participant_code?: string | null; first_name?: string | null; last_name?: string | null; accent_theme?: AccentTheme; color_mode?: ColorMode };
 type Overview = { participant_count: number; measurement_count: number };
-type Participant = { id: string; participant_code: string; is_active: boolean; created_at: string; revoked_consents?: Partial<Record<ConsentKind, string>>; birth_year?: number | null; dominant_hand?: string | null; gamepad_used?: boolean | null; pc_joystick_used?: boolean | null; rc_transmitter_used?: boolean | null; uav_flown?: boolean | null; uav_los?: boolean | null; uav_fpv?: boolean | null; uav_stabilized_mode?: boolean | null; uav_manual_mode?: boolean | null; }
+type Participant = { id: string; participant_code: string; is_active: boolean; created_at: string; revoked_consents?: Partial<Record<ConsentKind, string>>; birth_year?: number | null; biological_sex?: "male" | "female" | "unspecified" | null; dominant_hand?: string | null; gamepad_used?: boolean | null; pc_joystick_used?: boolean | null; rc_transmitter_used?: boolean | null; uav_flown?: boolean | null; uav_los?: boolean | null; uav_fpv?: boolean | null; uav_stabilized_mode?: boolean | null; uav_manual_mode?: boolean | null; }
 type AdminAccount = { id: string; username: string; email: string | null; first_name?: string | null; last_name?: string | null; role: string; effective_role: string; is_active: boolean; participant_id: string | null; participant_code: string | null; created_at: string };
 type TestDefinition = { id: string; test_code: string; name: string; version: string; status: string; analysis_profile: string; configuration: Record<string, unknown>; is_active: boolean };
 type Measurement = { id: string; participant_id: string; test_definition_id: string | null; test_type: string; status: string; started_at: string; source_file_name: string | null; raw_sha256: string | null; raw_size_bytes: number | null; analysis_data: Record<string, unknown> | null; human_model_status?: string; human_model_revision?: number | null; compute_quality_status?: string; compute_quality_note?: string | null };
@@ -103,7 +103,7 @@ type ParticipantDetail = { participant: Participant; measurements: { id: string;
 type AdminSection = "overview" | "participants" | "groups" | "trends" | "reports" | "tests" | "measurements" | "welcome" | "clients";
 type ParticipantGroup = { id: string; name: string; description: string | null; created_at: string; participant_ids: string[]; participant_codes: string[] };
 type StudentMeasurement = { id: string; test_type: string; status: string; started_at: string; raw_size_bytes: number | null; analysis_data: Record<string, unknown> | null };
-type StudentProfile = { username: string; email: string | null; nickname: string | null; role: string; participant_code: string; created_at: string; birth_year: number | null; dominant_hand: string | null; gamepad_used: boolean | null; pc_joystick_used: boolean | null; rc_transmitter_used: boolean | null; uav_flown: boolean | null; uav_los: boolean | null; uav_fpv: boolean | null; uav_stabilized_mode: boolean | null; uav_manual_mode: boolean | null; }
+type StudentProfile = { username: string; email: string | null; nickname: string | null; role: string; participant_code: string; created_at: string; birth_year: number | null; biological_sex: "male" | "female" | "unspecified" | null; dominant_hand: string | null; gamepad_used: boolean | null; pc_joystick_used: boolean | null; rc_transmitter_used: boolean | null; uav_flown: boolean | null; uav_los: boolean | null; uav_fpv: boolean | null; uav_stabilized_mode: boolean | null; uav_manual_mode: boolean | null; }
 type StudentComparison = { available: boolean; minimum_group_size: number; cohort_participant_count: number; own_measurement_count: number; metrics: ComparisonMetric[]; response_curve: ComparisonResponseCurve | null };
 
 type MeasurementMode = "SCOPE" | "SIMPLE";
@@ -1206,6 +1206,7 @@ export function App() {
                          ]} />
                          <InfoTable rows={[
                            [t("Rok narodenia"), participant.birth_year ?? t("Neuvedené")],
+                           [t("Biologické pohlavie"), biologicalSexLabel(participant.biological_sex)],
                            [t("Dominantná ruka"), profileLabel(participant.dominant_hand)],
                            [t("Herný gamepad"), yesNoLabel(participant.gamepad_used)],
                            [t("PC joystick"), yesNoLabel(participant.pc_joystick_used)],
@@ -2517,6 +2518,7 @@ function StudentPortal({ user, onLogout, accentTheme, colorMode, onAppearanceCha
             ["E-mail", profile.email || profile.username],
             ["Participant ID", profile.participant_code],
             [t("Rok narodenia"), profile.birth_year ?? t("Neuvedené")],
+            [t("Biologické pohlavie"), biologicalSexLabel(profile.biological_sex)],
             [t("Dominantná ruka"), profileLabel(profile.dominant_hand)],
             [t("Herný gamepad"), yesNoLabel(profile.gamepad_used)],
             [t("PC joystick"), yesNoLabel(profile.pc_joystick_used)],
@@ -2534,7 +2536,7 @@ function StudentPortal({ user, onLogout, accentTheme, colorMode, onAppearanceCha
   </main>;
 }
 type ProfileBinaryKey = "gamepad_used" | "pc_joystick_used" | "rc_transmitter_used" | "uav_flown" | "uav_los" | "uav_fpv" | "uav_stabilized_mode" | "uav_manual_mode";
-type StudentOnboardingAnswers = { birth_year: number | ""; dominant_hand: string; } & Record<ProfileBinaryKey, boolean | null>;
+type StudentOnboardingAnswers = { birth_year: number | ""; biological_sex: "male" | "female" | "unspecified"; dominant_hand: string; } & Record<ProfileBinaryKey, boolean | null>;
 
 function ProfileExperienceQuestion({ name, label, value, onChange }: {
   name: ProfileBinaryKey;
@@ -2562,6 +2564,7 @@ function StudentProfileOnboarding({ profile, csrfToken, onSaved, onSkip }: {
   const years = Array.from({ length: new Date().getFullYear() - 1899 }, (_, index) => new Date().getFullYear() - index);
   const [answers, setAnswers] = useState<StudentOnboardingAnswers>(() => ({
     birth_year: profile.birth_year ?? "",
+    biological_sex: profile.biological_sex ?? "unspecified",
     dominant_hand: profile.dominant_hand ?? "",
     gamepad_used: profile.gamepad_used,
     pc_joystick_used: profile.pc_joystick_used,
@@ -2598,6 +2601,7 @@ function StudentProfileOnboarding({ profile, csrfToken, onSaved, onSkip }: {
         headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken },
         body: JSON.stringify({
           birth_year: answers.birth_year === "" ? null : answers.birth_year,
+          biological_sex: answers.biological_sex,
           dominant_hand: answers.dominant_hand || null,
           gamepad_used: answers.gamepad_used,
           pc_joystick_used: answers.pc_joystick_used,
@@ -2624,6 +2628,7 @@ function StudentProfileOnboarding({ profile, csrfToken, onSaved, onSkip }: {
       <p className="muted">{t("Odpovede môžeš kedykoľvek zmeniť. Ak niektorú otázku nechceš zodpovedať, jednoducho ju preskoč.")}</p>
     </div>
     <div className="profile-onboarding-demographics">
+      <label>{t("Biologické pohlavie")}<select value={answers.biological_sex} onChange={(event) => setAnswers((current) => ({ ...current, biological_sex: event.target.value as StudentOnboardingAnswers["biological_sex"] }))}><option value="male">{t("Muž")}</option><option value="female">{t("Žena")}</option><option value="unspecified">{t("Neuvedené")}</option></select></label>
       <label>{t("Rok narodenia")}<select value={answers.birth_year} onChange={(event) => setAnswers((current) => ({ ...current, birth_year: event.target.value ? Number(event.target.value) : "" }))}><option value="">{t("Nevyplnené")}</option>{years.map((year) => <option key={year} value={year}>{year}</option>)}</select></label>
       <label>{t("Dominantná ruka")}<select value={answers.dominant_hand} onChange={(event) => setAnswers((current) => ({ ...current, dominant_hand: event.target.value }))}><option value="">{t("Nevyplnené")}</option><option value="right">{t("Pravá")}</option><option value="left">{t("Ľavá")}</option><option value="both">{t("Obe ruky")}</option><option value="prefer_not_to_say">{t("Nechcem uviesť")}</option></select></label>
     </div>
@@ -2678,6 +2683,7 @@ function ParticipantProfileEditor({ participant, studentProfile, csrfToken, onSa
       return value === "true" ? true : value === "false" ? false : null;
     };
     const profileData = {
+      biological_sex: form.get("biological_sex") || "unspecified",
       birth_year: form.get("birth_year") ? Number(form.get("birth_year")) : null,
       dominant_hand: form.get("dominant_hand") || null,
       gamepad_used: optionalBoolean("gamepad_used"),
@@ -2721,6 +2727,7 @@ function ParticipantProfileEditor({ participant, studentProfile, csrfToken, onSa
     {studentProfile && <label>{t("Prezývka (nepovinné)")}<input name="nickname" type="text" defaultValue={studentProfile.nickname ?? ""} maxLength={40} autoComplete="nickname" /></label>}
     {participant && <label className="checkbox-line"><input name="is_active" type="checkbox" defaultChecked={participant.is_active} /> {t("Aktívny účastník")}</label>}
     <div className="form-grid">
+      <label>{t("Biologické pohlavie")}<select name="biological_sex" defaultValue={values.biological_sex ?? "unspecified"}><option value="male">{t("Muž")}</option><option value="female">{t("Žena")}</option><option value="unspecified">{t("Neuvedené")}</option></select></label>
       <label>{t("Rok narodenia")}<select name="birth_year" defaultValue={values.birth_year ?? ""}><option value="">{t("Nevyplnené")}</option>{years.map((year) => <option key={year} value={year}>{year}</option>)}</select></label>
       <label>{t("Dominantná ruka")}<select name="dominant_hand" defaultValue={values.dominant_hand ?? ""}><option value="">{t("Nevyplnené")}</option><option value="right">{t("Pravá")}</option><option value="left">{t("Ľavá")}</option><option value="both">{t("Obe ruky")}</option><option value="prefer_not_to_say">{t("Nechcem uviesť")}</option></select></label>
     </div>
@@ -2738,6 +2745,10 @@ function ParticipantProfileEditor({ participant, studentProfile, csrfToken, onSa
   </form>;
 }
 
+function biologicalSexLabel(value?: string | null) {
+  const labels: Record<string, string> = { male: t("Muž"), female: t("Žena"), unspecified: t("Neuvedené") };
+  return value ? labels[value] ?? t("Neuvedené") : t("Neuvedené");
+}
 function profileLabel(value?: string | null) {
   const labels: Record<string, string> = { right: t("Pravá"), left: t("Ľavá"), both: t("Obe ruky"), prefer_not_to_say: t("Nechcem uviesť") };
   return value ? labels[value] ?? value : t("Neuvedené");

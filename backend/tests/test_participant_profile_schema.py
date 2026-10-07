@@ -32,3 +32,11 @@ def test_profile_rejects_future_birth_year() -> None:
 def test_profile_rejects_removed_demographic_fields() -> None:
     with pytest.raises(ValidationError):
         ParticipantProfileFields(birth_date="2001-02-03")
+
+
+def test_profile_accepts_only_biological_sex_choices() -> None:
+    for value in ("male", "female", "unspecified"):
+        assert ParticipantProfileFields(biological_sex=value).biological_sex == value
+
+    with pytest.raises(ValidationError):
+        ParticipantProfileFields(biological_sex="nonbinary")

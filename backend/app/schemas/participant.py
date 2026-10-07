@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
@@ -19,6 +20,7 @@ class ParticipantProfileFields(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     birth_year: int | None = Field(default=None, ge=1900, le=2100)
+    biological_sex: Literal["male", "female", "unspecified"] | None = None
     dominant_hand: str | None = Field(default=None, pattern="^(right|left|both|prefer_not_to_say)$")
     gamepad_used: bool | None = None
     pc_joystick_used: bool | None = None

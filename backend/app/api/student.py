@@ -42,6 +42,7 @@ def student_profile_response(student: AdminUser, participant: Participant) -> St
         participant_code=participant.participant_code,
         created_at=participant.created_at,
         birth_year=participant.birth_year,
+        biological_sex=participant.biological_sex,
         dominant_hand=participant.dominant_hand,
         gamepad_used=participant.gamepad_used,
         pc_joystick_used=participant.pc_joystick_used,

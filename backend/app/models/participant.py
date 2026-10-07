@@ -16,6 +16,7 @@ class Participant(Base):
     research_withdrawn_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     gdpr_withdrawn_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     birth_year: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    biological_sex: Mapped[str | None] = mapped_column(String(16), nullable=True)
     dominant_hand: Mapped[str | None] = mapped_column(String(24), nullable=True)
     gamepad_used: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     pc_joystick_used: Mapped[bool | None] = mapped_column(Boolean, nullable=True)

@@ -816,7 +816,7 @@ header > .actions, .registration-header > .actions { margin-top: 0; align-items:
 .profile-onboarding-intro { max-width: 680px; }
 .profile-onboarding-intro h3 { margin: 7px 0; font-size: clamp(1.2rem, 2vw, 1.5rem); }
 .profile-onboarding-intro p { margin: 0; }
-.profile-onboarding-demographics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.profile-onboarding-demographics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
 .profile-onboarding-demographics label { display: grid; gap: 7px; color: var(--text-soft); font-size: .9rem; }
 .profile-onboarding-demographics select { width: 100%; min-height: 44px; padding: 0 12px; border: 1px solid var(--line); border-radius: 8px; color: var(--text-main); background: var(--page-bg); font: inherit; }
 .profile-onboarding-section { padding-top: 18px; border-top: 1px solid var(--line); }
@@ -825,8 +825,9 @@ header > .actions, .registration-header > .actions { margin-top: 0; align-items:
 .profile-experience-question { display: flex; align-items: center; justify-content: space-between; gap: 14px; min-width: 0; margin: 0; padding: 13px 0; border: 0; border-bottom: 1px solid var(--line); }
 .profile-experience-question legend { float: none; width: auto; max-width: 70%; padding: 0; color: var(--text-soft); font-size: .9rem; }
 .profile-experience-options { display: flex; flex: 0 0 auto; gap: 6px; }
-.profile-experience-options label { position: relative; display: inline-flex; align-items: center; justify-content: center; min-width: 62px; min-height: 36px; padding: 6px 12px; border: 1px solid var(--line); border-radius: 9px; color: var(--text-soft); cursor: pointer; font-size: .85rem; transition: border-color .15s ease, background .15s ease, color .15s ease; }
-.profile-experience-options label.selected { border-color: var(--accent); background: rgba(var(--accent-rgb), .14); color: var(--text-main); }
+.profile-experience-options label { position: relative; display: inline-flex; align-items: center; justify-content: center; min-width: 62px; min-height: 36px; padding: 6px 12px; border: 1px solid var(--border-strong); border-radius: 9px; color: var(--text-soft); background: var(--surface); cursor: pointer; font-size: .85rem; transition: border-color .15s ease, background .15s ease, color .15s ease, box-shadow .15s ease; }
+.profile-experience-options label:hover { border-color: var(--accent); color: var(--text-main); }
+.profile-experience-options label.selected { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); background: rgba(var(--accent-rgb), .14); color: var(--text-main); }
 .profile-experience-options input { position: absolute; width: 1px; height: 1px; opacity: 0; }
 .profile-experience-options label:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
 .profile-uav-followups { margin: 14px 0 0 14px; padding-left: 18px; border-left: 2px solid rgba(var(--accent-rgb), .4); animation: profile-followups-in .18s ease-out; }

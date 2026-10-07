@@ -85,6 +85,7 @@ async def register(
     participant = Participant(
         participant_code=participant_code,
         birth_year=payload.birth_year,
+        biological_sex=payload.biological_sex,
         dominant_hand=payload.dominant_hand,
         gamepad_used=payload.gamepad_used,
         pc_joystick_used=payload.pc_joystick_used,
