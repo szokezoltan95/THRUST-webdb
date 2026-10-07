@@ -1347,6 +1347,82 @@ header > .actions, .registration-header > .actions { margin-top: 0; align-items:
     transition-duration: .01ms !important;
   }
 }
+
+/* GDPR queue: compact list that grows with its content and scrolls only when long. */
+.workspace[data-admin-section="privacy"] > .data-protection-page {
+  align-self: flex-start;
+  flex: 0 1 auto;
+  width: min(100%, 1220px);
+  height: fit-content;
+  max-height: none;
+  min-height: 0;
+  overflow: visible;
+}
+
+.data-protection-page .browser-header { align-items: center; }
+.data-protection-header-actions { display: flex; align-items: center; gap: 8px; }
+.data-protection-count { padding: 5px 9px; font-size: .78rem; }
+.data-protection-filters {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(140px, 190px) minmax(170px, 220px) auto;
+  align-items: center;
+  gap: 7px;
+  margin-top: 8px;
+}
+.data-protection-filters input,
+.data-protection-filters select { min-width: 0; min-height: 32px; padding: 5px 8px; font-size: .82rem; }
+.data-protection-filter-count { color: var(--text-muted); font-size: .76rem; white-space: nowrap; }
+.data-protection-guidance { margin: 8px 0 0; color: var(--text-muted); font-size: .76rem; }
+.workspace[data-admin-section="privacy"] .data-protection-list {
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: min(460px, calc(100dvh - 340px));
+  margin-top: 8px;
+  overflow: auto;
+  scrollbar-gutter: stable;
+  overscroll-behavior: contain;
+}
+.data-protection-row {
+  grid-template-columns: minmax(125px, .8fr) minmax(180px, 1.6fr) 90px auto auto;
+  gap: 8px;
+  min-height: 45px;
+  padding: 5px 8px;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 75%, transparent);
+  border-left: 3px solid transparent;
+  border-radius: 3px;
+}
+.data-protection-row.is-received { border-left-color: #4b9dff; background: color-mix(in srgb, #4b9dff 8%, var(--surface) 92%); }
+.data-protection-row.is-in_review { border-left-color: #e7a32d; background: color-mix(in srgb, #e7a32d 9%, var(--surface) 91%); }
+.data-protection-row.is-completed { border-left-color: #22a66c; background: color-mix(in srgb, #22a66c 8%, var(--surface) 92%); }
+.data-protection-row.is-rejected { border-left-color: #da5261; background: color-mix(in srgb, #da5261 8%, var(--surface) 92%); }
+.data-protection-person, .data-protection-request { gap: 2px; }
+.data-protection-person strong, .data-protection-request strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.data-protection-person small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .73rem; }
+.data-protection-request p { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .76rem; line-height: 1.25; }
+.data-protection-row time { font-size: .72rem; }
+.data-protection-row .request-status { padding: 3px 7px; font-size: .72rem; white-space: nowrap; }
+.request-status-received { border-color: color-mix(in srgb, #4b9dff 55%, var(--line)); color: #4b9dff; }
+.request-status-in_review { border-color: color-mix(in srgb, #e7a32d 60%, var(--line)); color: #e7a32d; }
+.request-status-completed { border-color: color-mix(in srgb, #22a66c 55%, var(--line)); color: #22a66c; }
+.request-status-rejected { border-color: color-mix(in srgb, #da5261 55%, var(--line)); color: #da5261; }
+.data-protection-no-match { display: flex; align-items: center; gap: 10px; padding: 10px; }
+.data-protection-no-match p { margin: 0; }
+@media (max-width: 800px) {
+  .data-protection-filters { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .data-protection-filter-count { justify-self: end; }
+  .workspace[data-admin-section="privacy"] .data-protection-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .workspace[data-admin-section="privacy"] .data-protection-person { grid-column: 1 / -1; }
+  .workspace[data-admin-section="privacy"] .data-protection-request { grid-column: 1 / -1; }
+  .workspace[data-admin-section="privacy"] .data-protection-row time { grid-column: 1; }
+  .workspace[data-admin-section="privacy"] .data-protection-row > .request-status { grid-column: 1; grid-row: auto; justify-self: start; }
+  .workspace[data-admin-section="privacy"] .data-protection-row > button { grid-column: 2; grid-row: auto; }
+}
+@media (max-width: 520px) {
+  .data-protection-header-actions { align-items: flex-end; flex-direction: column; }
+  .data-protection-filters { grid-template-columns: minmax(0, 1fr); }
+  .data-protection-row { gap: 5px 8px; }
+  .data-protection-guidance { line-height: 1.4; }
+}
 @media (max-width: 800px) {
   .app-main > .topbar { min-height: 58px; padding: 8px 14px; }
   .app-main > .topbar h1 { font-size: clamp(20px, 4vw, 26px); }
