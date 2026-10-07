@@ -1154,7 +1154,7 @@ export function App() {
             <section className="workspace" data-admin-section={activeSection}>
               {activeSection === "welcome" && (user.role === "admin" || user.role === "superadmin") && <WelcomeEditor csrfToken={user.csrf_token} initialLanguage={language} metrics={metrics} />}
               {activeSection === "clients" && (user.role === "admin" || user.role === "superadmin") && <ClientMonitor csrfToken={user.csrf_token} />}
-              {activeSection === "privacy" && (user.role === "admin" || user.role === "superadmin") && <StudentDataRequestAdminQueue csrfToken={user.csrf_token} isSuperadmin={user.role === "superadmin"} participants={participants} onParticipantSaved={(updated) => setParticipants((items) => items.map((item) => item.id === updated.id ? updated : item))} onPendingCountChange={setPrivacyActionCount} />}
+              {activeSection === "privacy" && (user.role === "admin" || user.role === "superadmin") && <StudentDataRequestAdminQueue csrfToken={user.csrf_token} isSuperadmin={user.role === "superadmin"} participants={participants} onParticipantSaved={(updated) => setParticipants((items) => items.map((item) => item.id === updated.id ? updated : item))} onPendingCountChange={setPrivacyActionCount} onOpenParticipants={() => setActiveSection("participants")} />}
               {activeSection === "overview" && <>
                 <div className="stats"><Metric label={t("Účastníci")} value={overview?.participant_count ?? "—"} /><Metric label={t("Merania")} value={overview?.measurement_count ?? "—"} /><Metric label={t("Čakajúce synchronizácie")} value="0" /></div>
                 <div className="empty"><span>01</span><div><h2>{t("Databáza je pripravená")}</h2><p>{t("Vyber sekciu vľavo alebo začni vytvorením účastníka.")}</p></div></div>
@@ -2678,9 +2678,12 @@ function dataRequestStatusLabel(value: DataRequestStatus) {
   return labels[value];
 }
 
-function StudentDataRequestAdminQueue({ csrfToken, isSuperadmin, participants, onParticipantSaved, onPendingCountChange }: { csrfToken: string; isSuperadmin: boolean; participants: Participant[]; onParticipantSaved: (participant: Participant) => void; onPendingCountChange: (count: number) => void }) {
+function StudentDataRequestAdminQueue({ csrfToken, isSuperadmin, participants, onParticipantSaved, onPendingCountChange, onOpenParticipants }: { csrfToken: string; isSuperadmin: boolean; participants: Participant[]; onParticipantSaved: (participant: Participant) => void; onPendingCountChange: (count: number) => void; onOpenParticipants: () => void }) {
   const [items, setItems] = useState<StudentDataRequest[]>([]);
   const [selected, setSelected] = useState<StudentDataRequest | null>(null);
+  const [statusFilter, setStatusFilter] = useState<DataRequestStatus | "all">("all");
+  const [typeFilter, setTypeFilter] = useState<StudentDataRequest["request_type"] | "all">("all");
+  const [search, setSearch] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   async function refresh() {
@@ -2692,21 +2695,34 @@ function StudentDataRequestAdminQueue({ csrfToken, isSuperadmin, participants, o
   useEffect(() => { void refresh(); }, []);
   const openItems = items.filter((item) => item.status === "received" || item.status === "in_review");
   useEffect(() => { onPendingCountChange(openItems.length); }, [openItems.length, onPendingCountChange]);
-  const sortedItems = [...items].sort((a, b) => {
+  const sortedItems = [...items].filter((item) => {
+    if (statusFilter !== "all" && item.status !== statusFilter) return false;
+    if (typeFilter !== "all" && item.request_type !== typeFilter) return false;
+    const query = search.trim().toLocaleLowerCase();
+    return !query || [item.participant_code, item.requester_email, item.details, item.response_note, dataRequestTypeLabel(item.request_type)]
+      .some((value) => value?.toLocaleLowerCase().includes(query));
+  }).sort((a, b) => {
     const pendingDifference = Number(!(a.status === "received" || a.status === "in_review")) - Number(!(b.status === "received" || b.status === "in_review"));
     return pendingDifference || Date.parse(b.created_at) - Date.parse(a.created_at);
   });
   function apply(updated: StudentDataRequest) { setItems((current) => current.map((item) => item.id === updated.id ? updated : item)); setSelected(updated); }
   return <section className="browser-panel data-protection-page">
-    <div className="browser-header"><div><div className="eyebrow">{t("GDPR · OCHRANA OSOBNÝCH ÚDAJOV")}</div><h2>{t("Ochrana údajov")}</h2><p className="muted">{t("Všetky žiadosti účastníkov vrátane vybavených. Otvorené žiadosti sú zoradené navrchu.")}</p></div><div className="data-protection-count">{openItems.length} {t("na vybavenie")}</div></div>
+    <div className="browser-header"><div><div className="eyebrow">{t("GDPR · OCHRANA OSOBNÝCH ÚDAJOV")}</div><h2>{t("Ochrana údajov")}</h2><p className="muted">{t("Všetky žiadosti účastníkov vrátane vybavených. Otvorené žiadosti sú zoradené navrchu.")}</p></div><div className="data-protection-header-actions"><div className="data-protection-count">{openItems.length} {t("na vybavenie")}</div><button type="button" className="quiet compact" onClick={onOpenParticipants}>{t("Účastníci a súhlasy")}</button></div></div>
     {error && <p className="error">{error}</p>}
-    {loading ? <p className="muted">{t("Načítavam…")}</p> : sortedItems.length ? <div className="data-protection-list">{sortedItems.map((item) => <article className={`data-protection-row${item.status === "received" || item.status === "in_review" ? " is-pending" : " is-closed"}`} key={item.id}>
+    <div className="data-protection-filters">
+      <input type="search" aria-label={t("Hľadať žiadosť")} placeholder={t("Hľadať ID, e-mail alebo poznámku…")} value={search} onChange={(event) => setSearch(event.target.value)} />
+      <select aria-label={t("Filtrovať podľa stavu")} value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as DataRequestStatus | "all")}><option value="all">{t("Všetky stavy")}</option><option value="received">{dataRequestStatusLabel("received")}</option><option value="in_review">{dataRequestStatusLabel("in_review")}</option><option value="completed">{dataRequestStatusLabel("completed")}</option><option value="rejected">{dataRequestStatusLabel("rejected")}</option></select>
+      <select aria-label={t("Filtrovať podľa typu žiadosti")} value={typeFilter} onChange={(event) => setTypeFilter(event.target.value as StudentDataRequest["request_type"] | "all")}><option value="all">{t("Všetky typy")}</option>{(["access", "rectification", "erasure", "restriction", "portability", "objection"] as const).map((type) => <option key={type} value={type}>{dataRequestTypeLabel(type)}</option>)}</select>
+      <span className="data-protection-filter-count">{sortedItems.length} / {items.length}</span>
+    </div>
+    <p className="data-protection-guidance">{t("Odvolanie súhlasu je samostatný úkon; samo osebe nevymaže údaje. Skontroluj ho v detaile účastníka.")}</p>
+    {loading ? <p className="muted">{t("Načítavam…")}</p> : sortedItems.length ? <div className="data-protection-list">{sortedItems.map((item) => <article className={`data-protection-row is-${item.status}`} key={item.id}>
       <div className="data-protection-person"><strong>{item.participant_code || t("Účet bez účastníckeho ID")}</strong><small>{item.requester_email || "—"}</small></div>
       <div className="data-protection-request"><strong>{dataRequestTypeLabel(item.request_type)}</strong><p title={item.details || undefined}>{item.details || t("Bez doplňujúcej poznámky")}</p></div>
       <time>{formatDate(item.created_at)}</time>
       <span className={`request-status request-status-${item.status}`}>{dataRequestStatusLabel(item.status)}</span>
-      <button type="button" className={item.status === "received" || item.status === "in_review" ? "primary compact" : "quiet compact"} onClick={() => setSelected(item)}>{item.status === "received" || item.status === "in_review" ? t("Akcia") : t("Detail")}</button>
-    </article>)}</div> : !error && <div className="empty-list"><h3>{t("Zatiaľ žiadne žiadosti")}</h3><p className="muted">{t("Po odoslaní žiadosti účastníkom sa zobrazí v tomto zozname.")}</p></div>}
+      <button type="button" className={item.status === "received" || item.status === "in_review" ? "primary compact" : "quiet compact"} onClick={() => setSelected(item)}>{item.status === "received" || item.status === "in_review" ? t("Úkony") : t("Detail")}</button>
+    </article>)}</div> : !error && (items.length ? <div className="empty-list data-protection-no-match"><p>{t("Filteru nezodpovedá žiadna žiadosť.")}</p><button type="button" className="quiet compact" onClick={() => { setSearch(""); setStatusFilter("all"); setTypeFilter("all"); }}>{t("Zrušiť filtre")}</button></div> : <div className="empty-list"><h3>{t("Zatiaľ žiadne žiadosti")}</h3><p className="muted">{t("Po odoslaní žiadosti účastníkom sa zobrazí v tomto zozname.")}</p></div>)}
     {selected && <AdminDataRequestActionDialog item={selected} csrfToken={csrfToken} isSuperadmin={isSuperadmin} participant={participants.find((participant) => participant.id === selected.participant_id)} onUpdated={apply} onParticipantSaved={onParticipantSaved} onDeleted={(id) => { setItems((current) => current.filter((item) => item.id !== id)); setSelected(null); }} onClose={() => setSelected(null)} />}
   </section>;
 }
