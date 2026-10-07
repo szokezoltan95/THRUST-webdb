@@ -2404,6 +2404,7 @@ function StudentPortal({ user, onLogout, onPasswordChanged, accentTheme, colorMo
   const [profile, setProfile] = useState<StudentProfile | null>(null);
   const [studentPage, setStudentPage] = useState<"results" | "account">("results");
   const [accountSection, setAccountSection] = useState<"profile" | "security" | "privacy" | "consents">("profile");
+  const [privacySection, setPrivacySection] = useState<"export" | "requests" | "information">("export");
   const [measurements, setMeasurements] = useState<StudentMeasurement[]>([]);
   const [comparison, setComparison] = useState<StudentComparison | null>(null);
   const [mode, setMode] = useState<MeasurementMode>("SCOPE");
@@ -2502,19 +2503,24 @@ function StudentPortal({ user, onLogout, onPasswordChanged, accentTheme, colorMo
 
   return <main className="student-shell" data-accent-theme={accentTheme} data-color-mode={colorMode}>
     <header><Brand colorMode={colorMode} /><div className="header-actions"><AppearanceControls accentTheme={accentTheme} colorMode={colorMode} onAccentChange={(theme) => onAppearanceChange(theme, colorMode)} onModeChange={(mode) => onAppearanceChange(accentTheme, mode)} /><LanguageSwitcher /><button className="quiet" onClick={onLogout}>{t("Odhlásiť")}</button></div></header>
-    <section className="public student-content">
+    <div className="student-workspace">
+      <aside className="student-sidebar">
+        <div className="student-sidebar-caption">{t("Navigácia študenta")}</div>
+        <nav className="student-side-nav" aria-label={t("Hlavná navigácia")}>
+          <button type="button" className={`student-side-item ${studentPage === "results" ? "active" : ""}`} aria-current={studentPage === "results" ? "page" : undefined} onClick={() => setStudentPage("results")}><span aria-hidden="true">◷</span>{t("Moje výsledky")}</button>
+          <button type="button" className={`student-side-item ${studentPage === "account" ? "active" : ""}`} aria-current={studentPage === "account" ? "page" : undefined} onClick={() => setStudentPage("account")}><span aria-hidden="true">⚙</span>{t("Správa účtu")}</button>
+          {studentPage === "account" && <div className="student-side-children">
+            {([["profile", "Profil", "○"], ["security", "Zabezpečenie", "⌑"], ["privacy", "Súkromie a údaje", "◇"], ["consents", "Súhlasy", "✓"]] as const).map(([section, label, icon]) => <button type="button" key={section} className={`student-side-item student-side-subitem ${accountSection === section ? "active" : ""}`} aria-current={accountSection === section ? "page" : undefined} onClick={() => setAccountSection(section)}><span aria-hidden="true">{icon}</span>{t(label)}</button>)}
+            {accountSection === "privacy" && <div className="student-side-grandchildren">
+              {([["export", "Stiahnutie"], ["requests", "Žiadosti"], ["information", "Informácie a lehoty"]] as const).map(([section, label]) => <button type="button" key={section} className={`student-side-link ${privacySection === section ? "active" : ""}`} aria-current={privacySection === section ? "page" : undefined} onClick={() => setPrivacySection(section)}>{t(label)}</button>)}
+            </div>}
+          </div>}
+        </nav>
+      </aside>
+      <section className="public student-content">
       <div className="eyebrow">{studentPage === "results" ? t("OSOBNÝ PROFIL") : t("SPRÁVA ÚČTU")}</div>
       <h1>{t("Ahoj,")} {profile?.nickname || user.nickname || user.participant_code || user.username}.</h1>
       <p className="lead">{t("Tvoje účastnícke ID:")} <strong>{user.participant_code || "—"}</strong></p>
-      <nav className="student-page-nav" aria-label={t("Hlavná navigácia")}>
-        <button type="button" className={`student-page-card ${studentPage === "results" ? "active" : ""}`} aria-current={studentPage === "results" ? "page" : undefined} onClick={() => setStudentPage("results")}>
-          <span className="student-page-card-icon" aria-hidden="true">↗</span><span><strong>{t("Moje výsledky")}</strong><small>{t("Výsledky meraní a skupinové porovnanie")}</small></span>
-        </button>
-        <button type="button" className={`student-page-card ${studentPage === "account" ? "active" : ""}`} aria-current={studentPage === "account" ? "page" : undefined} onClick={() => setStudentPage("account")}>
-          <span className="student-page-card-icon" aria-hidden="true">⚙</span><span><strong>{t("Správa účtu")}</strong><small>{t("Profil, heslo, súkromie a súhlasy")}</small>
-          </span>
-        </button>
-      </nav>
       {studentPage === "results" && <div className="stats"><Metric label={t("Moje merania")} value={visibleMeasurements.length} /><Metric label={t("Skupina")} value={comparison?.cohort_participant_count ?? "—"} /><Metric label={t("Porovnanie")} value={comparison?.available ? t("dostupné") : t("čaká na limit")} /></div>}
       {error && <p className="error">{error}</p>}
       {studentPage === "results" && profileReminder && profile && <div className="notice student-profile-reminder"><span>{t("Účet je vytvorený. Ak chceš, doplň si nepovinné otázky o skúsenostiach s ovládaním a UAV; môžeš to urobiť aj neskôr.")}</span><div><button type="button" className="primary compact" onClick={() => { setStudentPage("account"); setAccountSection("profile"); setOnboardingOpen(true); }}>{t("Vyplniť profil")}</button><button type="button" className="quiet compact" onClick={onDismissProfileReminder}>{t("Neskôr")}</button></div></div>}
@@ -2527,10 +2533,6 @@ function StudentPortal({ user, onLogout, onPasswordChanged, accentTheme, colorMo
         <div className="student-result-heading"><div><div className="eyebrow">{t("ANONYMIZOVANÉ POROVNANIE ·")} {mode === "SCOPE" ? "SCoPE" : "SimPLE"}</div><h2>{t("Výsledok v porovnaní so skupinou")}</h2></div></div>
         {comparison?.available ? <StudentComparisonCharts comparison={comparison} /> : <p className="muted">{t("Grafy sa zobrazia po nazbieraní dostatočne veľkej skupiny.")}</p>}
       </section>}
-      {studentPage === "account" && <section className="account-page-intro panel"><div><div className="eyebrow">{t("KONTO, ZABEZPEČENIE A SÚKROMIE")}</div><h2>{t("Správa účtu")}</h2></div><p className="muted">{t("Uprav svoj profil, zmeň heslo alebo spravuj svoje údaje a súhlasy.")}</p></section>}
-      {studentPage === "account" && <nav className="account-section-nav" aria-label={t("Časti správy účtu")}>
-        {([["profile", "Profil"], ["security", "Zabezpečenie"], ["privacy", "Súkromie a údaje"], ["consents", "Súhlasy"]] as const).map(([section, label]) => <button type="button" key={section} className={accountSection === section ? "active" : ""} aria-current={accountSection === section ? "page" : undefined} onClick={() => setAccountSection(section)}>{t(label)}</button>)}
-      </nav>}
       {studentPage === "account" && accountSection === "profile" && profile && <section id="student-profile-panel" className="panel student-profile-panel">
         <div className="profile-panel-heading"><div><div className="eyebrow">{t("PROFIL PILOTA")}</div><h2>{t("Moje údaje")}</h2><p className="muted">{t("Prezývka a nepovinné odpovede o tvojich skúsenostiach.")}</p></div>
           <button className="quiet compact" onClick={() => { setProfileMessage(""); if (onboardingOpen) { setOnboardingOpen(false); return; } setEditingProfile((value) => !value); }}>{onboardingOpen ? t("Zrušiť vyplnenie") : editingProfile ? t("Zrušiť úpravy") : t("Upraviť údaje")}</button>
@@ -2577,8 +2579,9 @@ function StudentPortal({ user, onLogout, onPasswordChanged, accentTheme, colorMo
         {consentMessage && <p className="notice">{consentMessage}</p>}
       </section>}
 
-      {studentPage === "account" && accountSection === "privacy" && <StudentDataManagement csrfToken={user.csrf_token} />}
-    </section>
+      {studentPage === "account" && accountSection === "privacy" && <StudentDataManagement csrfToken={user.csrf_token} privacySection={privacySection} setPrivacySection={setPrivacySection} />}
+      </section>
+    </div>
     {consentDialog && consentTexts && <ConsentTextDialog kind={consentDialog} document={activeConsentDocument || consentTexts[consentDialog]} onClose={() => { setConsentDialog(null); setActiveConsentDocument(null); }} />}
     <SiteFooter />
   </main>;
@@ -2608,14 +2611,13 @@ function PasswordChangePanel({ csrfToken, forced = false, onChanged }: { csrfTok
   return <section className={`panel password-change-panel${forced ? " forced" : ""}`}><div className="eyebrow">{t("ZABEZPEČENIE")}</div><h2>{forced ? t("Zmeň si dočasné heslo") : t("Zmena hesla")}</h2><p className="muted">{forced ? t("Pred pokračovaním si nastav vlastné heslo.") : t("Na zmenu hesla zadaj svoje aktuálne heslo a nové heslo s dĺžkou aspoň 10 znakov.")}</p><form className="password-change-form" onSubmit={submit}><label>{t("Aktuálne heslo")}<input type="password" name="current_password" autoComplete="current-password" required /></label><label>{t("Nové heslo")}<input type="password" name="new_password" autoComplete="new-password" minLength={10} maxLength={1024} required /></label><label>{t("Potvrdiť nové heslo")}<input type="password" name="confirm_password" autoComplete="new-password" minLength={10} maxLength={1024} required /></label><div className="profile-editor-actions"><span className={isError ? "error" : "muted"}>{message}</span><button className="primary compact" disabled={saving}>{saving ? t("Ukladám…") : t("Zmeniť heslo")}</button></div></form></section>;
 }
 
-function StudentDataManagement({ csrfToken }: { csrfToken: string }) {
+function StudentDataManagement({ csrfToken, privacySection, setPrivacySection }: { csrfToken: string; privacySection: "export" | "requests" | "information"; setPrivacySection: (section: "export" | "requests" | "information") => void }) {
   const [requests, setRequests] = useState<StudentDataRequest[]>([]);
   const [requestType, setRequestType] = useState<StudentDataRequest["request_type"]>("erasure");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [details, setDetails] = useState("");
   const [exporting, setExporting] = useState<string | null>(null);
-  const [privacySection, setPrivacySection] = useState<"export" | "requests" | "information">("export");
   useEffect(() => { request<StudentDataRequest[]>("/api/student/data-requests").then(setRequests).catch((reason) => setMessage(reason instanceof Error ? reason.message : t("Žiadosti sa nepodarilo načítať."))); }, []);
   async function download(format: "json" | "csv" | "zip") {
     setExporting(format); setMessage("");
@@ -2638,11 +2640,8 @@ function StudentDataManagement({ csrfToken }: { csrfToken: string }) {
     finally { setBusy(false); }
   }
   return <section className="student-data-management">
-    <nav className="privacy-section-nav" aria-label={t("Súkromie a údaje")}>
-      {([["export", "Stiahnutie"], ["requests", "Žiadosti"], ["information", "Informácie a lehoty"]] as const).map(([section, label]) => <button type="button" key={section} className={privacySection === section ? "active" : ""} aria-current={privacySection === section ? "page" : undefined} onClick={() => setPrivacySection(section)}>{t(label)}</button>)}
-    </nav>
     {privacySection === "export" && <section className="panel"><div className="eyebrow">{t("TVOJE ÚDAJE")}</div><h2>{t("Stiahnuť moje údaje")}</h2><p className="muted">{t("Export obsahuje iba údaje priradené k tvojmu účtu. ZIP obsahuje aj dostupné raw súbory; prihlasovacie tajomstvá a údaje iných účastníkov sa neexportujú.")}</p><div className="actions"><button className="quiet" disabled={exporting !== null} onClick={() => void download("json")}>{exporting === "json" ? t("Pripravujem…") : t("Stiahnuť JSON")}</button><button className="quiet" disabled={exporting !== null} onClick={() => void download("csv")}>{exporting === "csv" ? t("Pripravujem…") : t("Stiahnuť CSV")}</button><button className="primary" disabled={exporting !== null} onClick={() => void download("zip")}>{exporting === "zip" ? t("Pripravujem…") : t("Stiahnuť ZIP")}</button></div></section>}
-    {privacySection === "information" && <section className="panel"><div className="eyebrow">{t("OCHRANA OSOBNÝCH ÚDAJOV")}</div><h2>{t("Informácie o spracúvaní")}</h2><p className="muted">{t("Nasledujúce údaje doplníme po potvrdení s DPO. Zatiaľ nejde o schválené lehoty ani právne stanovisko.")}</p><div className="privacy-placeholder-grid">{privacyNoticePlaceholders.map((item) => <article key={item.key}><strong>{t(item.label)}</strong><span>{t("Bude doplnené po dohode s DPO.")}</span></article>)}</div><h3>{t("Lehoty uchovávania")}</h3><div className="privacy-placeholder-grid">{privacyRetentionPlaceholders.map((item) => <article key={item.key}><strong>{t(item.label)}</strong><span className="retention-placeholder">{item.period ?? t("Lehota sa doplní po dohode s DPO.")}</span></article>)}</div></section>}
+    {privacySection === "information" && <section className="panel"><div className="eyebrow">{t("OCHRANA OSOBNÝCH ÚDAJOV")}</div><h2>{t("Informácie o spracúvaní")}</h2><p className="muted">{t("Nasledujúce údaje doplníme po potvrdení s DPO. Zatiaľ nejde o schválené lehoty ani právne stanovisko.")}</p><dl className="privacy-info-list">{privacyNoticePlaceholders.map((item) => <div key={item.key}><dt>{t(item.label)}</dt><dd>{t("Bude doplnené po dohode s DPO.")}</dd></div>)}</dl><h3>{t("Lehoty uchovávania")}</h3><dl className="privacy-info-list privacy-retention-list">{privacyRetentionPlaceholders.map((item) => <div key={item.key}><dt>{t(item.label)}</dt><dd className="retention-placeholder">{item.period ?? t("Lehota sa doplní po dohode s DPO.")}</dd></div>)}</dl></section>}
     {privacySection === "requests" && <section className="panel"><div className="eyebrow">{t("TVOJE PRÁVA")}</div><h2>{t("Požiadať o vybavenie žiadosti")}</h2><p className="muted">{t("Výmaz, opravu údajov, obmedzenie spracúvania alebo námietku môžeš poslať správcovi. Stav vybavenia uvidíš nižšie. Export údajov je dostupný okamžite vyššie.")}</p><form className="data-request-form" onSubmit={submitRequest}><label>{t("Typ žiadosti")}<select value={requestType} onChange={(event) => setRequestType(event.target.value as StudentDataRequest["request_type"])}><option value="erasure">{t("Žiadosť o výmaz")}</option><option value="rectification">{t("Oprava údajov")}</option><option value="restriction">{t("Obmedzenie spracúvania")}</option><option value="objection">{t("Námietka proti spracúvaniu")}</option><option value="access">{t("Prístup k údajom")}</option><option value="portability">{t("Prenositeľnosť údajov")}</option></select></label><label>{t("Poznámka (nepovinné)")}<textarea rows={3} maxLength={4000} value={details} onChange={(event) => setDetails(event.target.value)} placeholder={t("Uveď, ktorých údajov alebo meraní sa žiadosť týka.")} /></label><button className="primary compact" disabled={busy}>{busy ? t("Odosielam…") : t("Odoslať žiadosť")}</button></form>{message && <p className="notice">{message}</p>}<div className="data-request-list"><h3>{t("Moje žiadosti")}</h3>{requests.length ? requests.map((item) => <article key={item.id}><div><strong>{dataRequestTypeLabel(item.request_type)}</strong><small>{formatDateTime(item.created_at)}</small></div><span className={`request-status request-status-${item.status}`}>{dataRequestStatusLabel(item.status)}</span>{item.details && <p>{item.details}</p>}{item.response_note && <p className="muted">{t("Odpoveď správcu:")} {item.response_note}</p>}</article>) : <p className="muted">{t("Zatiaľ nemáš odoslané žiadosti.")}</p>}</div></section>}
   </section>;
 }

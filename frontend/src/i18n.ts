@@ -6,6 +6,7 @@ const english: Record<string, string> = {
   "Správa účtu": "Account management",
   "Moje výsledky": "My results",
   "Hlavná navigácia": "Main navigation",
+  "Navigácia študenta": "Student navigation",
   "Časti správy účtu": "Account sections",
   "Profil, heslo, súkromie a súhlasy": "Profile, password, privacy and consents",
   "Výsledky meraní a skupinové porovnanie": "Measurement results and group comparison",
