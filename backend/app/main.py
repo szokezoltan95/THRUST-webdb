@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 
-from app.api import admin, auth, backgrounds, public, student, reports, welcome, live, human_models
+from app.api import admin, auth, backgrounds, public, student, reports, welcome, live, human_models, security_dashboard
 from app.core.config import settings
 
 app = FastAPI(title=settings.app_name, docs_url=None, redoc_url=None)
@@ -13,6 +13,7 @@ app.add_middleware(
 app.include_router(public.router, prefix="/api")
 app.include_router(auth.router, prefix="/api")
 app.include_router(admin.router, prefix="/api")
+app.include_router(security_dashboard.router, prefix="/api")
 app.include_router(human_models.router, prefix="/api")
 app.include_router(reports.router, prefix="/api")
 app.include_router(student.router, prefix="/api")

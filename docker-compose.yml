@@ -32,8 +32,11 @@ services:
       DATA_CONTROLLER_EMAIL: ${DATA_CONTROLLER_EMAIL:-}
       DATA_RETENTION_NOTICE: ${DATA_RETENTION_NOTICE:-}
       DATA_RETENTION_NOTICE_EN: ${DATA_RETENTION_NOTICE_EN:-}
+      BACKUP_STATUS_PATH: /var/lib/thrust-webdb/backup-status/status.json
+      BACKUP_MAX_AGE_HOURS: ${BACKUP_MAX_AGE_HOURS:-168}
     volumes:
       - measurement_data:/var/lib/thrust-webdb/measurements
+      - ./backup-status:/var/lib/thrust-webdb/backup-status:ro
     depends_on:
       db:
         condition: service_healthy

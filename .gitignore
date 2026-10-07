@@ -13,3 +13,4 @@ dist/
 /certs/
 *.pem
 *.key
+backup-status/

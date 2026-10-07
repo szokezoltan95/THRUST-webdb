@@ -5,6 +5,7 @@ from sqlalchemy import engine_from_config, pool
 
 from app.core.config import settings
 from app.db.base import Base
+from app.models.security import SecurityPolicy, SecurityEvent  # noqa: F401
 from app.models import AdminSession, AdminUser, Measurement, Participant, ResearchConsent, TestDefinition, ParticipantGroup, WelcomePage, StudentDataRequest  # noqa: F401
 
 config = context.config

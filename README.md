@@ -31,7 +31,7 @@ Different test versions, controller setups, and procedures can affect comparison
 
 The browser interface uses React, TypeScript, and Vite. A FastAPI backend supplies the API and enforces access rules. PostgreSQL stores accounts, participant details, consent records, test definitions, measurement metadata, and analysis JSON. Alembic manages database schema changes. Compressed raw measurement files are stored separately in a persistent Docker volume. The frontend is served by Nginx; the optional HTTPS configuration terminates TLS there. THRUST-measure talks to the API, never directly to PostgreSQL.
 
-WebDB stores personal information for registered accounts, including e-mail address, name, password hash, and consent history. Participant records can include birth date, vision, handedness, and experience data. Measurements are linked to generated participant codes, but those codes are **pseudonyms, not anonymity**: the service also holds the account-to-participant link. Public and student group views apply a configurable minimum group size. Study operators are responsible for the applicable consent text, access, retention, and backups.
+WebDB stores personal information for registered accounts, including e-mail address, optional student nickname, researcher names, password hash, and consent history. Participant profiles can include birth year, biological sex, handedness, and controller/UAV experience. Measurements are linked to generated participant codes, but those codes are **pseudonyms, not anonymity**: the service also holds the account-to-participant link. Public and student group views apply a configurable minimum group size. Study operators are responsible for the applicable consent text, access, retention, and backups.
 
 Two Docker volumes matter for recovery: `postgres_data` for PostgreSQL and `measurement_data` for raw logs and uploaded welcome-page images. Back up and test restoring both together; a database backup alone cannot restore the raw files.
 
@@ -55,6 +55,16 @@ docker compose -f docker-compose.yml -f docker-compose.https.yml exec backend al
 The HTTPS configuration serves port 443 and redirects port 80. Keep the private key and `.env` out of Git. On later updates, use **the same pair of Compose files** for both the build and migration commands. See `.env.example` for the remaining settings, including the public minimum group size, raw upload limit, and optional researcher registration key.
 
 ## Development and data handling
+
+The **Security and data** admin dashboard combines data requests, SK/EN consent
+texts, versioned privacy/retention settings, backup reports and sensitive-action
+audit history. Policy publication is restricted to superadmins; old consent
+snapshots remain intact. Student privacy information uses the published policy.
+Deploy migration `0019_security_dashboard` with this update. The host backup
+script covers both the PostgreSQL database and measurement volume; the web app
+reads its status without access to Docker or backup archives. See
+[security dashboard operations](ops/SECURITY.md) for deployment, backups,
+recovery, audit scope and operational limitations.
 
 From `frontend/`, run `npm ci && npm run build` to type-check and build the interface. From `backend/`, install its test dependencies and run `pytest`; integration tests require PostgreSQL. Schema changes need an Alembic migration so existing installations can update without discarding their data.
 

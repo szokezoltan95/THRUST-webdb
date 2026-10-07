@@ -49,7 +49,7 @@ async def test_welcome_draft_publish_permissions_and_images(tmp_path, monkeypatc
             assert (await client.get("/api/public/welcome?lang=sk")).json()["blocks"] is None
             assert (await client.post("/api/admin/welcome/publish?lang=sk", json={"revision": 0}, headers=headers)).status_code == 409
             assert (await client.post("/api/admin/welcome/publish?lang=sk", json={"revision": 1}, headers=headers)).status_code == 200
-            assert (await client.get("/api/public/welcome?lang=sk")).json()["blocks"] == [blocks[0], {"id": "metrics", "type": "metrics", "items": ["participants", "measurements", "active_tests"], "trends": []}]
+            assert (await client.get("/api/public/welcome?lang=sk")).json()["blocks"] == [blocks[0], {"id": "metrics", "type": "metrics", "items": ["participants", "measurements", "active_tests"], "trends": [], "aggregates": [], "max_width": 540, "columns": 3, "gap": 10, "size": "compact"}]
             assert (await client.get("/api/public/welcome?lang=en")).json()["blocks"] is None
             invalid = [{"id": "table", "type": "table", "title": "Bad", "columns": ["A", "B"], "rows": [["short"]]}]
             assert (await client.put("/api/admin/welcome/draft?lang=sk", json={"revision": 2, "blocks": invalid}, headers=headers)).status_code == 422

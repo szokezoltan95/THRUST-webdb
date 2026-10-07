@@ -7,6 +7,7 @@ import lfSkLogo from "./img/lf_sk.svg";
 import lfEnLogo from "./img/lf_en.svg";
 import { WelcomeContent, defaultWelcomeBlocks, type WelcomeBlock, type WelcomeData } from "./WelcomeContent";
 import { WelcomeEditor } from "./WelcomeEditor";
+import { SecurityDashboard, type PrivacyInformation } from "./SecurityDashboard";
 import { ComparisonHistogramPlot, ComparisonResponsePlot, formatComparisonValue, type ComparisonMetric, type ComparisonResponseCurve } from "./ComparisonVisuals";
 
 type AccentTheme = "blue" | "red" | "green" | "purple" | "orange" | "teal" | "pink" | "gold";
@@ -108,19 +109,6 @@ type StudentDataRequest = { id: string; request_type: "access" | "rectification"
 
 type DataRequestStatus = StudentDataRequest["status"];
 
-const privacyRetentionPlaceholders = [
-  { key: "account", label: "Účet a prihlasovacie údaje", period: null },
-  { key: "profile", label: "Profil účastníka", period: null },
-  { key: "measurements", label: "Merania, raw súbory a výsledky", period: null },
-  { key: "consents", label: "Súhlasy a žiadosti o práva", period: null },
-  { key: "backups", label: "Záložné kópie", period: null },
-] as const;
-const privacyNoticePlaceholders = [
-  { key: "controller", label: "Prevádzkovateľ a kontaktné údaje" },
-  { key: "purpose", label: "Účely a právne základy spracúvania" },
-  { key: "recipients", label: "Príjemcovia a sprostredkovatelia" },
-  { key: "retention", label: "Lehoty uchovávania a výmaz" },
-] as const;
 type StudentComparison = { available: boolean; minimum_group_size: number; cohort_participant_count: number; own_measurement_count: number; metrics: ComparisonMetric[]; response_curve: ComparisonResponseCurve | null };
 
 type MeasurementMode = "SCOPE" | "SIMPLE";
@@ -882,8 +870,8 @@ export function App() {
           nickname: data.get("nickname") || null,
           password: data.get("password"), research_consent: data.get("research_consent") === "on",
           gdpr_consent: data.get("gdpr_consent") === "on",
-          consent_version: consentTexts?.research.version || "research-v4",
-          gdpr_consent_version: consentTexts?.gdpr.version || "gdpr-v3",
+          consent_version: consentTexts?.research.version || "research-v5",
+          gdpr_consent_version: consentTexts?.gdpr.version || "gdpr-v4",
           consent_language: language,
         }),
       });
@@ -912,7 +900,7 @@ export function App() {
           password: data.get("password"),
           registration_key: data.get("registration_key"),
           gdpr_consent: data.get("gdpr_consent") === "on",
-          gdpr_consent_version: consentTexts?.gdpr.version || "gdpr-v3",
+          gdpr_consent_version: consentTexts?.gdpr.version || "gdpr-v4",
           consent_language: language,
         }),
       });
@@ -1108,7 +1096,7 @@ export function App() {
     { id: "measurements", icon: "↗", label: t("Merania a výsledky") },
     { id: "welcome", icon: "✎", label: t("Úvodná stránka") },
     { id: "clients", icon: "◉", label: t("Pripojení klienti") },
-    { id: "privacy", icon: "⌑", label: t("Ochrana údajov") },
+    { id: "privacy", icon: "⌑", label: t("Bezpečnosť a údaje") },
   ];
   const visibleNavItems = navOrder.map((id) => navItems.find((item) => item.id === id)!).filter((item) => (item.id !== "welcome" && item.id !== "clients" && item.id !== "privacy") || user?.role === "admin" || user?.role === "superadmin");
   function moveNavItem(target: AdminSection) {
@@ -1150,11 +1138,11 @@ export function App() {
             <div className="sidebar-footer"><span className="sidebar-user">{user.username} · {user.role}</span><button className="quiet" onClick={logout} title={t("Odhlásiť")}>{sidebarCollapsed ? "↪" : t("Odhlásiť")}</button></div>
           </aside>
           <div className="app-main">
-            <header className="topbar"><button type="button" className="mobile-menu-toggle" aria-label={mobileNavOpen ? t("Zavrieť menu") : t("Otvoriť menu")} aria-expanded={mobileNavOpen} onClick={() => setMobileNavOpen((open) => !open)}><span /><span /><span /></button><div className="topbar-title"><div className="eyebrow">{t("ADMINISTRÁCIA ·")} {user.role.toUpperCase()}</div><h1>{activeSection === "overview" ? t("Prehľad meraní") : activeSection === "participants" ? t("Účastníci a účty") : activeSection === "groups" ? t("Skupiny") : activeSection === "trends" ? t("Trendy") : activeSection === "reports" ? t("Exporty a reporty") : activeSection === "tests" ? t("Testy a konfigurácie") : activeSection === "welcome" ? t("Úvodná stránka") : activeSection === "clients" ? t("Pripojení klienti") : activeSection === "privacy" ? t("Ochrana údajov") : t("Merania a výsledky")}</h1></div><div className="header-actions"><AppearanceControls accentTheme={accentTheme} colorMode={colorMode} onAccentChange={(theme) => void saveAppearance(theme, colorMode)} onModeChange={(mode) => void saveAppearance(accentTheme, mode)} /><LanguageSwitcher /><span className="status-dot">{t("Systém online")}</span></div></header>
+            <header className="topbar"><button type="button" className="mobile-menu-toggle" aria-label={mobileNavOpen ? t("Zavrieť menu") : t("Otvoriť menu")} aria-expanded={mobileNavOpen} onClick={() => setMobileNavOpen((open) => !open)}><span /><span /><span /></button><div className="topbar-title"><div className="eyebrow">{t("ADMINISTRÁCIA ·")} {user.role.toUpperCase()}</div><h1>{activeSection === "overview" ? t("Prehľad meraní") : activeSection === "participants" ? t("Účastníci a účty") : activeSection === "groups" ? t("Skupiny") : activeSection === "trends" ? t("Trendy") : activeSection === "reports" ? t("Exporty a reporty") : activeSection === "tests" ? t("Testy a konfigurácie") : activeSection === "welcome" ? t("Úvodná stránka") : activeSection === "clients" ? t("Pripojení klienti") : activeSection === "privacy" ? t("Bezpečnosť a ochrana údajov") : t("Merania a výsledky")}</h1></div><div className="header-actions"><AppearanceControls accentTheme={accentTheme} colorMode={colorMode} onAccentChange={(theme) => void saveAppearance(theme, colorMode)} onModeChange={(mode) => void saveAppearance(accentTheme, mode)} /><LanguageSwitcher /><span className="status-dot">{t("Systém online")}</span></div></header>
             <section className="workspace" data-admin-section={activeSection}>
               {activeSection === "welcome" && (user.role === "admin" || user.role === "superadmin") && <WelcomeEditor csrfToken={user.csrf_token} initialLanguage={language} metrics={metrics} />}
               {activeSection === "clients" && (user.role === "admin" || user.role === "superadmin") && <ClientMonitor csrfToken={user.csrf_token} />}
-              {activeSection === "privacy" && (user.role === "admin" || user.role === "superadmin") && <StudentDataRequestAdminQueue csrfToken={user.csrf_token} isSuperadmin={user.role === "superadmin"} participants={participants} onParticipantSaved={(updated) => setParticipants((items) => items.map((item) => item.id === updated.id ? updated : item))} onPendingCountChange={setPrivacyActionCount} onOpenParticipants={() => setActiveSection("participants")} />}
+              {activeSection === "privacy" && (user.role === "admin" || user.role === "superadmin") && <SecurityDashboard csrfToken={user.csrf_token} isSuperadmin={user.role === "superadmin"} onNavigate={setActiveSection} requests={<StudentDataRequestAdminQueue csrfToken={user.csrf_token} isSuperadmin={user.role === "superadmin"} participants={participants} onParticipantSaved={(updated) => setParticipants((items) => items.map((item) => item.id === updated.id ? updated : item))} onPendingCountChange={setPrivacyActionCount} onOpenParticipants={() => setActiveSection("participants")} />} />}
               {activeSection === "overview" && <>
                 <div className="stats"><Metric label={t("Účastníci")} value={overview?.participant_count ?? "—"} /><Metric label={t("Merania")} value={overview?.measurement_count ?? "—"} /><Metric label={t("Čakajúce synchronizácie")} value="0" /></div>
                 <div className="empty"><span>01</span><div><h2>{t("Databáza je pripravená")}</h2><p>{t("Vyber sekciu vľavo alebo začni vytvorením účastníka.")}</p></div></div>
@@ -2623,6 +2611,14 @@ function PasswordChangePanel({ csrfToken, forced = false, onChanged }: { csrfTok
 }
 
 function StudentDataManagement({ csrfToken, privacySection, setPrivacySection }: { csrfToken: string; privacySection: "export" | "requests" | "information"; setPrivacySection: (section: "export" | "requests" | "information") => void }) {
+  const { language } = useLanguage();
+  const [privacyInformation, setPrivacyInformation] = useState<PrivacyInformation | null>(null);
+  const [privacyError, setPrivacyError] = useState("");
+  useEffect(() => {
+    if (privacySection !== "information") return;
+    setPrivacyInformation(null); setPrivacyError("");
+    request<PrivacyInformation>(`/api/public/privacy-policy?lang=${language}`).then(setPrivacyInformation).catch((reason) => setPrivacyError(reason instanceof Error ? reason.message : t("Údaje sa nepodarilo načítať.")));
+  }, [language, privacySection]);
   const [requests, setRequests] = useState<StudentDataRequest[]>([]);
   const [requestType, setRequestType] = useState<StudentDataRequest["request_type"] | null>(null);
   const [busy, setBusy] = useState(false);
@@ -2653,7 +2649,11 @@ function StudentDataManagement({ csrfToken, privacySection, setPrivacySection }:
   }
   return <section className="student-data-management">
     {privacySection === "export" && <section className="panel"><div className="eyebrow">{t("TVOJE ÚDAJE")}</div><h2>{t("Stiahnuť moje údaje")}</h2><p className="muted">{t("Export obsahuje iba údaje priradené k tvojmu účtu. ZIP obsahuje aj dostupné raw súbory; prihlasovacie tajomstvá a údaje iných účastníkov sa neexportujú.")}</p><div className="actions"><button className="quiet" disabled={exporting !== null} onClick={() => void download("json")}>{exporting === "json" ? t("Pripravujem…") : t("Stiahnuť JSON")}</button><button className="quiet" disabled={exporting !== null} onClick={() => void download("csv")}>{exporting === "csv" ? t("Pripravujem…") : t("Stiahnuť CSV")}</button><button className="primary" disabled={exporting !== null} onClick={() => void download("zip")}>{exporting === "zip" ? t("Pripravujem…") : t("Stiahnuť ZIP")}</button></div></section>}
-    {privacySection === "information" && <section className="panel"><div className="eyebrow">{t("OCHRANA OSOBNÝCH ÚDAJOV")}</div><h2>{t("Informácie o spracúvaní")}</h2><p className="muted">{t("Nasledujúce údaje doplníme po potvrdení s DPO. Zatiaľ nejde o schválené lehoty ani právne stanovisko.")}</p><dl className="privacy-info-list">{privacyNoticePlaceholders.map((item) => <div key={item.key}><dt>{t(item.label)}</dt><dd>{t("Bude doplnené po dohode s DPO.")}</dd></div>)}</dl><h3>{t("Lehoty uchovávania")}</h3><dl className="privacy-info-list privacy-retention-list">{privacyRetentionPlaceholders.map((item) => <div key={item.key}><dt>{t(item.label)}</dt><dd className="retention-placeholder">{item.period ?? t("Lehota sa doplní po dohode s DPO.")}</dd></div>)}</dl></section>}
+    {privacySection === "information" && <section className="panel"><div className="eyebrow">{t("OCHRANA OSOBNÝCH ÚDAJOV")}</div><h2>{t("Informácie o spracúvaní")}</h2>{privacyError && <p className="error">{privacyError}</p>}{privacyInformation ? <><dl className="privacy-info-list">{[
+      [t("Prevádzkovateľ a kontaktné údaje"), [privacyInformation.controller_name, privacyInformation.controller_address, privacyInformation.controller_email, privacyInformation.dpo_contact].filter(Boolean).join(" · ")],
+      [t("Účely a právne základy spracúvania"), privacyInformation.purposes],
+      [t("Príjemcovia a sprostredkovatelia"), privacyInformation.recipients],
+    ].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value || t("Bude doplnené po dohode s DPO.")}</dd></div>)}</dl><h3>{t("Lehoty uchovávania")}</h3><dl className="privacy-info-list privacy-retention-list">{privacyInformation.retention.map((item) => <div key={item.key}><dt>{item.label}</dt><dd>{item.period || t("Lehota sa doplní po dohode s DPO.")}</dd></div>)}</dl></> : !privacyError && <p className="muted">{t("Načítavam…")}</p>}</section>}
     {privacySection === "requests" && <section className="panel"><div className="eyebrow">{t("TVOJE PRÁVA")}</div><h2>{t("Požiadať o vybavenie žiadosti")}</h2><p className="muted">{t("Vyber oblasť žiadosti. Pred odoslaním si môžeš prečítať, čo žiadosť znamená a aké môže mať dôsledky.")}</p>
       {requestType === null ? <div className="data-request-options">{dataRequestOptions.map((option) => <button type="button" className={`data-request-option data-request-option-${option.type}`} key={option.type} onClick={() => { setRequestType(option.type); setMessage(""); }}><span className="eyebrow">{t(option.tag)}</span><strong>{dataRequestTypeLabel(option.type)}</strong><span>{t(option.summary)}</span><small>{t(option.consequence)}</small><span className="data-request-option-cta">{t("Vybrať žiadosť")} →</span></button>)}</div> : <div className="data-request-selected"><button type="button" className="quiet compact data-request-back" onClick={() => setRequestType(null)}>← {t("Späť na možnosti")}</button><div className="data-request-guidance"><div className="eyebrow">{t("ČO ŽIADOSŤ ZNAMENÁ")}</div><h3>{dataRequestTypeLabel(requestType)}</h3><p>{t(dataRequestOptions.find((option) => option.type === requestType)!.summary)}</p><p className="muted">{t(dataRequestOptions.find((option) => option.type === requestType)!.consequence)}</p></div><form className="data-request-form" onSubmit={submitRequest}><label>{t("Poznámka (nepovinné)")}<textarea rows={3} maxLength={4000} value={details} onChange={(event) => setDetails(event.target.value)} placeholder={t("Uveď, ktorých údajov alebo meraní sa žiadosť týka.")} /></label><div className="actions"><button className="primary compact" disabled={busy}>{busy ? t("Odosielam…") : t("Odoslať žiadosť")}</button></div></form></div>}
       {message && <p className="notice">{message}</p>}<div className="data-request-list"><h3>{t("Moje žiadosti")}</h3>{requests.length ? requests.map((item) => <article key={item.id}><div><strong>{dataRequestTypeLabel(item.request_type)}</strong><small>{formatDateTime(item.created_at)}</small></div><span className={`request-status request-status-${item.status}`}>{dataRequestStatusLabel(item.status)}</span>{item.details && <p>{item.details}</p>}{item.response_note && <p className="muted">{t("Odpoveď správcu:")} {item.response_note}</p>}</article>) : <p className="muted">{t("Zatiaľ nemáš odoslané žiadosti.")}</p>}</div></section>}

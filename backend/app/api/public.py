@@ -4,7 +4,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.consent_guard import revoked_participant_consents
-from app.core.consents import ConsentLanguage, consent_texts
+from app.core.consents import ConsentLanguage
+from app.core.privacy_policy import current_documents, current_policy, RETENTION_LABELS
 from app.db.session import get_db
 from app.models import Measurement, Participant
 
@@ -27,5 +28,15 @@ async def public_metrics(db: AsyncSession = Depends(get_db)) -> dict:
 
 
 @router.get("/consent-texts")
-async def public_consent_texts(lang: ConsentLanguage = "sk") -> dict[str, object]:
-    return consent_texts(lang)
+async def public_consent_texts(lang: ConsentLanguage = "sk", db: AsyncSession = Depends(get_db)) -> dict[str, object]:
+    return await current_documents(db, lang)
+
+
+@router.get("/privacy-policy")
+async def public_privacy_policy(lang: ConsentLanguage = "sk", db: AsyncSession = Depends(get_db)) -> dict:
+    revision, content = await current_policy(db)
+    return {"revision": revision, "controller_name": content["controller_name"],
+            "controller_address": content["controller_address"], "controller_email": content["controller_email"],
+            "dpo_contact": content["dpo_contact"], "purposes": content["purposes"][lang],
+            "recipients": content["recipients"][lang],
+            "retention": [{"key": key, "label": labels[int(lang == "en")], "period": content["retention"][key][lang]} for key, labels in RETENTION_LABELS.items()]}

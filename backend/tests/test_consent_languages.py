@@ -17,7 +17,7 @@ def test_consent_texts_have_matching_versions_and_two_languages() -> None:
 
 
 def test_registration_accepts_only_known_consent_languages() -> None:
-    payload = dict(email="user@example.com", password="long password", first_name="A", last_name="B",
+    payload = dict(email="user@example.com", password="long password", nickname="Pilot",
                    research_consent=True, gdpr_consent=True)
     assert RegistrationRequest(**payload).consent_language == "sk"
     assert RegistrationRequest(**payload, consent_language="en").consent_language == "en"

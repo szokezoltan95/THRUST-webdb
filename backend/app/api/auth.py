@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import AuthContext, effective_role, require_authenticated, require_user_csrf
 from app.core.config import settings
-from app.core.consents import GDPR_CONSENT_VERSION, RESEARCH_CONSENT_VERSION, gdpr_consent_text, research_consent_text
+from app.core.privacy_policy import current_documents, validate_presented_versions
 from app.core.security import (
     hash_password,
     new_csrf_token,
@@ -69,6 +69,8 @@ async def register(
 ) -> UserResponse:
     if not payload.research_consent or not payload.gdpr_consent:
         raise HTTPException(status_code=400, detail="Na registráciu sú potrebné oba samostatné súhlasy.")
+    documents = await current_documents(db, payload.consent_language)
+    validate_presented_versions(documents, payload.consent_version, payload.gdpr_consent_version)
 
     email = str(payload.email).strip().lower()
     if await db.scalar(select(AdminUser.id).where(AdminUser.email == email)):
@@ -113,14 +115,14 @@ async def register(
         ResearchConsent(
             user_id=user.id,
             consent_type="research",
-            version=payload.consent_version or RESEARCH_CONSENT_VERSION,
-            text_snapshot=research_consent_text(payload.consent_language),
+            version=documents["research"]["version"],
+            text_snapshot=documents["research"]["text"],
         ),
         ResearchConsent(
             user_id=user.id,
             consent_type="gdpr",
-            version=payload.gdpr_consent_version or GDPR_CONSENT_VERSION,
-            text_snapshot=gdpr_consent_text(payload.consent_language),
+            version=documents["gdpr"]["version"],
+            text_snapshot=documents["gdpr"]["text"],
         ),
     ])
     await db.commit()
@@ -135,6 +137,8 @@ async def register_researcher(
 ) -> UserResponse:
     if not payload.gdpr_consent:
         raise HTTPException(status_code=400, detail="Na registráciu výskumníka je potrebný súhlas so spracovaním údajov.")
+    documents = await current_documents(db, payload.consent_language)
+    validate_presented_versions(documents, None, payload.gdpr_consent_version)
 
     expected_key = settings.researcher_registration_key
     if not expected_key:
@@ -165,8 +169,8 @@ async def register_researcher(
     db.add(ResearchConsent(
         user_id=user.id,
         consent_type="gdpr",
-        version=payload.gdpr_consent_version or GDPR_CONSENT_VERSION,
-        text_snapshot=gdpr_consent_text(payload.consent_language),
+        version=documents["gdpr"]["version"],
+        text_snapshot=documents["gdpr"]["text"],
     ))
     await db.commit()
     return await create_session(user, response, db)

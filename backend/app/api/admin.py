@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.dependencies import AuthContext, effective_role, require_admin, require_csrf, require_researcher, require_researcher_csrf, require_superadmin_csrf
 from app.api.student import _student_export_csv, _student_export_payload
 from app.core.config import settings
+from app.core.audit import record_event
 from app.core.raw_logs import RawUploadInvalid, RawUploadTooLarge, decode_raw_upload
 from app.core.measurement_results import validate_measurement_result
 from app.core.consent_guard import require_active_consents, revoked_participant_consents
@@ -265,6 +266,7 @@ async def update_account_role(
         db.add(participant)
         await db.flush()
         target.participant_id = participant.id
+    record_event(db, auth, "account", "account.role_changed", target.id, previous_role=target.role, role=payload.role)
     target.role = payload.role
     await db.commit()
     participant = await db.get(Participant, target.participant_id) if target.participant_id else None
@@ -294,6 +296,7 @@ async def reset_account_password(
     target.password_hash = hash_password(payload.password)
     target.must_change_password = target.role == "student"
     await db.execute(delete(AdminSession).where(AdminSession.user_id == target.id))
+    record_event(db, auth, "account", "account.password_reset", target.id)
     await db.commit()
 
 
@@ -347,8 +350,12 @@ async def export_requested_student_data(
     payload = _student_export_payload(student, participant, measurements, consents, tests)
     csv_text = _student_export_csv(payload)
     if export_format == "json":
+        record_event(db, auth, "export", "data.exported", item.id, format=export_format)
+        await db.commit()
         return JSONResponse(payload, headers={"Content-Disposition": 'attachment; filename="thrust-student-data.json"'})
     if export_format == "csv":
+        record_event(db, auth, "export", "data.exported", item.id, format=export_format)
+        await db.commit()
         from fastapi.responses import Response
         return Response(csv_text, media_type="text/csv; charset=utf-8", headers={"Content-Disposition": 'attachment; filename="thrust-student-data.csv"'})
     handle = tempfile.NamedTemporaryFile(prefix="thrust-admin-export-", suffix=".zip", delete=False)
@@ -368,6 +375,12 @@ async def export_requested_student_data(
                 continue
             if raw_path.is_file():
                 archive.write(raw_path, f"raw/{measurement.id}-{Path(measurement.source_file_name or raw_path.name).name}", compress_type=zipfile.ZIP_STORED)
+    try:
+        record_event(db, auth, "export", "data.exported", item.id, format=export_format)
+        await db.commit()
+    except Exception:
+        archive_path.unlink(missing_ok=True)
+        raise
     return FileResponse(archive_path, filename="thrust-student-data.zip", media_type="application/zip", background=BackgroundTask(archive_path.unlink, missing_ok=True))
 
 
@@ -381,6 +394,7 @@ async def update_student_data_request(
     item = await db.get(StudentDataRequest, request_id)
     if item is None:
         raise HTTPException(status_code=404, detail="Žiadosť neexistuje.")
+    record_event(db, auth, "request", "request.updated", item.id, previous_status=item.status, status=payload.status)
     item.status = payload.status
     item.response_note = payload.response_note
     item.handled_by_user_id = auth.user.id
@@ -418,6 +432,7 @@ async def update_account_contact(
     target.email = normalized_email
     if normalized_email and target.username == old_email:
         target.username = normalized_email
+    record_event(db, auth, "account", "account.contact_updated", target.id, fields=["email"])
     await db.commit()
     participant = await db.get(Participant, target.participant_id) if target.participant_id else None
     return {
@@ -453,8 +468,10 @@ async def anonymize_account(
     target.email = None
     target.first_name = None
     target.last_name = None
+    target.nickname = None
     target.is_active = False
     await db.execute(delete(AdminSession).where(AdminSession.user_id == target.id))
+    record_event(db, auth, "erasure", "account.anonymized", target.id)
     await db.commit()
 
 
@@ -496,6 +513,7 @@ async def permanently_delete_participant(
 
     await db.execute(delete(Measurement).where(Measurement.participant_id == participant.id))
     await db.execute(delete(AdminUser).where(AdminUser.participant_id == participant.id))
+    record_event(db, auth, "erasure", "participant.purged", participant.id, measurement_count=len(measurements))
     await db.delete(participant)
     await db.commit()
 
@@ -513,6 +531,7 @@ async def permanently_delete_account(
         raise HTTPException(status_code=409, detail="Superadmin účet nemožno úplne odstrániť.")
     if target.participant_id:
         raise HTTPException(status_code=409, detail="Účet je prepojený s účastníkom; úplné vymazanie spusti z detailu účastníka.")
+    record_event(db, auth, "erasure", "account.purged", target.id)
     await db.delete(target)
     await db.commit()
 
@@ -570,6 +589,7 @@ async def update_participant(
         raise HTTPException(status_code=404, detail="Účastník neexistuje.")
     for field, value in payload.model_dump(exclude_unset=True).items():
         setattr(participant, field, value)
+    record_event(db, auth, "account", "participant.updated", participant.id, fields=sorted(payload.model_fields_set))
     await db.commit()
     await db.refresh(participant)
     return participant
@@ -944,12 +964,15 @@ async def disconnect_client(
         raise HTTPException(status_code=404, detail="Klient už nie je pripojený.")
     if client["client_type"] == "measure":
         request_measure_disconnect(client_id)
+        record_event(db, auth, "session", "client.disconnect_requested", client_type="measure")
+        await db.commit()
         return {"status": "pending"}
 
     session = await db.get(AdminSession, client["session_hash"])
     if session is not None:
         await db.delete(session)
-        await db.commit()
+    record_event(db, auth, "session", "client.disconnected", client_type="web")
+    await db.commit()
     notify_web_disconnect(client_id)
     return {"status": "disconnected"}
 

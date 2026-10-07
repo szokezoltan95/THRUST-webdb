@@ -19,8 +19,8 @@ class RegistrationRequest(ParticipantProfileFields):
     password: str = Field(min_length=10, max_length=1024)
     research_consent: bool
     gdpr_consent: bool
-    gdpr_consent_version: str = Field(default="gdpr-v1", min_length=1, max_length=30)
-    consent_version: str = Field(default="research-v1", min_length=1, max_length=30)
+    gdpr_consent_version: str = Field(default="gdpr-v4", min_length=1, max_length=30)
+    consent_version: str = Field(default="research-v5", min_length=1, max_length=30)
 
     @field_validator("nickname")
     @classmethod
@@ -37,7 +37,7 @@ class ResearcherRegistrationRequest(BaseModel):
     last_name: str = Field(min_length=1, max_length=120)
     registration_key: str = Field(min_length=1, max_length=64)
     gdpr_consent: bool
-    gdpr_consent_version: str = Field(default="gdpr-v3", min_length=1, max_length=30)
+    gdpr_consent_version: str = Field(default="gdpr-v4", min_length=1, max_length=30)
 
     @field_validator("first_name", "last_name")
     @classmethod

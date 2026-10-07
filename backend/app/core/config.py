@@ -21,6 +21,8 @@ class Settings(BaseSettings):
     data_controller_email: str = ""
     data_retention_notice: str = ""
     data_retention_notice_en: str = ""
+    backup_status_path: str = "/var/lib/thrust-webdb/backup-status/status.json"
+    backup_max_age_hours: int = 168
 
 
 @lru_cache

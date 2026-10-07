@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import AuthContext, require_authenticated, require_user_csrf
 from app.core.config import settings
+from app.core.audit import record_event
 from app.core.raw_logs import RawUploadInvalid, RawUploadTooLarge, decode_raw_upload
 from app.core.measurement_results import validate_measurement_result
 from app.core.consent_guard import require_active_consents, revoked_participant_consents
@@ -587,6 +588,8 @@ async def create_data_request(
     student = require_student(auth).user
     item = StudentDataRequest(user_id=student.id, request_type=payload.request_type, details=payload.details.strip() if payload.details else None)
     db.add(item)
+    await db.flush()
+    record_event(db, auth, "request", "request.created", item.id, request_type=payload.request_type)
     await db.commit()
     await db.refresh(item)
     return _data_request_response(item)
@@ -638,6 +641,7 @@ async def _revoke_consent(auth: AuthContext, db: AsyncSession, consent_type: str
         participant = await db.get(Participant, student.participant_id)
         if participant is not None:
             setattr(participant, f"{consent_type}_withdrawn_at", consent.revoked_at)
+        record_event(db, auth, "consent", "consent.withdrawn", consent.id, consent_type=consent_type, version=consent.version)
         await db.commit()
         publish_measurements_updated()
 
