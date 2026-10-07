@@ -406,6 +406,7 @@ export function App() {
   const [studentProfileReminder, setStudentProfileReminder] = useState(false);
   const [error, setError] = useState("");
   const [activeSection, setActiveSection] = useState<AdminSection>("overview");
+  const [privacyActionCount, setPrivacyActionCount] = useState(0);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => localStorage.getItem("thrust-webdb-sidebar-collapsed") === "true");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [navOrder, setNavOrder] = useState<AdminSection[]>(() => {
@@ -454,6 +455,16 @@ export function App() {
 
   useEffect(() => { localStorage.setItem("thrust-webdb-sidebar-collapsed", String(sidebarCollapsed)); }, [sidebarCollapsed]);
   useEffect(() => { localStorage.setItem("thrust-webdb-nav-order", JSON.stringify(navOrder)); }, [navOrder]);
+  useEffect(() => {
+    if (user?.role !== "admin" && user?.role !== "superadmin") { setPrivacyActionCount(0); return; }
+    let current = true;
+    const refreshCount = () => request<StudentDataRequest[]>("/api/admin/data-requests").then((items) => {
+      if (current) setPrivacyActionCount(items.filter((item) => item.status === "received" || item.status === "in_review").length);
+    }).catch(() => undefined);
+    void refreshCount();
+    const timer = window.setInterval(() => void refreshCount(), 30000);
+    return () => { current = false; window.clearInterval(timer); };
+  }, [user?.role]);
   useLayoutEffect(() => {
     const workspace = document.querySelector(".app-main > .workspace");
     if (!workspace) return;
@@ -1077,7 +1088,7 @@ export function App() {
     const filtered = adminAccounts.filter((account) => !account.participant_id &&
       (!query || [account.first_name, account.last_name, account.email, account.username, account.role].filter(Boolean).join(" ").toLowerCase().includes(query)));
     return sortRows(filtered, participantSort, (account, column) => ({
-      code: "", account: [account.first_name, account.last_name].filter(Boolean).join(" ") || account.username || account.email,
+      code: "", account: [account.first_name, account.last_name].filter(Boolean).join(" ") || account.email || account.username,
       first: null, last: null, count: null,
     }[column as "code" | "account" | "first" | "last" | "count"]));
   }
@@ -1134,7 +1145,7 @@ export function App() {
           <aside className="sidebar">
             <div className="sidebar-brand-row"><Brand colorMode={colorMode} /><button type="button" className="sidebar-toggle" aria-expanded={!sidebarCollapsed} aria-label={sidebarCollapsed ? t("Rozbaliť menu") : t("Zbaliť menu")} title={sidebarCollapsed ? t("Rozbaliť menu") : t("Zbaliť menu")} onClick={() => setSidebarCollapsed((collapsed) => !collapsed)}>{sidebarCollapsed ? "»" : "«"}</button><button type="button" className="mobile-menu-close" aria-label={t("Zavrieť menu")} onClick={() => setMobileNavOpen(false)}>×</button></div>
             <nav ref={navListRef} className="side-nav" aria-label={t("Administrácia")}>
-              {visibleNavItems.map((item) => <button key={item.id} data-nav-id={item.id} type="button" draggable onDragStart={(event) => { setDraggedNavItem(item.id); event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("text/plain", item.id); }} onDragEnter={() => setDropTargetNavItem(item.id)} onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = "move"; setDropTargetNavItem(item.id); }} onDragLeave={(event) => { if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) setDropTargetNavItem(null); }} onDrop={(event) => { event.preventDefault(); moveNavItem(item.id); setDropTargetNavItem(null); }} onDragEnd={() => { setDraggedNavItem(null); setDropTargetNavItem(null); }} title={sidebarCollapsed ? item.label : t("Potiahni na zmenu poradia") + ` · ${item.label}`} aria-label={item.label} className={`nav-item${activeSection === item.id ? " active" : ""}${draggedNavItem === item.id ? " nav-item-dragging" : ""}${dropTargetNavItem === item.id && draggedNavItem !== item.id ? " nav-item-drop-target" : ""}`} onClick={() => { setActiveSection(item.id); setMobileNavOpen(false); }}><span className="nav-icon" aria-hidden="true">{item.icon}</span><span className="nav-label">{item.label}</span></button>)}
+              {visibleNavItems.map((item) => <button key={item.id} data-nav-id={item.id} type="button" draggable onDragStart={(event) => { setDraggedNavItem(item.id); event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("text/plain", item.id); }} onDragEnter={() => setDropTargetNavItem(item.id)} onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = "move"; setDropTargetNavItem(item.id); }} onDragLeave={(event) => { if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) setDropTargetNavItem(null); }} onDrop={(event) => { event.preventDefault(); moveNavItem(item.id); setDropTargetNavItem(null); }} onDragEnd={() => { setDraggedNavItem(null); setDropTargetNavItem(null); }} title={sidebarCollapsed ? item.label : t("Potiahni na zmenu poradia") + ` · ${item.label}`} aria-label={item.label} className={`nav-item${activeSection === item.id ? " active" : ""}${item.id === "privacy" && privacyActionCount > 0 ? " nav-item-attention" : ""}${draggedNavItem === item.id ? " nav-item-dragging" : ""}${dropTargetNavItem === item.id && draggedNavItem !== item.id ? " nav-item-drop-target" : ""}`} onClick={() => { setActiveSection(item.id); setMobileNavOpen(false); }}><span className="nav-icon" aria-hidden="true">{item.icon}</span><span className="nav-label">{item.label}</span>{item.id === "privacy" && privacyActionCount > 0 && <span className="privacy-pending-badge" aria-label={tf("{0} nevybavených žiadostí", privacyActionCount)}>{privacyActionCount}</span>}</button>)}
             </nav>
             <div className="sidebar-footer"><span className="sidebar-user">{user.username} · {user.role}</span><button className="quiet" onClick={logout} title={t("Odhlásiť")}>{sidebarCollapsed ? "↪" : t("Odhlásiť")}</button></div>
           </aside>
@@ -1143,7 +1154,7 @@ export function App() {
             <section className="workspace">
               {activeSection === "welcome" && (user.role === "admin" || user.role === "superadmin") && <WelcomeEditor csrfToken={user.csrf_token} initialLanguage={language} metrics={metrics} />}
               {activeSection === "clients" && (user.role === "admin" || user.role === "superadmin") && <ClientMonitor csrfToken={user.csrf_token} />}
-              {activeSection === "privacy" && (user.role === "admin" || user.role === "superadmin") && <StudentDataRequestAdminQueue csrfToken={user.csrf_token} isSuperadmin={user.role === "superadmin"} participants={participants} onParticipantSaved={(updated) => setParticipants((items) => items.map((item) => item.id === updated.id ? updated : item))} />}
+              {activeSection === "privacy" && (user.role === "admin" || user.role === "superadmin") && <StudentDataRequestAdminQueue csrfToken={user.csrf_token} isSuperadmin={user.role === "superadmin"} participants={participants} onParticipantSaved={(updated) => setParticipants((items) => items.map((item) => item.id === updated.id ? updated : item))} onPendingCountChange={setPrivacyActionCount} />}
               {activeSection === "overview" && <>
                 <div className="stats"><Metric label={t("Účastníci")} value={overview?.participant_count ?? "—"} /><Metric label={t("Merania")} value={overview?.measurement_count ?? "—"} /><Metric label={t("Čakajúce synchronizácie")} value="0" /></div>
                 <div className="empty"><span>01</span><div><h2>{t("Databáza je pripravená")}</h2><p>{t("Vyber sekciu vľavo alebo začni vytvorením účastníka.")}</p></div></div>
@@ -1162,7 +1173,7 @@ export function App() {
                       const account = adminAccounts.find((item) => item.participant_id === participant.id) || null;
                       return <div className="data-table-row" key={participant.id}>
                         <strong>{participant.participant_code}{(participant.revoked_consents?.research || participant.revoked_consents?.gdpr) && <small className="consent-review-badge">{t("Vyžaduje riešenie")}</small>}</strong>
-                        <span>{account ? <><strong>{[account.first_name, account.last_name].filter(Boolean).join(" ") || account.username}</strong><small className="student-email">{account.email || account.username} · {account.effective_role}</small></> : <span className="muted">{user.role === "researcher" ? t("Osobný účet skrytý") : t("Manuálny účastník")}</span>}</span>
+                        <span>{account ? <><strong>{[account.first_name, account.last_name].filter(Boolean).join(" ") || account.email || account.username}</strong><small className="student-email">{[account.first_name, account.last_name].some(Boolean) ? `${account.email || account.username} · ${account.effective_role}` : account.effective_role}</small></> : <span className="muted">{user.role === "researcher" ? t("Osobný účet skrytý") : t("Manuálny účastník")}</span>}</span>
                         <span>{first ? formatDate(first) : "—"}</span>
                         <span>{last ? formatDate(last) : "—"}</span>
                         <span>{rows.length}</span>
@@ -1170,7 +1181,7 @@ export function App() {
                       </div>;
                     })}
                     {visibleAccountOnlyRows().map((account) => <div className="data-table-row" key={account.id}>
-                      <strong>—</strong><span><strong>{[account.first_name, account.last_name].filter(Boolean).join(" ") || account.username}</strong><small className="student-email">{account.email || account.username}</small></span>
+                      <strong>—</strong><span><strong>{[account.first_name, account.last_name].filter(Boolean).join(" ") || account.email || account.username}</strong><small className="student-email">{[account.first_name, account.last_name].some(Boolean) ? account.email || account.username : account.effective_role}</small></span>
                       <span>—</span><span>—</span><span>—</span><span className="row-actions">{accountManagementActions(account)}<button className="quiet compact" onClick={() => setSelectedAccount(account)}>{t("Detail účtu")}</button></span>
                     </div>)}
                   </div>
@@ -2613,7 +2624,7 @@ function PasswordChangePanel({ csrfToken, forced = false, onChanged }: { csrfTok
 
 function StudentDataManagement({ csrfToken, privacySection, setPrivacySection }: { csrfToken: string; privacySection: "export" | "requests" | "information"; setPrivacySection: (section: "export" | "requests" | "information") => void }) {
   const [requests, setRequests] = useState<StudentDataRequest[]>([]);
-  const [requestType, setRequestType] = useState<StudentDataRequest["request_type"]>("erasure");
+  const [requestType, setRequestType] = useState<StudentDataRequest["request_type"] | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [details, setDetails] = useState("");
@@ -2631,6 +2642,7 @@ function StudentDataManagement({ csrfToken, privacySection, setPrivacySection }:
   }
   async function submitRequest(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!requestType) return;
     if (requestType === "erasure" && !window.confirm(t("Odoslať žiadosť o výmaz? Žiadosť sa najprv posúdi; údaje sa týmto tlačidlom okamžite nevymažú."))) return;
     setBusy(true); setMessage("");
     try {
@@ -2642,9 +2654,20 @@ function StudentDataManagement({ csrfToken, privacySection, setPrivacySection }:
   return <section className="student-data-management">
     {privacySection === "export" && <section className="panel"><div className="eyebrow">{t("TVOJE ÚDAJE")}</div><h2>{t("Stiahnuť moje údaje")}</h2><p className="muted">{t("Export obsahuje iba údaje priradené k tvojmu účtu. ZIP obsahuje aj dostupné raw súbory; prihlasovacie tajomstvá a údaje iných účastníkov sa neexportujú.")}</p><div className="actions"><button className="quiet" disabled={exporting !== null} onClick={() => void download("json")}>{exporting === "json" ? t("Pripravujem…") : t("Stiahnuť JSON")}</button><button className="quiet" disabled={exporting !== null} onClick={() => void download("csv")}>{exporting === "csv" ? t("Pripravujem…") : t("Stiahnuť CSV")}</button><button className="primary" disabled={exporting !== null} onClick={() => void download("zip")}>{exporting === "zip" ? t("Pripravujem…") : t("Stiahnuť ZIP")}</button></div></section>}
     {privacySection === "information" && <section className="panel"><div className="eyebrow">{t("OCHRANA OSOBNÝCH ÚDAJOV")}</div><h2>{t("Informácie o spracúvaní")}</h2><p className="muted">{t("Nasledujúce údaje doplníme po potvrdení s DPO. Zatiaľ nejde o schválené lehoty ani právne stanovisko.")}</p><dl className="privacy-info-list">{privacyNoticePlaceholders.map((item) => <div key={item.key}><dt>{t(item.label)}</dt><dd>{t("Bude doplnené po dohode s DPO.")}</dd></div>)}</dl><h3>{t("Lehoty uchovávania")}</h3><dl className="privacy-info-list privacy-retention-list">{privacyRetentionPlaceholders.map((item) => <div key={item.key}><dt>{t(item.label)}</dt><dd className="retention-placeholder">{item.period ?? t("Lehota sa doplní po dohode s DPO.")}</dd></div>)}</dl></section>}
-    {privacySection === "requests" && <section className="panel"><div className="eyebrow">{t("TVOJE PRÁVA")}</div><h2>{t("Požiadať o vybavenie žiadosti")}</h2><p className="muted">{t("Výmaz, opravu údajov, obmedzenie spracúvania alebo námietku môžeš poslať správcovi. Stav vybavenia uvidíš nižšie. Export údajov je dostupný okamžite vyššie.")}</p><form className="data-request-form" onSubmit={submitRequest}><label>{t("Typ žiadosti")}<select value={requestType} onChange={(event) => setRequestType(event.target.value as StudentDataRequest["request_type"])}><option value="erasure">{t("Žiadosť o výmaz")}</option><option value="rectification">{t("Oprava údajov")}</option><option value="restriction">{t("Obmedzenie spracúvania")}</option><option value="objection">{t("Námietka proti spracúvaniu")}</option><option value="access">{t("Prístup k údajom")}</option><option value="portability">{t("Prenositeľnosť údajov")}</option></select></label><label>{t("Poznámka (nepovinné)")}<textarea rows={3} maxLength={4000} value={details} onChange={(event) => setDetails(event.target.value)} placeholder={t("Uveď, ktorých údajov alebo meraní sa žiadosť týka.")} /></label><button className="primary compact" disabled={busy}>{busy ? t("Odosielam…") : t("Odoslať žiadosť")}</button></form>{message && <p className="notice">{message}</p>}<div className="data-request-list"><h3>{t("Moje žiadosti")}</h3>{requests.length ? requests.map((item) => <article key={item.id}><div><strong>{dataRequestTypeLabel(item.request_type)}</strong><small>{formatDateTime(item.created_at)}</small></div><span className={`request-status request-status-${item.status}`}>{dataRequestStatusLabel(item.status)}</span>{item.details && <p>{item.details}</p>}{item.response_note && <p className="muted">{t("Odpoveď správcu:")} {item.response_note}</p>}</article>) : <p className="muted">{t("Zatiaľ nemáš odoslané žiadosti.")}</p>}</div></section>}
+    {privacySection === "requests" && <section className="panel"><div className="eyebrow">{t("TVOJE PRÁVA")}</div><h2>{t("Požiadať o vybavenie žiadosti")}</h2><p className="muted">{t("Vyber oblasť žiadosti. Pred odoslaním si môžeš prečítať, čo žiadosť znamená a aké môže mať dôsledky.")}</p>
+      {requestType === null ? <div className="data-request-options">{dataRequestOptions.map((option) => <button type="button" className={`data-request-option data-request-option-${option.type}`} key={option.type} onClick={() => { setRequestType(option.type); setMessage(""); }}><span className="eyebrow">{t(option.tag)}</span><strong>{dataRequestTypeLabel(option.type)}</strong><span>{t(option.summary)}</span><small>{t(option.consequence)}</small><span className="data-request-option-cta">{t("Vybrať žiadosť")} →</span></button>)}</div> : <div className="data-request-selected"><button type="button" className="quiet compact data-request-back" onClick={() => setRequestType(null)}>← {t("Späť na možnosti")}</button><div className="data-request-guidance"><div className="eyebrow">{t("ČO ŽIADOSŤ ZNAMENÁ")}</div><h3>{dataRequestTypeLabel(requestType)}</h3><p>{t(dataRequestOptions.find((option) => option.type === requestType)!.summary)}</p><p className="muted">{t(dataRequestOptions.find((option) => option.type === requestType)!.consequence)}</p></div><form className="data-request-form" onSubmit={submitRequest}><label>{t("Poznámka (nepovinné)")}<textarea rows={3} maxLength={4000} value={details} onChange={(event) => setDetails(event.target.value)} placeholder={t("Uveď, ktorých údajov alebo meraní sa žiadosť týka.")} /></label><div className="actions"><button className="primary compact" disabled={busy}>{busy ? t("Odosielam…") : t("Odoslať žiadosť")}</button></div></form></div>}
+      {message && <p className="notice">{message}</p>}<div className="data-request-list"><h3>{t("Moje žiadosti")}</h3>{requests.length ? requests.map((item) => <article key={item.id}><div><strong>{dataRequestTypeLabel(item.request_type)}</strong><small>{formatDateTime(item.created_at)}</small></div><span className={`request-status request-status-${item.status}`}>{dataRequestStatusLabel(item.status)}</span>{item.details && <p>{item.details}</p>}{item.response_note && <p className="muted">{t("Odpoveď správcu:")} {item.response_note}</p>}</article>) : <p className="muted">{t("Zatiaľ nemáš odoslané žiadosti.")}</p>}</div></section>}
   </section>;
 }
+
+const dataRequestOptions: { type: StudentDataRequest["request_type"]; tag: string; summary: string; consequence: string }[] = [
+  { type: "access", tag: "ZÍSKAŤ INFORMÁCIE", summary: "Požiadaš o potvrdenie, či spracúvame tvoje údaje, a o prístup k nim.", consequence: "Dostaneš informácie alebo kópiu dostupných údajov. Samotná žiadosť ich nemení ani nemaže." },
+  { type: "rectification", tag: "OPRAVIŤ ÚDAJE", summary: "Požiadaš o opravu alebo doplnenie údajov, ktoré sú nesprávne či neúplné.", consequence: "Správca môže potrebovať upresnenie, ktoré údaje treba opraviť. Po potvrdení sa oprava zaznamená v profile." },
+  { type: "erasure", tag: "VYMAZAŤ ÚDAJE", summary: "Požiadaš o odstránenie osobných údajov spojených s tvojím účtom.", consequence: "Žiadosť sa najprv posúdi. Ak sa výmaz vykoná, odstránené údaje už nemusí byť možné obnoviť; niektoré údaje môžu zostať, ak na to existuje dôvod." },
+  { type: "restriction", tag: "OBMEDZIŤ SPRACÚVANIE", summary: "Požiadaš o dočasné obmedzenie používania určitých údajov počas posudzovania situácie.", consequence: "Správca žiadosť posúdi a môže ťa kontaktovať. Obmedzenie môže dočasne ovplyvniť ďalšiu účasť alebo používanie účtu." },
+  { type: "portability", tag: "PRENIESŤ ÚDAJE", summary: "Požiadaš o údaje, ktoré sa dajú poskytnúť v štruktúrovanej elektronickej podobe.", consequence: "Správca posúdi rozsah a vhodný formát. Prenos údajov sám osebe nevymaže tvoje údaje z WebDB." },
+  { type: "objection", tag: "VZNIESŤ NÁMIETKU", summary: "Požiadaš o posúdenie námietky voči určitému spracúvaniu tvojich údajov.", consequence: "Uveď, ktorého spracúvania sa námietka týka. Správca ju individuálne posúdi a oznámi ďalší postup." },
+];
 
 function dataRequestTypeLabel(value: StudentDataRequest["request_type"]) {
   const labels: Record<StudentDataRequest["request_type"], string> = { access: t("Prístup k údajom"), rectification: t("Oprava údajov"), erasure: t("Žiadosť o výmaz"), restriction: t("Obmedzenie spracúvania"), portability: t("Prenositeľnosť údajov"), objection: t("Námietka proti spracúvaniu") };
@@ -2655,7 +2678,7 @@ function dataRequestStatusLabel(value: DataRequestStatus) {
   return labels[value];
 }
 
-function StudentDataRequestAdminQueue({ csrfToken, isSuperadmin, participants, onParticipantSaved }: { csrfToken: string; isSuperadmin: boolean; participants: Participant[]; onParticipantSaved: (participant: Participant) => void }) {
+function StudentDataRequestAdminQueue({ csrfToken, isSuperadmin, participants, onParticipantSaved, onPendingCountChange }: { csrfToken: string; isSuperadmin: boolean; participants: Participant[]; onParticipantSaved: (participant: Participant) => void; onPendingCountChange: (count: number) => void }) {
   const [items, setItems] = useState<StudentDataRequest[]>([]);
   const [selected, setSelected] = useState<StudentDataRequest | null>(null);
   const [error, setError] = useState("");
@@ -2668,16 +2691,22 @@ function StudentDataRequestAdminQueue({ csrfToken, isSuperadmin, participants, o
   }
   useEffect(() => { void refresh(); }, []);
   const openItems = items.filter((item) => item.status === "received" || item.status === "in_review");
+  useEffect(() => { onPendingCountChange(openItems.length); }, [openItems.length, onPendingCountChange]);
+  const sortedItems = [...items].sort((a, b) => {
+    const pendingDifference = Number(!(a.status === "received" || a.status === "in_review")) - Number(!(b.status === "received" || b.status === "in_review"));
+    return pendingDifference || Date.parse(b.created_at) - Date.parse(a.created_at);
+  });
   function apply(updated: StudentDataRequest) { setItems((current) => current.map((item) => item.id === updated.id ? updated : item)); setSelected(updated); }
   return <section className="browser-panel data-protection-page">
-    <div className="browser-header"><div><div className="eyebrow">{t("GDPR · OCHRANA OSOBNÝCH ÚDAJOV")}</div><h2>{t("Ochrana údajov")}</h2><p className="muted">{t("Nevybavené žiadosti účastníkov a potrebné kroky.")}</p></div><div className="data-protection-count">{openItems.length} {t("na vybavenie")}</div></div>
+    <div className="browser-header"><div><div className="eyebrow">{t("GDPR · OCHRANA OSOBNÝCH ÚDAJOV")}</div><h2>{t("Ochrana údajov")}</h2><p className="muted">{t("Všetky žiadosti účastníkov vrátane vybavených. Otvorené žiadosti sú zoradené navrchu.")}</p></div><div className="data-protection-count">{openItems.length} {t("na vybavenie")}</div></div>
     {error && <p className="error">{error}</p>}
-    {loading ? <p className="muted">{t("Načítavam…")}</p> : openItems.length ? <div className="data-protection-list">{openItems.map((item) => <article className="data-protection-row" key={item.id}>
+    {loading ? <p className="muted">{t("Načítavam…")}</p> : sortedItems.length ? <div className="data-protection-list">{sortedItems.map((item) => <article className={`data-protection-row${item.status === "received" || item.status === "in_review" ? " is-pending" : " is-closed"}`} key={item.id}>
       <div className="data-protection-person"><strong>{item.participant_code || t("Účet bez účastníckeho ID")}</strong><small>{item.requester_email || "—"}</small></div>
-      <div className="data-protection-request"><strong>{dataRequestTypeLabel(item.request_type)} <span className={`request-status request-status-${item.status}`}>{dataRequestStatusLabel(item.status)}</span></strong><p title={item.details || undefined}>{item.details || t("Bez doplňujúcej poznámky")}</p></div>
+      <div className="data-protection-request"><strong>{dataRequestTypeLabel(item.request_type)}</strong><p title={item.details || undefined}>{item.details || t("Bez doplňujúcej poznámky")}</p></div>
       <time>{formatDate(item.created_at)}</time>
-      <button type="button" className="primary compact" onClick={() => setSelected(item)}>{t("Akcia")}</button>
-    </article>)}</div> : !error && <div className="empty-list"><h3>{t("Žiadne otvorené žiadosti")}</h3><p className="muted">{t("Momentálne nikto nečaká na vybavenie žiadosti.")}</p></div>}
+      <span className={`request-status request-status-${item.status}`}>{dataRequestStatusLabel(item.status)}</span>
+      <button type="button" className={item.status === "received" || item.status === "in_review" ? "primary compact" : "quiet compact"} onClick={() => setSelected(item)}>{item.status === "received" || item.status === "in_review" ? t("Akcia") : t("Detail")}</button>
+    </article>)}</div> : !error && <div className="empty-list"><h3>{t("Zatiaľ žiadne žiadosti")}</h3><p className="muted">{t("Po odoslaní žiadosti účastníkom sa zobrazí v tomto zozname.")}</p></div>}
     {selected && <AdminDataRequestActionDialog item={selected} csrfToken={csrfToken} isSuperadmin={isSuperadmin} participant={participants.find((participant) => participant.id === selected.participant_id)} onUpdated={apply} onParticipantSaved={onParticipantSaved} onDeleted={(id) => { setItems((current) => current.filter((item) => item.id !== id)); setSelected(null); }} onClose={() => setSelected(null)} />}
   </section>;
 }
@@ -2691,6 +2720,7 @@ function AdminDataRequestActionDialog({ item, csrfToken, isSuperadmin, participa
   const [email, setEmail] = useState(item.requester_email || "");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const canAct = item.status === "received" || item.status === "in_review";
   async function saveStatus(nextStatus = status, responseNote = note) {
     setBusy(true); setMessage("");
     try {
@@ -2754,10 +2784,12 @@ function AdminDataRequestActionDialog({ item, csrfToken, isSuperadmin, participa
     <p className="muted">{item.requester_email || "—"} · {formatDateTime(item.created_at)}</p>
     <div className="data-request-description"><strong>{t("Poznámka účastníka")}</strong><p>{item.details || t("Bez doplňujúcej poznámky")}</p></div>
     <div className="data-request-action-area">
+      {canAct ? <>
       {(item.request_type === "access" || item.request_type === "portability") && <div><h3>{t("Pripraviť export údajov")}</h3><p className="muted">{t("Export obsahuje profil, súhlasy, výsledky a dostupné raw súbory.")}</p><button type="button" className="primary compact" disabled={busy} onClick={() => void downloadRequestedData()}>{busy ? t("Pripravujem…") : t("Stiahnuť export ZIP")}</button></div>}
       {item.request_type === "rectification" && <div><h3>{t("Opraviť údaje účastníka")}</h3>{participant && <ParticipantProfileEditor key={participant.id} participant={participant} csrfToken={csrfToken} onSaved={(updated) => { onParticipantSaved(updated); void complete(t("Profilové údaje účastníka boli opravené.")); }} />}<form className="data-request-form data-request-email-form" onSubmit={correctEmail}><label>{t("Kontaktný e-mail účtu")}<input type="email" required value={email} onChange={(event) => setEmail(event.target.value)} /></label><button type="submit" className="quiet compact" disabled={busy}>{t("Opraviť e-mail a vybaviť")}</button></form></div>}
       {(item.request_type === "restriction" || item.request_type === "objection") && <div><h3>{t("Pozastaviť ďalšiu účasť")}</h3><p className="muted">{t("Pozastavenie deaktivuje účastníka a zablokuje nové merania; existujúce dáta sa tým nevymažú.")}</p>{participant?.is_active ? <button type="button" className="primary compact" disabled={busy} onClick={() => void pauseParticipation()}>{t("Pozastaviť merania a zaznamenať")}</button> : <p className="notice">{t("Účastník je už neaktívny; nové merania sú pozastavené.")}</p>}</div>}
       {item.request_type === "erasure" && <div><h3>{t("Možnosti výmazu")}</h3><p className="muted">{t("Anonymizácia odstráni kontaktné údaje a ponechá výsledky pod pseudonymným ID. Úplný výmaz odstráni aj merania a raw súbory.")}</p>{isSuperadmin ? <div className="actions"><button type="button" className="quiet" disabled={busy} onClick={() => void anonymize()}>{t("Anonymizovať účet")}</button><button type="button" className="quiet danger" disabled={busy} onClick={() => void eraseEverything()}>{t("Úplne vymazať všetko")}</button></div> : <p className="notice">{t("Anonymizáciu a úplný výmaz môže vykonať iba superadmin.")}</p>}</div>}
+      </> : <p className="muted data-request-closed-note">{item.response_note || t("Táto žiadosť je už uzavretá. Ak treba pokračovať, zmeň jej stav na Posudzuje sa.")}</p>}
     </div>
     <form className="data-request-resolution" onSubmit={(event) => { event.preventDefault(); void saveStatus(); }}><div className="form-grid"><label>{t("Stav žiadosti")}<select value={status} onChange={(event) => setStatus(event.target.value as DataRequestStatus)}><option value="received">{t("Prijatá")}</option><option value="in_review">{t("Posudzuje sa")}</option><option value="completed">{t("Vybavená")}</option><option value="rejected">{t("Zamietnutá")}</option></select></label><label>{t("Odpoveď / záznam o kroku")}<textarea rows={2} maxLength={4000} value={note} onChange={(event) => setNote(event.target.value)} /></label></div>{message && <p className="notice">{message}</p>}<div className="actions"><button type="submit" className="quiet" disabled={busy}>{t("Uložiť stav a poznámku")}</button><button type="button" className="primary" onClick={onClose}>{t("Hotovo")}</button></div></form>
   </section></div>;
