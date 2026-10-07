@@ -1645,20 +1645,8 @@ main[data-color-mode="light"] .test-state-inactive { color: #52616e; }
 .welcome-featured-bar { fill: var(--accent); opacity: .8; }
 .welcome-featured-bar:hover { opacity: 1; }
 .welcome-featured-bar.suppressed { fill: var(--text-muted); opacity: .5; }
-.welcome-featured-band { fill: var(--accent); opacity: .16; }
-.welcome-featured-line { fill: none; stroke: var(--accent); stroke-width: 3.5; }
-.welcome-featured-empty { min-height: 160px; display: flex; align-items: center; justify-content: center; text-align: center; padding: 15px; border: 1px dashed var(--line); border-radius: 9px; }
-.welcome-featured-note { margin: 14px 0 0; color: var(--text-muted); font-size: .78rem; line-height: 1.4; }
-@container (max-width: 790px) {
-  .welcome-featured-grid-layout { grid-template-columns: minmax(0, 1fr); }
-}
-@media (max-width: 650px) {
-  .welcome-mini-stats { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
-  .welcome-mini-stat { min-width: 0; }
-  .welcome-featured { margin: 30px 0 46px; }
-  .welcome-featured-heading { flex-direction: column; }
-  .welcome-featured-card { padding: 12px; }
-}
+
+
 .scope-task-summary { margin: 16px 0; padding: 16px; border: 1px solid var(--border, #2d3a4b); border-radius: 12px; background: color-mix(in srgb, var(--panel, #111827) 82%, transparent); }
 .scope-task-summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 12px 0; }
 .scope-task-summary-grid > div { display: grid; gap: 4px; padding: 10px 12px; border-radius: 9px; background: color-mix(in srgb, var(--surface, #1f2937) 75%, transparent); }
@@ -1860,4 +1848,585 @@ main[data-color-mode="light"] .test-state-inactive { color: #52616e; }
   .data-request-resolution .form-grid { grid-template-columns: 1fr; }
   .data-request-options { grid-template-columns: 1fr; }
   .data-request-option { min-height: 0; }
+}
+
+.welcome-featured-band { fill: var(--accent); opacity: .16; }
+.welcome-featured-line { fill: none; stroke: var(--accent); stroke-width: 3.5; }
+.welcome-featured-empty { min-height: 160px; display: flex; align-items: center; justify-content: center; text-align: center; padding: 15px; border: 1px dashed var(--line); border-radius: 9px; }
+.welcome-featured-note { margin: 14px 0 0; color: var(--text-muted); font-size: .78rem; line-height: 1.4; }
+@container (max-width: 790px) {
+  .welcome-featured-grid-layout { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 650px) {
+  .welcome-mini-stats { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  .welcome-mini-stat { min-width: 0; }
+  .welcome-featured { margin: 30px 0 46px; }
+  .welcome-featured-heading { flex-direction: column; }
+  .welcome-featured-card { padding: 12px; }
+}
+
+/* Fixed application viewport with compact, consistently sized admin work areas. */
+html:has(.app-shell),
+body:has(.app-shell) {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+body:has(.app-shell) {
+  overscroll-behavior: none;
+}
+
+body:has(.app-shell) > #root,
+#root:has(.app-shell),
+main:has(> .app-shell) {
+  width: 100%;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.app-shell {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100dvh;
+  min-height: 0;
+}
+
+.app-main {
+  overflow: hidden;
+}
+
+.app-main > .workspace {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  overflow: hidden;
+  padding: 12px clamp(12px, 2vw, 28px);
+  overscroll-behavior: none;
+  scrollbar-gutter: auto;
+}
+
+.app-main > .workspace > * {
+  min-width: 0;
+}
+
+.app-main > .topbar {
+  min-height: 56px;
+  padding-block: 6px;
+}
+
+.app-main > .topbar h1 {
+  font-size: clamp(20px, 2vw, 27px);
+}
+
+.sidebar {
+  padding: 12px 10px 10px;
+}
+
+.sidebar-brand-row {
+  padding-bottom: 12px;
+}
+
+.nav-item {
+  min-height: 36px;
+  gap: 8px;
+  padding: 7px 9px;
+  font-size: .86rem;
+}
+
+.nav-item .nav-icon {
+  font-size: 16px;
+}
+
+.sidebar-footer {
+  gap: 6px;
+  padding: 10px 8px 0;
+}
+
+.sidebar-footer .quiet,
+.quiet,
+.primary {
+  min-height: 30px;
+  padding: 5px 10px;
+  font-size: .82rem;
+  line-height: 1.2;
+}
+
+.quiet.compact,
+.primary.compact {
+  min-height: 26px;
+  padding: 4px 8px;
+  font-size: .76rem;
+}
+
+input:not([type="checkbox"]):not([type="radio"]),
+select,
+textarea {
+  min-height: 30px;
+  padding: 6px 8px;
+  font-size: .84rem;
+}
+
+.app-main .workspace h2 {
+  font-size: 1.08rem;
+  line-height: 1.25;
+}
+
+.app-main .workspace h3 {
+  font-size: .94rem;
+}
+
+.panel,
+.browser-panel,
+.browser-detail,
+.participant-create-strip,
+.test-create-strip,
+.welcome-editor-panel {
+  border-radius: 6px;
+  padding: 12px;
+}
+
+.app-main .workspace .muted {
+  font-size: .8rem;
+  line-height: 1.4;
+}
+
+.browser-header,
+.detail-header {
+  gap: 10px;
+}
+
+.browser-header p {
+  margin-top: 5px;
+}
+
+.browser-toolbar {
+  margin: 10px 0 7px;
+}
+
+.data-table-head,
+.data-table-row {
+  gap: 8px;
+}
+
+.data-table-head {
+  min-height: 30px;
+  padding: 5px 8px;
+  font-size: .66rem;
+}
+
+.data-table-row {
+  min-height: 34px;
+  padding: 4px 8px;
+  font-size: .8rem;
+}
+
+.row-actions {
+  gap: 4px;
+}
+
+.participant-create-strip {
+  flex: 0 0 auto;
+  gap: 10px;
+  margin-top: 0;
+  padding-block: 7px;
+}
+
+.inline-create-form input {
+  min-height: 26px;
+}
+
+.actions {
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.workspace[data-admin-section="participants"],
+.workspace[data-admin-section="groups"],
+.workspace[data-admin-section="trends"],
+.workspace[data-admin-section="reports"],
+.workspace[data-admin-section="tests"],
+.workspace[data-admin-section="measurements"],
+.workspace[data-admin-section="privacy"],
+.workspace[data-admin-section="clients"],
+.workspace[data-admin-section="welcome"] {
+  display: flex;
+  flex-direction: column;
+}
+
+.workspace[data-admin-section="participants"] > .browser-panel,
+.workspace[data-admin-section="groups"] > .browser-panel,
+.workspace[data-admin-section="tests"] > .browser-panel,
+.workspace[data-admin-section="privacy"] > .data-protection-page,
+.workspace[data-admin-section="reports"] > .browser-panel {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.workspace[data-admin-section="participants"] .participant-table,
+.workspace[data-admin-section="tests"] .test-table,
+.workspace[data-admin-section="reports"] .report-measurement-list,
+.workspace[data-admin-section="privacy"] .data-protection-list {
+  flex: 1 1 0;
+  min-height: 0;
+  max-height: none;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+
+.workspace[data-admin-section="participants"] .data-table-head,
+.workspace[data-admin-section="tests"] .data-table-head,
+.workspace[data-admin-section="privacy"] .data-protection-list {
+  scrollbar-gutter: stable;
+}
+
+.participant-table .data-table-head,
+.test-table .data-table-head,
+.privacy-request-admin-list .data-table-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--surface);
+}
+
+.workspace[data-admin-section="groups"] .browser-panel {
+  max-width: none;
+  margin: 0;
+}
+
+.workspace[data-admin-section="groups"] .measurement-form {
+  min-height: 0;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.workspace[data-admin-section="groups"] .group-members {
+  max-height: min(34vh, 280px);
+  overflow: auto;
+  gap: 6px 14px;
+  padding: 9px;
+}
+
+.workspace[data-admin-section="trends"] > .browser-panel:first-child {
+  flex: 0 0 auto;
+  padding-block: 10px;
+}
+
+.workspace[data-admin-section="trends"] .trend-select-grid {
+  gap: 8px;
+  margin: 7px 0;
+}
+
+.workspace[data-admin-section="trends"] .trend-select-grid select {
+  min-height: 72px;
+  max-height: 100px;
+}
+
+.workspace[data-admin-section="trends"] .filters {
+  margin: 7px 0 2px;
+}
+
+.workspace[data-admin-section="trends"] > .browser-panel:nth-child(2) {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.workspace[data-admin-section="trends"] .report-chart-image {
+  flex: 0 1 auto;
+  width: min(100%, 760px);
+  max-height: 30vh;
+  object-fit: contain;
+  margin: 6px auto;
+}
+
+.workspace[data-admin-section="trends"] .trend-data-table {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: auto;
+}
+
+.workspace[data-admin-section="reports"] .report-measurement-list {
+  margin-top: 4px;
+}
+
+.workspace[data-admin-section="reports"] .report-actions {
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.workspace[data-admin-section="reports"] > .quick-panel {
+  flex: 0 0 auto;
+  padding: 10px 12px;
+}
+
+.workspace[data-admin-section="reports"] > .quick-panel p {
+  margin: 4px 0;
+}
+
+.workspace[data-admin-section="tests"] > .browser-panel {
+  flex-basis: 0;
+}
+
+.workspace[data-admin-section="tests"] > .mode-create-panel {
+  flex: 0 0 auto;
+  margin-top: 0;
+  padding: 9px 12px;
+}
+
+.workspace[data-admin-section="tests"] .mode-create-panel .program-choice {
+  min-height: 50px;
+  padding: 6px 10px;
+}
+
+.workspace[data-admin-section="measurements"] > .workbench {
+  display: grid;
+  flex: 1 1 0;
+  min-height: 0;
+  grid-template-columns: minmax(320px, .92fr) minmax(360px, 1.08fr);
+  gap: 10px;
+}
+
+.workspace[data-admin-section="measurements"] .workbench-list {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  padding: 10px;
+}
+
+.workspace[data-admin-section="measurements"] .archive-measurement-list {
+  flex: 1 1 0;
+  height: auto;
+  min-height: 0;
+  max-height: none;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.workspace[data-admin-section="measurements"] .workbench-detail {
+  min-height: 0;
+  margin: 0;
+}
+
+.workspace[data-admin-section="clients"] > .client-monitor,
+.workspace[data-admin-section="welcome"] > .welcome-editor {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.workspace[data-admin-section="clients"] .client-monitor {
+  gap: 10px;
+}
+
+.workspace[data-admin-section="clients"] .client-monitor-heading {
+  flex: 0 0 auto;
+  gap: 10px;
+}
+
+.workspace[data-admin-section="clients"] .client-monitor-heading p {
+  margin: 4px 0;
+}
+
+.workspace[data-admin-section="clients"] .client-monitor-grid {
+  flex: 1 1 0;
+  grid-auto-rows: max-content;
+  min-height: 0;
+  overflow: auto;
+  align-content: start;
+  gap: 8px;
+  padding: 1px 3px 2px 1px;
+  overscroll-behavior: contain;
+}
+
+.workspace[data-admin-section="clients"] .client-monitor-card {
+  padding: 10px;
+  border-radius: 6px;
+}
+
+.workspace[data-admin-section="clients"] .client-activity {
+  min-height: 34px;
+  gap: 7px;
+  margin-top: 9px;
+  padding: 6px 8px;
+}
+
+.workspace[data-admin-section="clients"] .client-activity strong {
+  font-size: .84rem;
+}
+
+.workspace[data-admin-section="clients"] .client-monitor-fields {
+  gap: 7px 12px;
+  margin-top: 10px;
+}
+
+.workspace[data-admin-section="clients"] .client-monitor-actions {
+  margin-top: 8px;
+}
+
+.workspace[data-admin-section="welcome"] .welcome-editor-toolbar {
+  flex: 0 0 auto;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.workspace[data-admin-section="welcome"] .welcome-editor-actions {
+  gap: 5px;
+}
+
+.workspace[data-admin-section="welcome"] .welcome-editor-grid {
+  flex: 1 1 0;
+  min-height: 0;
+  grid-template-columns: 190px minmax(0, 1fr) 240px;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.workspace[data-admin-section="welcome"] .welcome-editor-panel,
+.workspace[data-admin-section="welcome"] .welcome-editor-preview {
+  min-height: 0;
+  overflow: auto;
+  padding: 10px;
+  scrollbar-width: thin;
+}
+
+.workspace[data-admin-section="welcome"] .welcome-editor-preview {
+  min-height: 0;
+}
+
+.workspace[data-admin-section="welcome"] .welcome-editor-panel h2 {
+  font-size: .98rem;
+  margin-bottom: 9px;
+}
+
+.workspace[data-admin-section="welcome"] .welcome-editor-panel h3 {
+  margin: 14px 0 8px;
+}
+
+.workspace[data-admin-section="welcome"] .welcome-field {
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.data-protection-page {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+}
+
+.data-protection-list {
+  border-top: 1px solid var(--line);
+}
+
+.data-protection-row {
+  grid-template-columns: minmax(110px, .75fr) minmax(0, 1.7fr) 92px auto auto;
+  gap: 8px;
+  padding: 7px 4px;
+  font-size: .82rem;
+}
+
+.data-protection-count {
+  flex: 0 0 auto;
+}
+
+.detail-modal-open,
+.measurement-context-window,
+.test-editor-window,
+.backdrop > .login,
+.backdrop > .data-request-action-dialog {
+  overscroll-behavior: contain;
+}
+
+.detail-modal-open {
+  max-height: calc(100dvh - 36px);
+  scrollbar-width: thin;
+}
+
+.backdrop {
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.login {
+  max-height: calc(100dvh - 40px);
+  overflow: auto;
+  padding: 22px;
+}
+
+.app-shell .empty-list {
+  padding: 16px;
+}
+
+.app-shell .selection-toolbar {
+  min-height: 28px;
+}
+
+.app-shell .measurement-list-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding-block: 4px;
+  background: var(--surface);
+}
+
+.student-shell {
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.student-shell > .student-workspace {
+  flex: 1 1 0;
+  min-height: 0;
+  height: auto;
+  overflow: hidden;
+}
+
+.student-shell .student-content {
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+
+@media (max-width: 800px) {
+  .app-main > .workspace {
+    padding: 9px 10px;
+  }
+
+  .workspace[data-admin-section="measurements"] > .workbench {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  .workspace[data-admin-section="welcome"] .welcome-editor-grid {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(130px, .4fr) minmax(220px, 1fr) minmax(150px, .7fr);
+  }
+
+  .workspace[data-admin-section="welcome"] .welcome-properties {
+    grid-column: 1;
+  }
+
+  .workspace[data-admin-section="privacy"] .data-protection-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .workspace[data-admin-section="privacy"] .data-protection-request {
+    grid-column: 1 / -1;
+  }
 }
