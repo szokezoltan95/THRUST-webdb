@@ -1,16 +1,21 @@
 import hashlib
+import json
+import tempfile
+import zipfile
 import math
 import secrets
 import string
 from pathlib import Path
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.responses import FileResponse
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import FileResponse, JSONResponse
+from starlette.background import BackgroundTask
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import AuthContext, effective_role, require_admin, require_csrf, require_researcher, require_researcher_csrf, require_superadmin_csrf
+from app.api.student import _student_export_csv, _student_export_payload
 from app.core.config import settings
 from app.core.raw_logs import RawUploadInvalid, RawUploadTooLarge, decode_raw_upload
 from app.core.measurement_results import validate_measurement_result
@@ -19,10 +24,10 @@ from app.core.live_updates import publish_measurements_updated
 from app.core.live_updates import (client_for_disconnect, connected_clients_snapshot,
                                    notify_web_disconnect, request_measure_disconnect, unregister_client)
 from app.db.session import get_db
-from app.models import AdminSession, AdminUser, Measurement, HumanModelResult, Participant, TestDefinition, ParticipantGroup, StudentDataRequest
+from app.models import AdminSession, AdminUser, Measurement, HumanModelResult, Participant, ResearchConsent, TestDefinition, ParticipantGroup, StudentDataRequest
 from app.schemas.participant_group import ParticipantGroupCreate, ParticipantGroupUpdate
 from app.schemas.participant import ParticipantCreate, ParticipantResponse, ParticipantUpdate, RegisteredStudentResponse
-from app.schemas.user_admin import AccountPasswordReset, AccountRoleUpdate, AdminAccountResponse, StudentDataRequestResponse, StudentDataRequestUpdate
+from app.schemas.user_admin import AccountPasswordReset, AccountRoleUpdate, AdminAccountProfileUpdate, AdminAccountResponse, StudentDataRequestResponse, StudentDataRequestUpdate
 from app.core.security import hash_password
 from app.schemas.measurement import MeasurementCreate, MeasurementResponse
 from app.schemas.test_definition import TestDefinitionCreate, TestDefinitionResponse, TestDefinitionUpdate
@@ -310,9 +315,60 @@ async def list_student_data_requests(
             "created_at": item.created_at, "updated_at": item.updated_at,
             "requester_email": user.email or user.username,
             "participant_code": participant.participant_code if participant else None,
+            "requester_user_id": user.id,
+            "participant_id": participant.id if participant else None,
         }
         for item, user, participant in result.all()
     ]
+
+
+@router.get("/data-requests/{request_id}/export")
+async def export_requested_student_data(
+    request_id: str,
+    export_format: str = Query(default="zip", alias="format", pattern="^(json|csv|zip)$"),
+    auth: AuthContext = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    item = await db.get(StudentDataRequest, request_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="Žiadosť neexistuje.")
+    if item.request_type not in {"access", "portability"}:
+        raise HTTPException(status_code=409, detail="Tento typ žiadosti nevyžaduje export údajov.")
+    student = await db.get(AdminUser, item.user_id)
+    if student is None or student.role != "student" or not student.participant_id:
+        raise HTTPException(status_code=409, detail="K žiadosti nie je priradený aktívny profil účastníka.")
+    participant = await db.get(Participant, student.participant_id)
+    if participant is None:
+        raise HTTPException(status_code=409, detail="Profil účastníka neexistuje.")
+    measurements = list(await db.scalars(select(Measurement).where(Measurement.participant_id == participant.id).order_by(Measurement.started_at.asc())))
+    consents = list(await db.scalars(select(ResearchConsent).where(ResearchConsent.user_id == student.id).order_by(ResearchConsent.accepted_at.asc())))
+    test_ids = {measurement.test_definition_id for measurement in measurements if measurement.test_definition_id}
+    tests = {test.id: test for test in await db.scalars(select(TestDefinition).where(TestDefinition.id.in_(test_ids)))} if test_ids else {}
+    payload = _student_export_payload(student, participant, measurements, consents, tests)
+    csv_text = _student_export_csv(payload)
+    if export_format == "json":
+        return JSONResponse(payload, headers={"Content-Disposition": 'attachment; filename="thrust-student-data.json"'})
+    if export_format == "csv":
+        from fastapi.responses import Response
+        return Response(csv_text, media_type="text/csv; charset=utf-8", headers={"Content-Disposition": 'attachment; filename="thrust-student-data.csv"'})
+    handle = tempfile.NamedTemporaryFile(prefix="thrust-admin-export-", suffix=".zip", delete=False)
+    handle.close()
+    archive_path = Path(handle.name)
+    storage_root = Path(settings.measurement_storage_path).resolve()
+    with zipfile.ZipFile(archive_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("data.json", json.dumps(payload, ensure_ascii=False, indent=2))
+        archive.writestr("data.csv", csv_text)
+        for measurement in measurements:
+            if not measurement.raw_storage_path:
+                continue
+            raw_path = Path(measurement.raw_storage_path).resolve()
+            try:
+                raw_path.relative_to(storage_root)
+            except ValueError:
+                continue
+            if raw_path.is_file():
+                archive.write(raw_path, f"raw/{measurement.id}-{Path(measurement.source_file_name or raw_path.name).name}", compress_type=zipfile.ZIP_STORED)
+    return FileResponse(archive_path, filename="thrust-student-data.zip", media_type="application/zip", background=BackgroundTask(archive_path.unlink, missing_ok=True))
 
 
 @router.patch("/data-requests/{request_id}", response_model=StudentDataRequestResponse)
@@ -338,6 +394,40 @@ async def update_student_data_request(
         "created_at": item.created_at, "updated_at": item.updated_at,
         "requester_email": (user.email or user.username) if user else None,
         "participant_code": participant.participant_code if participant else None,
+        "requester_user_id": user.id if user else None,
+        "participant_id": participant.id if participant else None,
+    }
+
+
+@router.patch("/users/{user_id}/profile", response_model=AdminAccountResponse)
+async def update_account_contact(
+    user_id: str,
+    payload: AdminAccountProfileUpdate,
+    auth: AuthContext = Depends(require_csrf),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    if effective_role(auth.user) not in {"admin", "superadmin"}:
+        raise HTTPException(status_code=403, detail="Správu účtov môže vykonávať iba administrátor.")
+    target = await db.get(AdminUser, user_id)
+    if target is None:
+        raise HTTPException(status_code=404, detail="Používateľ neexistuje.")
+    normalized_email = str(payload.email).strip().lower() if payload.email else None
+    old_email = target.email
+    if normalized_email and await db.scalar(select(AdminUser.id).where(((AdminUser.email == normalized_email) | (AdminUser.username == normalized_email)), AdminUser.id != target.id)):
+        raise HTTPException(status_code=409, detail="Tento e-mail už používa iný účet.")
+    target.email = normalized_email
+    if normalized_email and target.username == old_email:
+        target.username = normalized_email
+    await db.commit()
+    participant = await db.get(Participant, target.participant_id) if target.participant_id else None
+    return {
+        "id": target.id, "username": target.username, "email": target.email,
+        "first_name": target.first_name, "last_name": target.last_name,
+        "role": target.role, "effective_role": effective_role(target),
+        "is_active": target.is_active and (participant.is_active if participant else True),
+        "participant_id": participant.id if participant else None,
+        "participant_code": participant.participant_code if participant else None,
+        "created_at": target.created_at,
     }
 
 

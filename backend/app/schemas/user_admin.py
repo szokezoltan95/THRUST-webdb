@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, EmailStr, Field
 
 
 AccountRole = Literal["student", "researcher", "admin"]
@@ -29,6 +29,10 @@ class AccountPasswordReset(BaseModel):
     password: str = Field(min_length=10, max_length=1024)
 
 
+class AdminAccountProfileUpdate(BaseModel):
+    email: EmailStr | None
+
+
 DataRequestType = Literal["access", "rectification", "erasure", "restriction", "portability", "objection"]
 DataRequestStatus = Literal["received", "in_review", "completed", "rejected"]
 
@@ -48,6 +52,8 @@ class StudentDataRequestResponse(BaseModel):
     updated_at: datetime
     requester_email: str | None = None
     participant_code: str | None = None
+    requester_user_id: str | None = None
+    participant_id: str | None = None
 
     model_config = {"from_attributes": True}
 
