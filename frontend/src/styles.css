@@ -2210,6 +2210,39 @@ textarea {
   padding: 10px;
 }
 
+.workspace[data-admin-section="measurements"] .archive-measurement-list .measurement-item,
+.workspace[data-admin-section="measurements"] .archive-measurement-list .measurement-list-head {
+  grid-template-columns:
+    22px
+    minmax(105px, .65fr)
+    minmax(175px, 1fr)
+    minmax(280px, 2fr)
+    minmax(75px, .45fr)
+    minmax(160px, 1fr);
+  min-width: 920px;
+}
+
+.workspace[data-admin-section="measurements"] .archive-measurement-list .measurement-item {
+  min-height: 36px;
+  line-height: 1.25;
+}
+
+.workspace[data-admin-section="measurements"] .archive-measurement-list .measurement-item > strong,
+.workspace[data-admin-section="measurements"] .archive-measurement-list .measurement-item > span,
+.workspace[data-admin-section="measurements"] .archive-measurement-list .measurement-item > small {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace[data-admin-section="measurements"] .archive-measurement-list .measurement-item .measurement-status {
+  width: auto;
+  justify-self: stretch;
+  text-align: left;
+}
+
 .workspace[data-admin-section="measurements"] .archive-measurement-list {
   flex: 1 1 0;
   height: auto;
