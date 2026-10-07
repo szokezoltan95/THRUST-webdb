@@ -2,6 +2,7 @@
 export type Language = "sk" | "en";
 
 const english: Record<string, string> = {
+  "Príliš veľa požiadaviek. Skús to znova o chvíľu.": "Too many requests. Please try again shortly.",
   "Všetky žiadosti účastníkov vrátane vybavených. Otvorené žiadosti sú zoradené navrchu.": "All participant requests, including resolved ones. Open requests are listed first.",
   "Zatiaľ žiadne žiadosti": "No requests yet",
   "Po odoslaní žiadosti účastníkom sa zobrazí v tomto zozname.": "Requests will appear here when participants submit them.",
