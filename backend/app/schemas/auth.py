@@ -54,6 +54,7 @@ class UserResponse(BaseModel):
     nickname: str | None = None
     role: str
     csrf_token: str
+    must_change_password: bool = False
     participant_id: str | None = None
     participant_code: str | None = None
     first_name: str | None = None
@@ -74,3 +75,8 @@ class StudentProfileResponse(ParticipantProfileFields):
     role: str
     participant_code: str
     created_at: datetime
+
+
+class StudentPasswordChange(BaseModel):
+    current_password: str = Field(min_length=1, max_length=1024)
+    new_password: str = Field(min_length=10, max_length=1024)

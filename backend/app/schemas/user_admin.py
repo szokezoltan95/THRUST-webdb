@@ -27,3 +27,31 @@ class AccountRoleUpdate(BaseModel):
 
 class AccountPasswordReset(BaseModel):
     password: str = Field(min_length=10, max_length=1024)
+
+
+DataRequestType = Literal["access", "rectification", "erasure", "restriction", "portability", "objection"]
+DataRequestStatus = Literal["received", "in_review", "completed", "rejected"]
+
+
+class StudentDataRequestCreate(BaseModel):
+    request_type: DataRequestType
+    details: str | None = Field(default=None, max_length=4000)
+
+
+class StudentDataRequestResponse(BaseModel):
+    id: str
+    request_type: DataRequestType
+    details: str | None
+    status: DataRequestStatus
+    response_note: str | None
+    created_at: datetime
+    updated_at: datetime
+    requester_email: str | None = None
+    participant_code: str | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class StudentDataRequestUpdate(BaseModel):
+    status: DataRequestStatus
+    response_note: str | None = Field(default=None, max_length=4000)

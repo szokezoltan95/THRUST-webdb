@@ -18,7 +18,7 @@ from app.core.security import (
 )
 from app.db.session import get_db
 from app.models import AdminSession, AdminUser, Participant, ResearchConsent
-from app.schemas.auth import AppearancePreferences, LoginRequest, RegistrationRequest, ResearcherRegistrationRequest, UserResponse
+from app.schemas.auth import AppearancePreferences, LoginRequest, RegistrationRequest, ResearcherRegistrationRequest, StudentPasswordChange, UserResponse
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
 
@@ -29,6 +29,7 @@ def response_for_user(user: AdminUser, csrf_token: str, participant_code: str | 
         nickname=user.nickname,
         role=effective_role(user),
         csrf_token=csrf_token,
+        must_change_password=user.must_change_password,
         participant_id=user.participant_id,
         participant_code=participant_code,
         first_name=user.first_name,

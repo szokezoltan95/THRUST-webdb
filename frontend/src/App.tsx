@@ -93,17 +93,34 @@ type PublicMetrics = {
   publishable: boolean;
 };
 
-type User = { username: string; role: string; csrf_token: string; email?: string | null; nickname?: string | null; participant_id?: string | null; participant_code?: string | null; first_name?: string | null; last_name?: string | null; accent_theme?: AccentTheme; color_mode?: ColorMode };
+type User = { username: string; role: string; csrf_token: string; must_change_password?: boolean; email?: string | null; nickname?: string | null; participant_id?: string | null; participant_code?: string | null; first_name?: string | null; last_name?: string | null; accent_theme?: AccentTheme; color_mode?: ColorMode };
 type Overview = { participant_count: number; measurement_count: number };
 type Participant = { id: string; participant_code: string; is_active: boolean; created_at: string; revoked_consents?: Partial<Record<ConsentKind, string>>; birth_year?: number | null; biological_sex?: "male" | "female" | "unspecified" | null; dominant_hand?: string | null; gamepad_used?: boolean | null; pc_joystick_used?: boolean | null; rc_transmitter_used?: boolean | null; uav_flown?: boolean | null; uav_los?: boolean | null; uav_fpv?: boolean | null; uav_stabilized_mode?: boolean | null; uav_manual_mode?: boolean | null; }
 type AdminAccount = { id: string; username: string; email: string | null; first_name?: string | null; last_name?: string | null; role: string; effective_role: string; is_active: boolean; participant_id: string | null; participant_code: string | null; created_at: string };
 type TestDefinition = { id: string; test_code: string; name: string; version: string; status: string; analysis_profile: string; configuration: Record<string, unknown>; is_active: boolean };
 type Measurement = { id: string; participant_id: string; test_definition_id: string | null; test_type: string; status: string; started_at: string; source_file_name: string | null; raw_sha256: string | null; raw_size_bytes: number | null; analysis_data: Record<string, unknown> | null; human_model_status?: string; human_model_revision?: number | null; compute_quality_status?: string; compute_quality_note?: string | null };
 type ParticipantDetail = { participant: Participant; measurements: { id: string; test_type: string; status: string; started_at: string; raw_data_available?: boolean; raw_size_bytes?: number | null }[] };
-type AdminSection = "overview" | "participants" | "groups" | "trends" | "reports" | "tests" | "measurements" | "welcome" | "clients";
+type AdminSection = "overview" | "participants" | "groups" | "trends" | "reports" | "tests" | "measurements" | "welcome" | "clients" | "privacy";
 type ParticipantGroup = { id: string; name: string; description: string | null; created_at: string; participant_ids: string[]; participant_codes: string[] };
 type StudentMeasurement = { id: string; test_type: string; status: string; started_at: string; raw_size_bytes: number | null; analysis_data: Record<string, unknown> | null };
 type StudentProfile = { username: string; email: string | null; nickname: string | null; role: string; participant_code: string; created_at: string; birth_year: number | null; biological_sex: "male" | "female" | "unspecified" | null; dominant_hand: string | null; gamepad_used: boolean | null; pc_joystick_used: boolean | null; rc_transmitter_used: boolean | null; uav_flown: boolean | null; uav_los: boolean | null; uav_fpv: boolean | null; uav_stabilized_mode: boolean | null; uav_manual_mode: boolean | null; }
+type StudentDataRequest = { id: string; request_type: "access" | "rectification" | "erasure" | "restriction" | "portability" | "objection"; details: string | null; status: "received" | "in_review" | "completed" | "rejected"; response_note: string | null; created_at: string; updated_at: string; requester_email?: string | null; participant_code?: string | null; }
+
+type DataRequestStatus = StudentDataRequest["status"];
+
+const privacyRetentionPlaceholders = [
+  { key: "account", label: "Účet a prihlasovacie údaje", period: null },
+  { key: "profile", label: "Profil účastníka", period: null },
+  { key: "measurements", label: "Merania, raw súbory a výsledky", period: null },
+  { key: "consents", label: "Súhlasy a žiadosti o práva", period: null },
+  { key: "backups", label: "Záložné kópie", period: null },
+] as const;
+const privacyNoticePlaceholders = [
+  { key: "controller", label: "Prevádzkovateľ a kontaktné údaje" },
+  { key: "purpose", label: "Účely a právne základy spracúvania" },
+  { key: "recipients", label: "Príjemcovia a sprostredkovatelia" },
+  { key: "retention", label: "Lehoty uchovávania a výmaz" },
+] as const;
 type StudentComparison = { available: boolean; minimum_group_size: number; cohort_participant_count: number; own_measurement_count: number; metrics: ComparisonMetric[]; response_curve: ComparisonResponseCurve | null };
 
 type MeasurementMode = "SCOPE" | "SIMPLE";
@@ -394,10 +411,10 @@ export function App() {
   const [navOrder, setNavOrder] = useState<AdminSection[]>(() => {
     try {
       const stored = JSON.parse(localStorage.getItem("thrust-webdb-nav-order") || "[]") as AdminSection[];
-      const allowed: AdminSection[] = ["overview", "participants", "groups", "trends", "reports", "tests", "measurements", "welcome", "clients"];
+      const allowed: AdminSection[] = ["overview", "participants", "groups", "trends", "reports", "tests", "measurements", "welcome", "clients", "privacy"];
       const uniqueStored = [...new Set(stored)].filter((item) => allowed.includes(item));
       return [...uniqueStored, ...allowed.filter((item) => !uniqueStored.includes(item))];
-    } catch { return ["overview", "participants", "groups", "trends", "reports", "tests", "measurements", "welcome", "clients"]; }
+    } catch { return ["overview", "participants", "groups", "trends", "reports", "tests", "measurements", "welcome", "clients", "privacy"]; }
   });
   const [draggedNavItem, setDraggedNavItem] = useState<AdminSection | null>(null);
   const [dropTargetNavItem, setDropTargetNavItem] = useState<AdminSection | null>(null);
@@ -923,7 +940,7 @@ export function App() {
         method: "POST", headers: { "Content-Type": "application/json", "X-CSRF-Token": user.csrf_token },
         body: JSON.stringify({ password }),
       });
-      setAccountMessage(t("Heslo zmenené. Používateľ sa musí prihlásiť znova."));
+      setAccountMessage(account.role === "student" ? t("Dočasné heslo je nastavené. Pri ďalšom prihlásení ho študent bude musieť zmeniť.") : t("Heslo zmenené. Používateľ sa musí prihlásiť znova."));
     } catch (reason) { setAccountMessage(reason instanceof Error ? reason.message : t("Heslo sa nepodarilo resetovať.")); }
   }
 
@@ -1080,8 +1097,9 @@ export function App() {
     { id: "measurements", icon: "↗", label: t("Merania a výsledky") },
     { id: "welcome", icon: "✎", label: t("Úvodná stránka") },
     { id: "clients", icon: "◉", label: t("Pripojení klienti") },
+    { id: "privacy", icon: "⌑", label: t("Žiadosti o údaje") },
   ];
-  const visibleNavItems = navOrder.map((id) => navItems.find((item) => item.id === id)!).filter((item) => (item.id !== "welcome" && item.id !== "clients") || user?.role === "admin" || user?.role === "superadmin");
+  const visibleNavItems = navOrder.map((id) => navItems.find((item) => item.id === id)!).filter((item) => (item.id !== "welcome" && item.id !== "clients" && item.id !== "privacy") || user?.role === "admin" || user?.role === "superadmin");
   function moveNavItem(target: AdminSection) {
     if (!draggedNavItem || draggedNavItem === target) return;
     const nav = navListRef.current;
@@ -1098,7 +1116,7 @@ export function App() {
     setDraggedNavItem(null);
   }
 
-  if (user?.role === "student") return <StudentPortal user={user} onLogout={logout} accentTheme={accentTheme} colorMode={colorMode} onAppearanceChange={(theme, mode) => void saveAppearance(theme, mode)} profileReminder={studentProfileReminder} onDismissProfileReminder={() => setStudentProfileReminder(false)} />;
+  if (user?.role === "student") return <StudentPortal user={user} onLogout={logout} onPasswordChanged={() => setUser((current) => current ? { ...current, must_change_password: false } : current)} accentTheme={accentTheme} colorMode={colorMode} onAppearanceChange={(theme, mode) => void saveAppearance(theme, mode)} profileReminder={studentProfileReminder} onDismissProfileReminder={() => setStudentProfileReminder(false)} />;
   if (isRegisterPage && !user) return <>
     <RegistrationPage onSubmit={register} onBack={leaveRegistration} onLogin={() => { leaveRegistration(); setLoginOpen(true); }} onResearcherRegister={openResearcherRegistration} error={error} consentTexts={consentTexts} onOpenConsent={setConsentDialog} />
     {consentDialog && consentTexts && <ConsentTextDialog kind={consentDialog} document={activeConsentDocument || consentTexts[consentDialog]} onClose={() => { setConsentDialog(null); setActiveConsentDocument(null); }} />}
@@ -1121,10 +1139,11 @@ export function App() {
             <div className="sidebar-footer"><span className="sidebar-user">{user.username} · {user.role}</span><button className="quiet" onClick={logout} title={t("Odhlásiť")}>{sidebarCollapsed ? "↪" : t("Odhlásiť")}</button></div>
           </aside>
           <div className="app-main">
-            <header className="topbar"><button type="button" className="mobile-menu-toggle" aria-label={mobileNavOpen ? t("Zavrieť menu") : t("Otvoriť menu")} aria-expanded={mobileNavOpen} onClick={() => setMobileNavOpen((open) => !open)}><span /><span /><span /></button><div className="topbar-title"><div className="eyebrow">{t("ADMINISTRÁCIA ·")} {user.role.toUpperCase()}</div><h1>{activeSection === "overview" ? t("Prehľad meraní") : activeSection === "participants" ? t("Účastníci a účty") : activeSection === "groups" ? t("Skupiny") : activeSection === "trends" ? t("Trendy") : activeSection === "reports" ? t("Exporty a reporty") : activeSection === "tests" ? t("Testy a konfigurácie") : activeSection === "welcome" ? t("Úvodná stránka") : activeSection === "clients" ? t("Pripojení klienti") : t("Merania a výsledky")}</h1></div><div className="header-actions"><AppearanceControls accentTheme={accentTheme} colorMode={colorMode} onAccentChange={(theme) => void saveAppearance(theme, colorMode)} onModeChange={(mode) => void saveAppearance(accentTheme, mode)} /><LanguageSwitcher /><span className="status-dot">{t("Systém online")}</span></div></header>
+            <header className="topbar"><button type="button" className="mobile-menu-toggle" aria-label={mobileNavOpen ? t("Zavrieť menu") : t("Otvoriť menu")} aria-expanded={mobileNavOpen} onClick={() => setMobileNavOpen((open) => !open)}><span /><span /><span /></button><div className="topbar-title"><div className="eyebrow">{t("ADMINISTRÁCIA ·")} {user.role.toUpperCase()}</div><h1>{activeSection === "overview" ? t("Prehľad meraní") : activeSection === "participants" ? t("Účastníci a účty") : activeSection === "groups" ? t("Skupiny") : activeSection === "trends" ? t("Trendy") : activeSection === "reports" ? t("Exporty a reporty") : activeSection === "tests" ? t("Testy a konfigurácie") : activeSection === "welcome" ? t("Úvodná stránka") : activeSection === "clients" ? t("Pripojení klienti") : activeSection === "privacy" ? t("Žiadosti o údaje") : t("Merania a výsledky")}</h1></div><div className="header-actions"><AppearanceControls accentTheme={accentTheme} colorMode={colorMode} onAccentChange={(theme) => void saveAppearance(theme, colorMode)} onModeChange={(mode) => void saveAppearance(accentTheme, mode)} /><LanguageSwitcher /><span className="status-dot">{t("Systém online")}</span></div></header>
             <section className="workspace">
               {activeSection === "welcome" && (user.role === "admin" || user.role === "superadmin") && <WelcomeEditor csrfToken={user.csrf_token} initialLanguage={language} metrics={metrics} />}
               {activeSection === "clients" && (user.role === "admin" || user.role === "superadmin") && <ClientMonitor csrfToken={user.csrf_token} />}
+              {activeSection === "privacy" && (user.role === "admin" || user.role === "superadmin") && <StudentDataRequestAdminQueue csrfToken={user.csrf_token} />}
               {activeSection === "overview" && <>
                 <div className="stats"><Metric label={t("Účastníci")} value={overview?.participant_count ?? "—"} /><Metric label={t("Merania")} value={overview?.measurement_count ?? "—"} /><Metric label={t("Čakajúce synchronizácie")} value="0" /></div>
                 <div className="empty"><span>01</span><div><h2>{t("Databáza je pripravená")}</h2><p>{t("Vyber sekciu vľavo alebo začni vytvorením účastníka.")}</p></div></div>
@@ -2371,9 +2390,10 @@ function StudentComparisonCharts({ comparison }: { comparison: StudentComparison
 }
 
 
-function StudentPortal({ user, onLogout, accentTheme, colorMode, onAppearanceChange, profileReminder, onDismissProfileReminder }: {
+function StudentPortal({ user, onLogout, onPasswordChanged, accentTheme, colorMode, onAppearanceChange, profileReminder, onDismissProfileReminder }: {
   user: User;
   onLogout: () => Promise<void>;
+  onPasswordChanged: () => void;
   accentTheme: AccentTheme;
   colorMode: ColorMode;
   onAppearanceChange: (theme: AccentTheme, mode: ColorMode) => void;
@@ -2382,6 +2402,7 @@ function StudentPortal({ user, onLogout, accentTheme, colorMode, onAppearanceCha
 }) {
   const { language } = useLanguage();
   const [profile, setProfile] = useState<StudentProfile | null>(null);
+  const [studentPage, setStudentPage] = useState<"results" | "account">("results");
   const [measurements, setMeasurements] = useState<StudentMeasurement[]>([]);
   const [comparison, setComparison] = useState<StudentComparison | null>(null);
   const [mode, setMode] = useState<MeasurementMode>("SCOPE");
@@ -2419,6 +2440,7 @@ function StudentPortal({ user, onLogout, accentTheme, colorMode, onAppearanceCha
   }
 
   useEffect(() => {
+    if (user.must_change_password) return;
     async function load<T>(label: string, url: string, apply: (value: T) => void): Promise<string | null> {
       try {
         apply(await request<T>(url));
@@ -2436,76 +2458,67 @@ function StudentPortal({ user, onLogout, accentTheme, colorMode, onAppearanceCha
     ]).then((errors) => {
       setError(errors.filter((message): message is string => message !== null).join(" "));
     });
-  }, []);
+  }, [user.must_change_password]);
 
   useEffect(() => {
+    if (user.must_change_password) return;
     const refreshStudentResults = () => {
       request<StudentMeasurement[]>("/api/student/measurements").then(setMeasurements).catch(() => undefined);
       request<StudentComparison>(`/api/student/comparison?mode=${mode}`).then(setComparison).catch(() => undefined);
     };
     window.addEventListener("thrust:data-updated", refreshStudentResults);
     return () => window.removeEventListener("thrust:data-updated", refreshStudentResults);
-  }, [mode]);
+  }, [mode, user.must_change_password]);
 
   useEffect(() => {
+    if (user.must_change_password) return;
     let active = true;
     setConsentTexts(null);
     request<ConsentDocuments>(`/api/public/consent-texts?lang=${language}`)
       .then((documents) => { if (active) setConsentTexts(documents); })
       .catch((reason) => { if (active) setError(reason instanceof Error ? reason.message : t("Texty súhlasov sa nepodarilo načítať.")); });
     return () => { active = false; };
-  }, [language]);
+  }, [language, user.must_change_password]);
 
   useEffect(() => {
+    if (user.must_change_password) return;
     let active = true;
     setComparison(null);
     void request<StudentComparison>(`/api/student/comparison?mode=${mode}`)
       .then((result) => { if (active) setComparison(result); })
       .catch((reason) => { if (active) setError(reason instanceof Error ? reason.message : t("Porovnanie sa nepodarilo načítať.")); });
     return () => { active = false; };
-  }, [mode]);
+  }, [mode, user.must_change_password]);
 
   const visibleMeasurements = sortRows(measurements.filter((item) => getMeasurementMode(item) === mode), studentMeasurementSort, (item, column) => ({ test: item.test_type, status: item.status, date: item.started_at, size: item.raw_size_bytes ?? 0 }[column as "test" | "status" | "date" | "size"]));
   const selectedMeasurement = visibleMeasurements.find((item) => item.id === selectedMeasurementId);
 
+  if (user.must_change_password) return <main className="student-shell" data-accent-theme={accentTheme} data-color-mode={colorMode}>
+    <header><Brand colorMode={colorMode} /><div className="header-actions"><LanguageSwitcher /><button className="quiet" onClick={onLogout}>{t("Odhlásiť")}</button></div></header>
+    <section className="public student-content forced-password-page"><div className="eyebrow">{t("ZABEZPEČENIE ÚČTU")}</div><h1>{t("Zmeň si dočasné heslo")}</h1><p className="lead">{t("Správca ti nastavil dočasné heslo. Pred pokračovaním si zvoľ vlastné heslo.")}</p><PasswordChangePanel csrfToken={user.csrf_token} forced onChanged={onPasswordChanged} /></section>
+    <SiteFooter />
+  </main>;
+
   return <main className="student-shell" data-accent-theme={accentTheme} data-color-mode={colorMode}>
-    <header><Brand colorMode={colorMode} /><div className="header-actions"><AppearanceControls accentTheme={accentTheme} colorMode={colorMode} onAccentChange={(theme) => onAppearanceChange(theme, colorMode)} onModeChange={(mode) => onAppearanceChange(accentTheme, mode)} /><LanguageSwitcher /><button className="quiet" onClick={onLogout}>{t("Odhlásiť")}</button></div></header>
+    <header><Brand colorMode={colorMode} /><div className="header-actions"><AppearanceControls accentTheme={accentTheme} colorMode={colorMode} onAccentChange={(theme) => onAppearanceChange(theme, colorMode)} onModeChange={(mode) => onAppearanceChange(accentTheme, mode)} /><LanguageSwitcher /><button className="quiet" onClick={() => setStudentPage((page) => page === "results" ? "account" : "results")}>{studentPage === "results" ? t("Správa účtu") : t("Moje výsledky")}</button><button className="quiet" onClick={onLogout}>{t("Odhlásiť")}</button></div></header>
     <section className="public student-content">
-      <div className="eyebrow">{t("OSOBNÝ PROFIL")}</div>
+      <div className="eyebrow">{studentPage === "results" ? t("OSOBNÝ PROFIL") : t("SPRÁVA ÚČTU")}</div>
       <h1>{t("Ahoj,")} {profile?.nickname || user.nickname || user.participant_code || user.username}.</h1>
       <p className="lead">{t("Tvoje účastnícke ID:")} <strong>{user.participant_code || "—"}</strong></p>
-      <div className="stats"><Metric label={t("Moje merania")} value={visibleMeasurements.length} /><Metric label={t("Skupina")} value={comparison?.cohort_participant_count ?? "—"} /><Metric label={t("Porovnanie")} value={comparison?.available ? t("dostupné") : t("čaká na limit")} /></div>
+      {studentPage === "results" && <div className="stats"><Metric label={t("Moje merania")} value={visibleMeasurements.length} /><Metric label={t("Skupina")} value={comparison?.cohort_participant_count ?? "—"} /><Metric label={t("Porovnanie")} value={comparison?.available ? t("dostupné") : t("čaká na limit")} /></div>}
       {error && <p className="error">{error}</p>}
-      {profileReminder && profile && <div className="notice student-profile-reminder"><span>{t("Účet je vytvorený. Ak chceš, doplň si nepovinné otázky o skúsenostiach s ovládaním a UAV; môžeš to urobiť aj neskôr.")}</span><div><button type="button" className="primary compact" onClick={() => { setOnboardingOpen(true); document.getElementById("student-profile-panel")?.scrollIntoView({ behavior: "smooth", block: "center" }); }}>{t("Vyplniť profil")}</button><button type="button" className="quiet compact" onClick={onDismissProfileReminder}>{t("Neskôr")}</button></div></div>}
-      <section className="panel">
+      {studentPage === "results" && profileReminder && profile && <div className="notice student-profile-reminder"><span>{t("Účet je vytvorený. Ak chceš, doplň si nepovinné otázky o skúsenostiach s ovládaním a UAV; môžeš to urobiť aj neskôr.")}</span><div><button type="button" className="primary compact" onClick={() => { setStudentPage("account"); setOnboardingOpen(true); }}>{t("Vyplniť profil")}</button><button type="button" className="quiet compact" onClick={onDismissProfileReminder}>{t("Neskôr")}</button></div></div>}
+      {studentPage === "results" && <section className="panel">
         <div className="student-result-heading"><div><div className="eyebrow">{t("VÝSLEDKY")}</div><h2>{t("Moje merania ·")} {mode === "SCOPE" ? "SCoPE" : "SimPLE"}</h2></div><ModeSwitch value={mode} onChange={(selected) => { setMode(selected); setSelectedMeasurementId(null); }} /></div>
         {visibleMeasurements.length ? <div className="table-wrap"><table><thead><tr><th><SortHeader label={t("Test")} active={studentMeasurementSort.column === "test"} direction={studentMeasurementSort.direction} onClick={() => setStudentMeasurementSort((current) => nextSort(current, "test"))} /></th><th><SortHeader label={t("Stav")} active={studentMeasurementSort.column === "status"} direction={studentMeasurementSort.direction} onClick={() => setStudentMeasurementSort((current) => nextSort(current, "status"))} /></th><th><SortHeader label={t("Dátum a čas")} active={studentMeasurementSort.column === "date"} direction={studentMeasurementSort.direction} onClick={() => setStudentMeasurementSort((current) => nextSort(current, "date"))} /></th><th><SortHeader label={t("Veľkosť súboru")} active={studentMeasurementSort.column === "size"} direction={studentMeasurementSort.direction} onClick={() => setStudentMeasurementSort((current) => nextSort(current, "size"))} /></th><th>{t("Výsledky")}</th></tr></thead><tbody>{visibleMeasurements.map((m) => <tr key={m.id}><td>{m.test_type}</td><td>{m.status}</td><td>{formatDateTime(m.started_at)}</td><td>{formatBytes(m.raw_size_bytes)}</td><td><button type="button" className="quiet compact" onClick={() => setSelectedMeasurementId(m.id === selectedMeasurementId ? null : m.id)}>{m.id === selectedMeasurementId ? t("Skryť") : t("Zobraziť")}</button></td></tr>)}</tbody></table></div> : <p className="muted">{t("Zatiaľ nemáš uložené meranie")} {mode === "SCOPE" ? "SCoPE" : "SimPLE"}.</p>}
         {selectedMeasurement && <div className="student-result-detail"><h3>{selectedMeasurement.test_type} · {formatDateTime(selectedMeasurement.started_at)}</h3>{mode === "SIMPLE" ? <SimpleAnalysisView analysis={selectedMeasurement.analysis_data ?? {}} /> : selectedMeasurement.analysis_data?.normalized_step_response ? <><ScopeTaskSummary analysis={selectedMeasurement.analysis_data ?? {}} /><ResponseChart data={selectedMeasurement.analysis_data.normalized_step_response} /><ResponseMetrics data={selectedMeasurement.analysis_data.normalized_step_response} /></> : <p className="muted">{t("Toto meranie nemá uloženú analýzu odozvy.")}</p>}</div>}
-      </section>
-      <section className="panel">
+      </section>}
+      {studentPage === "results" && <section className="panel">
         <div className="student-result-heading"><div><div className="eyebrow">{t("ANONYMIZOVANÉ POROVNANIE ·")} {mode === "SCOPE" ? "SCoPE" : "SimPLE"}</div><h2>{t("Výsledok v porovnaní so skupinou")}</h2></div></div>
         {comparison?.available ? <StudentComparisonCharts comparison={comparison} /> : <p className="muted">{t("Grafy sa zobrazia po nazbieraní dostatočne veľkej skupiny.")}</p>}
-      </section>
-      <section className="panel">
-        <div className="eyebrow">{t("TVOJE SÚHLASY")}</div><h2>{t("Informácie o spracúvaní údajov")}</h2>
-        <p className="muted">{t("Výskumný súhlas a spracovanie údajov účtu sú oddelené. Každý si môžeš prezrieť a odvolať samostatne.")}</p>
-        <div className="consent-status-grid">
-          {(["research", "gdpr"] as const).map((kind) => {
-            const status = consents?.[kind];
-            const doc = consentTexts?.[kind];
-            const title = kind === "research" ? t("Výskumné použitie meraní") : t("Osobné údaje a účet");
-            return <article className="consent-status-card" key={kind}>
-              <strong>{title}</strong>
-              <p className={status?.accepted ? "consent-active" : "muted"}>{status?.accepted ? t("Súhlas udelený") : status?.revoked_at ? t("Súhlas odvolaný") : t("Záznam súhlasu sa nenašiel")}</p>
-              {status?.accepted_at && <small>{t("Udelený:")} {formatDate(status.accepted_at)} · {status.version}</small>}
-              {doc && <a href={`#consent-${kind}`} onClick={(event) => { event.preventDefault(); setActiveConsentDocument({ version: status?.version || doc.version, text: status?.text || doc.text, configured: doc.configured }); setConsentDialog(kind); }}>{t("Zobraziť text súhlasu")}</a>}
-              {status?.accepted && <button className="quiet compact" onClick={() => void revokeConsent(kind)}>{t("Odvolať tento súhlas")}</button>}
-            </article>;
-          })}
-        </div>
-        {consentMessage && <p className="notice">{consentMessage}</p>}
-      </section>
-      {profile && <section id="student-profile-panel" className="panel student-profile-panel">
+      </section>}
+      {studentPage === "account" && <section className="account-page-intro panel"><div className="eyebrow">{t("KONTO, ZABEZPEČENIE A SÚKROMIE")}</div><h2>{t("Správa účtu")}</h2><p className="muted">{t("Uprav svoj profil, zmeň heslo alebo spravuj svoje údaje a súhlasy.")}</p></section>}
+      {studentPage === "account" && profile && <section id="student-profile-panel" className="panel student-profile-panel">
         <div className="profile-panel-heading"><div><div className="eyebrow">{t("PROFIL PILOTA")}</div><h2>{t("Moje údaje")}</h2><p className="muted">{t("Prezývka a nepovinné odpovede o tvojich skúsenostiach.")}</p></div>
           <button className="quiet compact" onClick={() => { setProfileMessage(""); if (onboardingOpen) { setOnboardingOpen(false); return; } setEditingProfile((value) => !value); }}>{onboardingOpen ? t("Zrušiť vyplnenie") : editingProfile ? t("Zrušiť úpravy") : t("Upraviť údaje")}</button>
         </div>
@@ -2530,11 +2543,115 @@ function StudentPortal({ user, onLogout, accentTheme, colorMode, onAppearanceCha
             [t("Manuálny / acro režim"), yesNoLabel(profile.uav_manual_mode)],
           ]} />}
       </section>}
+      {studentPage === "account" && <PasswordChangePanel csrfToken={user.csrf_token} onChanged={() => undefined} />}
+      {studentPage === "account" && <section className="panel">
+        <div className="eyebrow">{t("TVOJE SÚHLASY")}</div><h2>{t("Informácie o spracúvaní údajov")}</h2>
+        <p className="muted">{t("Výskumný súhlas a spracovanie údajov účtu sú oddelené. Každý si môžeš prezrieť a odvolať samostatne.")}</p>
+        <div className="consent-status-grid">
+          {(["research", "gdpr"] as const).map((kind) => {
+            const status = consents?.[kind];
+            const doc = consentTexts?.[kind];
+            const title = kind === "research" ? t("Výskumné použitie meraní") : t("Osobné údaje a účet");
+            return <article className="consent-status-card" key={kind}>
+              <strong>{title}</strong>
+              <p className={status?.accepted ? "consent-active" : "muted"}>{status?.accepted ? t("Súhlas udelený") : status?.revoked_at ? t("Súhlas odvolaný") : t("Záznam súhlasu sa nenašiel")}</p>
+              {status?.accepted_at && <small>{t("Udelený:")} {formatDate(status.accepted_at)} · {status.version}</small>}
+              {doc && <a href={`#consent-${kind}`} onClick={(event) => { event.preventDefault(); setActiveConsentDocument({ version: status?.version || doc.version, text: status?.text || doc.text, configured: doc.configured }); setConsentDialog(kind); }}>{t("Zobraziť text súhlasu")}</a>}
+              {status?.accepted && <button className="quiet compact" onClick={() => void revokeConsent(kind)}>{t("Odvolať tento súhlas")}</button>}
+            </article>;
+          })}
+        </div>
+        {consentMessage && <p className="notice">{consentMessage}</p>}
+      </section>}
+
+      {studentPage === "account" && <StudentDataManagement csrfToken={user.csrf_token} />}
     </section>
     {consentDialog && consentTexts && <ConsentTextDialog kind={consentDialog} document={activeConsentDocument || consentTexts[consentDialog]} onClose={() => { setConsentDialog(null); setActiveConsentDocument(null); }} />}
     <SiteFooter />
   </main>;
 }
+
+function PasswordChangePanel({ csrfToken, forced = false, onChanged }: { csrfToken: string; forced?: boolean; onChanged: () => void }) {
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("");
+  const [isError, setIsError] = useState(false);
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    setSaving(true); setMessage(""); setIsError(false);
+    const data = new FormData(form);
+    const currentPassword = String(data.get("current_password") || "");
+    const newPassword = String(data.get("new_password") || "");
+    const confirmation = String(data.get("confirm_password") || "");
+    if (newPassword !== confirmation) { setMessage(t("Nové heslá sa nezhodujú.")); setIsError(true); setSaving(false); return; }
+    try {
+      await request<void>("/api/student/password", { method: "POST", headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken }, body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }) });
+      setMessage(t("Heslo bolo zmenené."));
+      onChanged();
+      form.reset();
+    } catch (reason) { setMessage(reason instanceof Error ? reason.message : t("Heslo sa nepodarilo zmeniť.")); setIsError(true); }
+    finally { setSaving(false); }
+  }
+  return <section className={`panel password-change-panel${forced ? " forced" : ""}`}><div className="eyebrow">{t("ZABEZPEČENIE")}</div><h2>{forced ? t("Zmeň si dočasné heslo") : t("Zmena hesla")}</h2><p className="muted">{forced ? t("Pred pokračovaním si nastav vlastné heslo.") : t("Na zmenu hesla zadaj svoje aktuálne heslo a nové heslo s dĺžkou aspoň 10 znakov.")}</p><form className="password-change-form" onSubmit={submit}><label>{t("Aktuálne heslo")}<input type="password" name="current_password" autoComplete="current-password" required /></label><label>{t("Nové heslo")}<input type="password" name="new_password" autoComplete="new-password" minLength={10} maxLength={1024} required /></label><label>{t("Potvrdiť nové heslo")}<input type="password" name="confirm_password" autoComplete="new-password" minLength={10} maxLength={1024} required /></label><div className="profile-editor-actions"><span className={isError ? "error" : "muted"}>{message}</span><button className="primary compact" disabled={saving}>{saving ? t("Ukladám…") : t("Zmeniť heslo")}</button></div></form></section>;
+}
+
+function StudentDataManagement({ csrfToken }: { csrfToken: string }) {
+  const [requests, setRequests] = useState<StudentDataRequest[]>([]);
+  const [requestType, setRequestType] = useState<StudentDataRequest["request_type"]>("erasure");
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+  const [details, setDetails] = useState("");
+  const [exporting, setExporting] = useState<string | null>(null);
+  useEffect(() => { request<StudentDataRequest[]>("/api/student/data-requests").then(setRequests).catch((reason) => setMessage(reason instanceof Error ? reason.message : t("Žiadosti sa nepodarilo načítať."))); }, []);
+  async function download(format: "json" | "csv" | "zip") {
+    setExporting(format); setMessage("");
+    try {
+      const response = await fetch(`/api/student/data-export?format=${format}`, { credentials: "same-origin" });
+      if (!response.ok) { const body = await response.json().catch(() => null) as { detail?: string } | null; throw new Error(body?.detail || t("Export sa nepodarilo vytvoriť.")); }
+      const blob = await response.blob(); const url = URL.createObjectURL(blob); const anchor = document.createElement("a");
+      anchor.href = url; anchor.download = `thrust-my-data.${format}`; anchor.click(); window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (reason) { setMessage(reason instanceof Error ? reason.message : t("Export sa nepodarilo vytvoriť.")); }
+    finally { setExporting(null); }
+  }
+  async function submitRequest(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (requestType === "erasure" && !window.confirm(t("Odoslať žiadosť o výmaz? Žiadosť sa najprv posúdi; údaje sa týmto tlačidlom okamžite nevymažú."))) return;
+    setBusy(true); setMessage("");
+    try {
+      const created = await request<StudentDataRequest>("/api/student/data-requests", { method: "POST", headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken }, body: JSON.stringify({ request_type: requestType, details: details.trim() || null }) });
+      setRequests((current) => [created, ...current]); setDetails(""); setMessage(t("Žiadosť bola odoslaná."));
+    } catch (reason) { setMessage(reason instanceof Error ? reason.message : t("Žiadosť sa nepodarilo odoslať.")); }
+    finally { setBusy(false); }
+  }
+  return <section className="student-data-management">
+    <section className="panel"><div className="eyebrow">{t("TVOJE ÚDAJE")}</div><h2>{t("Stiahnuť moje údaje")}</h2><p className="muted">{t("Export obsahuje iba údaje priradené k tvojmu účtu. ZIP obsahuje aj dostupné raw súbory; prihlasovacie tajomstvá a údaje iných účastníkov sa neexportujú.")}</p><div className="actions"><button className="quiet" disabled={exporting !== null} onClick={() => void download("json")}>{exporting === "json" ? t("Pripravujem…") : t("Stiahnuť JSON")}</button><button className="quiet" disabled={exporting !== null} onClick={() => void download("csv")}>{exporting === "csv" ? t("Pripravujem…") : t("Stiahnuť CSV")}</button><button className="primary" disabled={exporting !== null} onClick={() => void download("zip")}>{exporting === "zip" ? t("Pripravujem…") : t("Stiahnuť ZIP")}</button></div></section>
+    <section className="panel"><div className="eyebrow">{t("OCHRANA OSOBNÝCH ÚDAJOV")}</div><h2>{t("Informácie o spracúvaní")}</h2><p className="muted">{t("Nasledujúce údaje doplníme po potvrdení s DPO. Zatiaľ nejde o schválené lehoty ani právne stanovisko.")}</p><div className="privacy-placeholder-grid">{privacyNoticePlaceholders.map((item) => <article key={item.key}><strong>{t(item.label)}</strong><span>{t("Bude doplnené po dohode s DPO.")}</span></article>)}</div><h3>{t("Lehoty uchovávania")}</h3><div className="privacy-placeholder-grid">{privacyRetentionPlaceholders.map((item) => <article key={item.key}><strong>{t(item.label)}</strong><span className="retention-placeholder">{item.period ?? t("Lehota sa doplní po dohode s DPO.")}</span></article>)}</div></section>
+    <section className="panel"><div className="eyebrow">{t("TVOJE PRÁVA")}</div><h2>{t("Požiadať o vybavenie žiadosti")}</h2><p className="muted">{t("Výmaz, opravu údajov, obmedzenie spracúvania alebo námietku môžeš poslať správcovi. Stav vybavenia uvidíš nižšie. Export údajov je dostupný okamžite vyššie.")}</p><form className="data-request-form" onSubmit={submitRequest}><label>{t("Typ žiadosti")}<select value={requestType} onChange={(event) => setRequestType(event.target.value as StudentDataRequest["request_type"])}><option value="erasure">{t("Žiadosť o výmaz")}</option><option value="rectification">{t("Oprava údajov")}</option><option value="restriction">{t("Obmedzenie spracúvania")}</option><option value="objection">{t("Námietka proti spracúvaniu")}</option><option value="access">{t("Prístup k údajom")}</option><option value="portability">{t("Prenositeľnosť údajov")}</option></select></label><label>{t("Poznámka (nepovinné)")}<textarea rows={3} maxLength={4000} value={details} onChange={(event) => setDetails(event.target.value)} placeholder={t("Uveď, ktorých údajov alebo meraní sa žiadosť týka.")} /></label><button className="primary compact" disabled={busy}>{busy ? t("Odosielam…") : t("Odoslať žiadosť")}</button></form>{message && <p className="notice">{message}</p>}<div className="data-request-list"><h3>{t("Moje žiadosti")}</h3>{requests.length ? requests.map((item) => <article key={item.id}><div><strong>{dataRequestTypeLabel(item.request_type)}</strong><small>{formatDateTime(item.created_at)}</small></div><span className={`request-status request-status-${item.status}`}>{dataRequestStatusLabel(item.status)}</span>{item.details && <p>{item.details}</p>}{item.response_note && <p className="muted">{t("Odpoveď správcu:")} {item.response_note}</p>}</article>) : <p className="muted">{t("Zatiaľ nemáš odoslané žiadosti.")}</p>}</div></section>
+  </section>;
+}
+
+function dataRequestTypeLabel(value: StudentDataRequest["request_type"]) {
+  const labels: Record<StudentDataRequest["request_type"], string> = { access: t("Prístup k údajom"), rectification: t("Oprava údajov"), erasure: t("Žiadosť o výmaz"), restriction: t("Obmedzenie spracúvania"), portability: t("Prenositeľnosť údajov"), objection: t("Námietka proti spracúvaniu") };
+  return labels[value];
+}
+function dataRequestStatusLabel(value: DataRequestStatus) {
+  const labels: Record<DataRequestStatus, string> = { received: t("Prijatá"), in_review: t("Posudzuje sa"), completed: t("Vybavená"), rejected: t("Zamietnutá") };
+  return labels[value];
+}
+
+function StudentDataRequestAdminQueue({ csrfToken }: { csrfToken: string }) {
+  const [items, setItems] = useState<StudentDataRequest[]>([]); const [error, setError] = useState("");
+  useEffect(() => { request<StudentDataRequest[]>("/api/admin/data-requests").then(setItems).catch((reason) => setError(reason instanceof Error ? reason.message : t("Žiadosti sa nepodarilo načítať."))); }, []);
+  function apply(updated: StudentDataRequest) { setItems((current) => current.map((item) => item.id === updated.id ? updated : item)); }
+  return <section className="browser-panel"><div className="browser-header"><div><div className="eyebrow">{t("OCHRANA ÚDAJOV")}</div><h2>{t("Žiadosti študentov")}</h2><p className="muted">{t("Evidencia a stav žiadostí o prístup, opravu, výmaz alebo obmedzenie údajov.")}</p></div><span className="role-label">{items.filter((item) => item.status === "received" || item.status === "in_review").length} {t("otvorených")}</span></div>{error && <p className="error">{error}</p>}{items.length ? <div className="privacy-request-admin-list">{items.map((item) => <AdminDataRequestCard key={item.id} item={item} csrfToken={csrfToken} onSaved={apply} />)}</div> : !error && <p className="muted">{t("Momentálne nie sú evidované žiadne žiadosti.")}</p>}</section>;
+}
+
+function AdminDataRequestCard({ item, csrfToken, onSaved }: { item: StudentDataRequest; csrfToken: string; onSaved: (item: StudentDataRequest) => void }) {
+  const [status, setStatus] = useState<DataRequestStatus>(item.status); const [note, setNote] = useState(item.response_note || ""); const [saving, setSaving] = useState(false); const [error, setError] = useState("");
+  async function save(event: FormEvent<HTMLFormElement>) { event.preventDefault(); setSaving(true); setError(""); try { const updated = await request<StudentDataRequest>(`/api/admin/data-requests/${item.id}`, { method: "PATCH", headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken }, body: JSON.stringify({ status, response_note: note.trim() || null }) }); onSaved(updated); } catch (reason) { setError(reason instanceof Error ? reason.message : t("Žiadosť sa nepodarilo uložiť.")); } finally { setSaving(false); } }
+  return <article className="privacy-request-card"><div><strong>{dataRequestTypeLabel(item.request_type)}</strong><small>{item.requester_email || "—"} · {item.participant_code || t("Bez Participant ID")} · {formatDateTime(item.created_at)}</small>{item.details && <p>{item.details}</p>}</div><form onSubmit={save}><label>{t("Stav")}<select value={status} onChange={(event) => setStatus(event.target.value as DataRequestStatus)}><option value="received">{t("Prijatá")}</option><option value="in_review">{t("Posudzuje sa")}</option><option value="completed">{t("Vybavená")}</option><option value="rejected">{t("Zamietnutá")}</option></select></label><label>{t("Odpoveď pre študenta")}<textarea rows={2} maxLength={4000} value={note} onChange={(event) => setNote(event.target.value)} /></label>{error && <p className="error">{error}</p>}<button className="primary compact" disabled={saving}>{saving ? t("Ukladám…") : t("Uložiť stav")}</button></form></article>;
+}
+
 type ProfileBinaryKey = "gamepad_used" | "pc_joystick_used" | "rc_transmitter_used" | "uav_flown" | "uav_los" | "uav_fpv" | "uav_stabilized_mode" | "uav_manual_mode";
 type StudentOnboardingAnswers = { birth_year: number | ""; biological_sex: "male" | "female" | "unspecified"; dominant_hand: string; } & Record<ProfileBinaryKey, boolean | null>;
 

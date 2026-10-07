@@ -1663,3 +1663,33 @@ main[data-color-mode="light"] .test-state-inactive { color: #52616e; }
 .scope-task-summary-grid span { color: var(--text-soft, #9ca3af); font-size: .78rem; }
 .scope-task-summary-grid strong { font-size: 1.2rem; }
 .scope-task-summary-grid small { color: var(--text-soft, #9ca3af); font-size: .78rem; font-weight: 500; }
+
+
+/* Student account management and privacy request screens. */
+.student-profile-panel, .student-data-management > .panel, .password-change-panel, .account-page-intro { border-radius: 14px; }
+.password-change-form, .data-request-form { display: grid; gap: 14px; max-width: 760px; }
+.password-change-form label, .data-request-form label, .privacy-request-card label { display: grid; gap: 7px; color: var(--text-soft); font-size: .9rem; }
+.password-change-form input, .data-request-form select, .data-request-form textarea, .privacy-request-card select, .privacy-request-card textarea { width: 100%; min-height: 42px; padding: 9px 11px; color: var(--text-main); border: 1px solid var(--line); border-radius: 8px; background: var(--surface-input); font: inherit; }
+.data-request-form textarea, .privacy-request-card textarea { resize: vertical; }
+.password-change-form .profile-editor-actions { align-items: center; }
+.student-data-management { display: grid; gap: 18px; }
+.privacy-placeholder-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 16px 0 22px; }
+.privacy-placeholder-grid article { display: grid; gap: 7px; min-height: 76px; padding: 14px; border: 1px dashed var(--border-strong); border-radius: 10px; background: var(--surface-raised); }
+.privacy-placeholder-grid article span { color: var(--text-muted); font-size: .88rem; }
+.retention-placeholder { color: var(--accent) !important; }
+.data-request-list { margin-top: 22px; }
+.data-request-list h3 { margin-bottom: 10px; }
+.data-request-list article { display: grid; grid-template-columns: 1fr auto; gap: 8px 16px; padding: 13px 0; border-top: 1px solid var(--line); }
+.data-request-list article > div { display: grid; gap: 4px; }
+.data-request-list article small, .privacy-request-card small { color: var(--text-muted); }
+.data-request-list article > p { grid-column: 1 / -1; margin: 0; }
+.request-status { align-self: start; padding: 4px 9px; border: 1px solid var(--border-strong); border-radius: 999px; color: var(--text-soft); font-size: .8rem; }
+.request-status-received, .request-status-in_review { border-color: rgba(var(--accent-rgb), .5); color: var(--accent); }
+.request-status-completed { border-color: rgba(68, 217, 148, .45); color: #44d994; }
+.privacy-request-admin-list { display: grid; gap: 12px; }
+.privacy-request-card { display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, .8fr); gap: 20px; padding: 18px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.privacy-request-card > div { display: grid; align-content: start; gap: 7px; }
+.privacy-request-card p { margin: 6px 0 0; white-space: pre-wrap; }
+.privacy-request-card form { display: grid; gap: 10px; }
+.forced-password-page { width: min(760px, calc(100% - 36px)); }
+@media (max-width: 700px) { .privacy-placeholder-grid { grid-template-columns: 1fr; } .privacy-request-card { grid-template-columns: 1fr; } }

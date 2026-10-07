@@ -21,6 +21,7 @@ class AdminUser(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     username: Mapped[str] = mapped_column(String(80), unique=True, nullable=False)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    must_change_password: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
     role: Mapped[str] = mapped_column(String(30), nullable=False, default="admin")
     accent_theme: Mapped[str] = mapped_column(String(20), nullable=False, default="blue", server_default="blue")
     color_mode: Mapped[str] = mapped_column(String(10), nullable=False, default="dark", server_default="dark")
@@ -57,3 +58,17 @@ class ResearchConsent(Base):
     accepted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     text_snapshot: Mapped[str] = mapped_column(Text, nullable=False)
+
+
+class StudentDataRequest(Base):
+    __tablename__ = "student_data_requests"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    user_id: Mapped[str] = mapped_column(ForeignKey("admin_users.id", ondelete="CASCADE"), nullable=False, index=True)
+    request_type: Mapped[str] = mapped_column(String(30), nullable=False)
+    details: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="received", server_default="received")
+    response_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    handled_by_user_id: Mapped[str | None] = mapped_column(ForeignKey("admin_users.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow)

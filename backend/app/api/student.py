@@ -1,4 +1,9 @@
+import csv
 import hashlib
+import io
+import json
+import tempfile
+import zipfile
 import math
 from collections import defaultdict
 from datetime import datetime, timezone
@@ -6,7 +11,9 @@ from pathlib import Path
 from statistics import mean
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import FileResponse, JSONResponse, Response
+from starlette.background import BackgroundTask
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,11 +24,14 @@ from app.core.measurement_results import validate_measurement_result
 from app.core.consent_guard import require_active_consents, revoked_participant_consents
 from app.core.live_updates import publish_measurements_updated
 from app.db.session import get_db
-from app.models import AdminUser, Measurement, Participant, ResearchConsent, TestDefinition
+from app.models import AdminSession, AdminUser, Measurement, Participant, ResearchConsent, TestDefinition, StudentDataRequest
 from app.schemas.auth import StudentProfileResponse
 from app.schemas.participant import StudentProfileUpdate
 from app.schemas.measurement import MeasurementCreate, MeasurementResponse
 from app.schemas.test_definition import TestDefinitionResponse
+from app.schemas.auth import StudentPasswordChange
+from app.schemas.user_admin import StudentDataRequestCreate, StudentDataRequestResponse
+from app.core.security import hash_password, verify_password
 
 router = APIRouter(prefix="/student", tags=["student"])
 
@@ -53,6 +63,28 @@ def student_profile_response(student: AdminUser, participant: Participant) -> St
         uav_stabilized_mode=participant.uav_stabilized_mode,
         uav_manual_mode=participant.uav_manual_mode,
     )
+
+
+@router.post("/password", status_code=204)
+async def change_student_password(
+    payload: StudentPasswordChange,
+    auth: AuthContext = Depends(require_user_csrf),
+    db: AsyncSession = Depends(get_db),
+) -> None:
+    student = require_student(auth).user
+    if not verify_password(payload.current_password, student.password_hash):
+        raise HTTPException(status_code=400, detail="Aktuálne heslo nie je správne.")
+    if payload.current_password == payload.new_password:
+        raise HTTPException(status_code=400, detail="Nové heslo sa musí líšiť od aktuálneho.")
+    student.password_hash = hash_password(payload.new_password)
+    student.must_change_password = False
+    await db.execute(
+        delete(AdminSession).where(
+            AdminSession.user_id == student.id,
+            AdminSession.token_hash != auth.session.token_hash,
+        )
+    )
+    await db.commit()
 
 
 @router.get("/profile", response_model=StudentProfileResponse)
@@ -435,6 +467,129 @@ async def create_measurement(
     await db.commit()
     await db.refresh(measurement)
     return measurement
+
+
+def _student_export_payload(student: AdminUser, participant: Participant, measurements: list[Measurement], consents: list[ResearchConsent], tests: dict[str, TestDefinition]) -> dict:
+    profile = student_profile_response(student, participant).model_dump(mode="json")
+    return {
+        "exported_at": datetime.now(timezone.utc).isoformat(),
+        "account": {"email": student.email, "nickname": student.nickname, "role": student.role, "created_at": student.created_at.isoformat()},
+        "participant": profile,
+        "consents": [
+            {"type": item.consent_type, "version": item.version, "accepted_at": item.accepted_at.isoformat(),
+             "revoked_at": item.revoked_at.isoformat() if item.revoked_at else None, "text": item.text_snapshot}
+            for item in consents
+        ],
+        "measurements": [
+            {
+                "id": item.id, "test_definition_id": item.test_definition_id, "test_type": item.test_type,
+                "test": ({"test_code": tests[item.test_definition_id].test_code, "name": tests[item.test_definition_id].name,
+                          "version": tests[item.test_definition_id].version, "analysis_profile": tests[item.test_definition_id].analysis_profile}
+                         if item.test_definition_id in tests else None),
+                "status": item.status, "started_at": item.started_at.isoformat(),
+                "source_file_name": item.source_file_name, "analysis_data": item.analysis_data,
+                "raw": {"available": bool(item.raw_storage_path), "sha256": item.raw_sha256,
+                        "size_bytes": item.raw_size_bytes, "content_type": item.raw_content_type},
+            }
+            for item in measurements
+        ],
+    }
+
+
+def _student_export_csv(payload: dict) -> str:
+    stream = io.StringIO(newline="")
+    writer = csv.writer(stream)
+    writer.writerow(["record_type", "record_id", "field", "value"])
+    for group in ("account", "participant"):
+        for key, value in payload[group].items():
+            writer.writerow([group, "", key, json.dumps(value, ensure_ascii=False) if isinstance(value, (dict, list)) else value])
+    for item in payload["consents"]:
+        consent_id = f"{item['type']}:{item['version']}:{item['accepted_at']}"
+        for key, value in item.items():
+            writer.writerow(["consent", consent_id, key, value])
+    for item in payload["measurements"]:
+        for key, value in item.items():
+            writer.writerow(["measurement", item["id"], key, json.dumps(value, ensure_ascii=False) if isinstance(value, (dict, list)) else value])
+    return stream.getvalue()
+
+
+@router.get("/data-export")
+async def export_student_data(
+    export_format: Literal["json", "csv", "zip"] = Query(default="zip", alias="format"),
+    auth: AuthContext = Depends(require_authenticated),
+    db: AsyncSession = Depends(get_db),
+):
+    student = require_student(auth).user
+    participant = await db.get(Participant, student.participant_id)
+    if participant is None:
+        raise HTTPException(status_code=409, detail="Profil účastníka neexistuje.")
+    measurements = list(await db.scalars(
+        select(Measurement).where(Measurement.participant_id == participant.id).order_by(Measurement.started_at.asc())
+    ))
+    consents = list(await db.scalars(
+        select(ResearchConsent).where(ResearchConsent.user_id == student.id).order_by(ResearchConsent.accepted_at.asc())
+    ))
+    test_ids = {item.test_definition_id for item in measurements if item.test_definition_id}
+    tests = {item.id: item for item in await db.scalars(select(TestDefinition).where(TestDefinition.id.in_(test_ids)))} if test_ids else {}
+    payload = _student_export_payload(student, participant, measurements, consents, tests)
+    csv_text = _student_export_csv(payload)
+    if export_format == "json":
+        return JSONResponse(payload, headers={"Content-Disposition": 'attachment; filename="thrust-my-data.json"'})
+    if export_format == "csv":
+        return Response(csv_text, media_type="text/csv; charset=utf-8", headers={"Content-Disposition": 'attachment; filename="thrust-my-data.csv"'})
+
+    handle = tempfile.NamedTemporaryFile(prefix="thrust-export-", suffix=".zip", delete=False)
+    handle.close()
+    archive_path = Path(handle.name)
+    storage_root = Path(settings.measurement_storage_path).resolve()
+    with zipfile.ZipFile(archive_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("data.json", json.dumps(payload, ensure_ascii=False, indent=2))
+        archive.writestr("data.csv", csv_text)
+        for item in measurements:
+            if not item.raw_storage_path:
+                continue
+            raw_path = Path(item.raw_storage_path).resolve()
+            try:
+                raw_path.relative_to(storage_root)
+            except ValueError:
+                continue
+            if raw_path.is_file():
+                safe_name = Path(item.source_file_name or raw_path.name).name
+                archive.write(raw_path, f"raw/{item.id}-{safe_name}", compress_type=zipfile.ZIP_STORED)
+    return FileResponse(archive_path, filename="thrust-my-data.zip", media_type="application/zip", background=BackgroundTask(archive_path.unlink, missing_ok=True))
+
+
+def _data_request_response(item: StudentDataRequest, user: AdminUser | None = None, participant: Participant | None = None) -> dict:
+    return {
+        "id": item.id, "request_type": item.request_type, "details": item.details, "status": item.status,
+        "response_note": item.response_note, "created_at": item.created_at, "updated_at": item.updated_at,
+        "requester_email": (user.email or user.username) if user else None,
+        "participant_code": participant.participant_code if participant else None,
+    }
+
+
+@router.get("/data-requests", response_model=list[StudentDataRequestResponse])
+async def list_own_data_requests(
+    auth: AuthContext = Depends(require_authenticated),
+    db: AsyncSession = Depends(get_db),
+) -> list[dict]:
+    student = require_student(auth).user
+    items = await db.scalars(select(StudentDataRequest).where(StudentDataRequest.user_id == student.id).order_by(StudentDataRequest.created_at.desc()))
+    return [_data_request_response(item) for item in items]
+
+
+@router.post("/data-requests", response_model=StudentDataRequestResponse, status_code=201)
+async def create_data_request(
+    payload: StudentDataRequestCreate,
+    auth: AuthContext = Depends(require_user_csrf),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    student = require_student(auth).user
+    item = StudentDataRequest(user_id=student.id, request_type=payload.request_type, details=payload.details.strip() if payload.details else None)
+    db.add(item)
+    await db.commit()
+    await db.refresh(item)
+    return _data_request_response(item)
 
 
 @router.get("/consents")

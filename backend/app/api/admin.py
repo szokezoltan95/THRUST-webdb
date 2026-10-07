@@ -3,6 +3,7 @@ import math
 import secrets
 import string
 from pathlib import Path
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import FileResponse
@@ -18,10 +19,10 @@ from app.core.live_updates import publish_measurements_updated
 from app.core.live_updates import (client_for_disconnect, connected_clients_snapshot,
                                    notify_web_disconnect, request_measure_disconnect, unregister_client)
 from app.db.session import get_db
-from app.models import AdminSession, AdminUser, Measurement, HumanModelResult, Participant, TestDefinition, ParticipantGroup
+from app.models import AdminSession, AdminUser, Measurement, HumanModelResult, Participant, TestDefinition, ParticipantGroup, StudentDataRequest
 from app.schemas.participant_group import ParticipantGroupCreate, ParticipantGroupUpdate
 from app.schemas.participant import ParticipantCreate, ParticipantResponse, ParticipantUpdate, RegisteredStudentResponse
-from app.schemas.user_admin import AccountPasswordReset, AccountRoleUpdate, AdminAccountResponse
+from app.schemas.user_admin import AccountPasswordReset, AccountRoleUpdate, AdminAccountResponse, StudentDataRequestResponse, StudentDataRequestUpdate
 from app.core.security import hash_password
 from app.schemas.measurement import MeasurementCreate, MeasurementResponse
 from app.schemas.test_definition import TestDefinitionCreate, TestDefinitionResponse, TestDefinitionUpdate
@@ -286,8 +287,58 @@ async def reset_account_password(
     if target.id == auth.user.id or effective_role(target) == "superadmin":
         raise HTTPException(status_code=409, detail="Heslo superadmin účtu nemožno resetovať cez toto rozhranie.")
     target.password_hash = hash_password(payload.password)
+    target.must_change_password = target.role == "student"
     await db.execute(delete(AdminSession).where(AdminSession.user_id == target.id))
     await db.commit()
+
+
+@router.get("/data-requests", response_model=list[StudentDataRequestResponse])
+async def list_student_data_requests(
+    auth: AuthContext = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+) -> list[dict]:
+    result = await db.execute(
+        select(StudentDataRequest, AdminUser, Participant)
+        .join(AdminUser, AdminUser.id == StudentDataRequest.user_id)
+        .outerjoin(Participant, Participant.id == AdminUser.participant_id)
+        .order_by(StudentDataRequest.created_at.desc())
+    )
+    return [
+        {
+            "id": item.id, "request_type": item.request_type, "details": item.details,
+            "status": item.status, "response_note": item.response_note,
+            "created_at": item.created_at, "updated_at": item.updated_at,
+            "requester_email": user.email or user.username,
+            "participant_code": participant.participant_code if participant else None,
+        }
+        for item, user, participant in result.all()
+    ]
+
+
+@router.patch("/data-requests/{request_id}", response_model=StudentDataRequestResponse)
+async def update_student_data_request(
+    request_id: str,
+    payload: StudentDataRequestUpdate,
+    auth: AuthContext = Depends(require_csrf),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    item = await db.get(StudentDataRequest, request_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="Žiadosť neexistuje.")
+    item.status = payload.status
+    item.response_note = payload.response_note
+    item.handled_by_user_id = auth.user.id
+    item.updated_at = datetime.now(timezone.utc)
+    await db.commit()
+    user = await db.get(AdminUser, item.user_id)
+    participant = await db.get(Participant, user.participant_id) if user and user.participant_id else None
+    return {
+        "id": item.id, "request_type": item.request_type, "details": item.details,
+        "status": item.status, "response_note": item.response_note,
+        "created_at": item.created_at, "updated_at": item.updated_at,
+        "requester_email": (user.email or user.username) if user else None,
+        "participant_code": participant.participant_code if participant else None,
+    }
 
 
 @router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)

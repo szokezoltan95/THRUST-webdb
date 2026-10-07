@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
-from fastapi import Cookie, Depends, Header, HTTPException, status
+from fastapi import Cookie, Depends, Header, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -26,6 +26,7 @@ def effective_role(user: AdminUser) -> str:
 
 
 async def require_session(
+    request: Request,
     thrust_session: str | None = Cookie(default=None),
     db: AsyncSession = Depends(get_db),
 ) -> AuthContext:
@@ -43,6 +44,10 @@ async def require_session(
     session_record, user = row
     if not user.is_active or session_record.expires_at <= datetime.now(timezone.utc):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
+    if user.role == "student" and user.must_change_password and request.url.path not in {
+        "/api/auth/me", "/api/auth/logout", "/api/student/password",
+    }:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Najprv si zmeň dočasné heslo.")
     return AuthContext(user=user, session=session_record)
 
 
