@@ -2622,8 +2622,10 @@ textarea {
 .security-backup-row { display: grid; grid-template-columns: minmax(140px, 1fr) minmax(100px, 1fr) 95px 110px; gap: 8px; padding: 8px 4px; border-bottom: 1px solid var(--line); font-size: .76rem; }
 .security-list-head { position: sticky; top: 0; background: var(--surface); color: var(--text-muted); }
 .security-tab-requests { display: flex; overflow: hidden; }
-.security-tab-requests > .data-protection-page { display: flex; flex: 0 1 auto; flex-direction: column; min-height: 0; width: min(100%, 1220px); align-self: flex-start; }
-.security-tab-requests .data-protection-list { align-content: start; }
+.security-tab-requests { display: flex; flex-direction: column; }
+.security-tab-requests > .data-protection-page { display: flex; flex: 0 1 auto; flex-direction: column; min-height: 0; max-height: 100%; overflow: auto; width: min(100%, 1220px); align-self: flex-start; }
+/* The queue has intrinsic height; the old standalone workspace rule used a zero flex basis. */
+.workspace[data-admin-section="privacy"] .security-tab-requests .data-protection-list { flex: 0 1 auto; min-height: 72px; max-height: 460px; grid-auto-rows: max-content; align-content: start; }
 .security-tab-audit { display: flex; overflow: hidden; }
 .security-audit-panel { display: flex; flex-direction: column; flex: 1 1 0; min-height: 0; margin: 0; }
 .security-audit-filters { display: flex; align-items: flex-end; gap: 8px; margin: 8px 0; flex-wrap: wrap; }
