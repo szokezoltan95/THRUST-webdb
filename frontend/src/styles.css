@@ -2497,23 +2497,43 @@ textarea {
 }
 
 .student-shell {
-  height: 100dvh;
-  min-height: 0;
-  overflow: hidden;
+  height: auto;
+  min-height: 100dvh;
+  overflow: visible;
 }
 
 .student-shell > .student-workspace {
-  flex: 1 1 0;
+  flex: 1 0 auto;
   min-height: 0;
   height: auto;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .student-shell .student-content {
   min-height: 0;
-  overflow: auto;
-  overscroll-behavior: contain;
-  scrollbar-width: thin;
+  overflow: visible;
+}
+
+/* Students use document scrolling; the fixed viewport belongs to the admin shell. */
+.student-export-contents { padding-left: 22px; color: var(--text-soft); line-height: 1.6; }
+.student-export-formats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-block: 16px 24px; }
+.student-export-format { display: flex; flex-direction: column; align-items: start; min-width: 0; padding: 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-raised); }
+.student-export-format.recommended { border-color: var(--accent); }
+.student-export-format h4 { margin: 0; font-size: 1rem; }
+.student-export-format p { font-size: .86rem; line-height: 1.55; overflow-wrap: anywhere; }
+.student-export-format > button { margin-top: auto; }
+.student-export-format-heading { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.student-export-format-heading span { color: var(--accent); font-size: .72rem; font-weight: 650; }
+.student-export-portability, .student-data-assistance { margin-block: 20px; padding-top: 14px; border-top: 1px solid var(--line); }
+.student-data-self-service { display: flex; flex-wrap: wrap; gap: 8px; }
+.student-primary-requests { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.student-data-management .notice { margin-top: 0; }
+@media (max-width: 1000px) {
+  .student-export-formats, .student-primary-requests { grid-template-columns: 1fr; }
+  .student-primary-requests .data-request-option { min-height: 0; }
+}
+@media (max-width: 700px) {
+  .student-shell .student-sidebar { position: static; }
 }
 
 @media (max-width: 800px) {

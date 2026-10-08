@@ -2419,6 +2419,8 @@ function StudentPortal({ user, onLogout, onPasswordChanged, accentTheme, colorMo
   const [onboardingOpen, setOnboardingOpen] = useState(false);
   const [profileMessage, setProfileMessage] = useState("");
 
+  useEffect(() => { window.scrollTo(0, 0); }, [studentPage, accountSection, privacySection]);
+
   useEffect(() => {
     setError("");
     setConsentMessage("");
@@ -2578,7 +2580,7 @@ function StudentPortal({ user, onLogout, onPasswordChanged, accentTheme, colorMo
         {consentMessage && <p className="notice">{consentMessage}</p>}
       </section>}
 
-      {studentPage === "account" && accountSection === "privacy" && privacySection !== "consents" && <StudentDataManagement csrfToken={user.csrf_token} privacySection={privacySection} setPrivacySection={setPrivacySection} />}
+      {studentPage === "account" && accountSection === "privacy" && privacySection !== "consents" && <StudentDataManagement csrfToken={user.csrf_token} privacySection={privacySection} setPrivacySection={setPrivacySection} onEditProfile={() => { setAccountSection("profile"); setEditingProfile(true); }} />}
       </section>
     </div>
     {consentDialog && consentTexts && <ConsentTextDialog kind={consentDialog} document={activeConsentDocument || consentTexts[consentDialog]} onClose={() => { setConsentDialog(null); setActiveConsentDocument(null); }} />}
@@ -2610,7 +2612,7 @@ function PasswordChangePanel({ csrfToken, forced = false, onChanged }: { csrfTok
   return <section className={`panel password-change-panel${forced ? " forced" : ""}`}><div className="eyebrow">{t("ZABEZPEČENIE")}</div><h2>{forced ? t("Zmeň si dočasné heslo") : t("Zmena hesla")}</h2><p className="muted">{forced ? t("Pred pokračovaním si nastav vlastné heslo.") : t("Na zmenu hesla zadaj svoje aktuálne heslo a nové heslo s dĺžkou aspoň 10 znakov.")}</p><form className="password-change-form" onSubmit={submit}><label>{t("Aktuálne heslo")}<input type="password" name="current_password" autoComplete="current-password" required /></label><label>{t("Nové heslo")}<input type="password" name="new_password" autoComplete="new-password" minLength={10} maxLength={1024} required /></label><label>{t("Potvrdiť nové heslo")}<input type="password" name="confirm_password" autoComplete="new-password" minLength={10} maxLength={1024} required /></label><div className="profile-editor-actions"><span className={isError ? "error" : "muted"}>{message}</span><button className="primary compact" disabled={saving}>{saving ? t("Ukladám…") : t("Zmeniť heslo")}</button></div></form></section>;
 }
 
-function StudentDataManagement({ csrfToken, privacySection, setPrivacySection }: { csrfToken: string; privacySection: "export" | "requests" | "information"; setPrivacySection: (section: "export" | "requests" | "information") => void }) {
+function StudentDataManagement({ csrfToken, privacySection, setPrivacySection, onEditProfile }: { csrfToken: string; privacySection: "export" | "requests" | "information"; setPrivacySection: (section: "export" | "requests" | "information") => void; onEditProfile: () => void }) {
   const { language } = useLanguage();
   const [privacyInformation, setPrivacyInformation] = useState<PrivacyInformation | null>(null);
   const [privacyError, setPrivacyError] = useState("");
@@ -2625,14 +2627,23 @@ function StudentDataManagement({ csrfToken, privacySection, setPrivacySection }:
   const [message, setMessage] = useState("");
   const [details, setDetails] = useState("");
   const [exporting, setExporting] = useState<string | null>(null);
-  useEffect(() => { request<StudentDataRequest[]>("/api/student/data-requests").then(setRequests).catch((reason) => setMessage(reason instanceof Error ? reason.message : t("Žiadosti sa nepodarilo načítať."))); }, []);
+  useEffect(() => {
+    if (privacySection !== "requests") return;
+    let active = true;
+    request<StudentDataRequest[]>("/api/student/data-requests").then((items) => { if (active) setRequests(items); }).catch((reason) => { if (active) setMessage(reason instanceof Error ? reason.message : t("Žiadosti sa nepodarilo načítať.")); });
+    return () => { active = false; };
+  }, [privacySection]);
+  const selectedOption = dataRequestOptions.find((option) => option.type === requestType);
+  const assistanceSelected = requestType === "access" || requestType === "rectification" || requestType === "portability";
+  function selectRequest(type: StudentDataRequest["request_type"]) { setRequestType(type); setDetails(""); setMessage(""); }
+  function openAssistance(type: StudentDataRequest["request_type"] = "access") { selectRequest(type); setPrivacySection("requests"); }
   async function download(format: "json" | "csv" | "zip") {
     setExporting(format); setMessage("");
     try {
       const response = await fetch(`/api/student/data-export?format=${format}`, { credentials: "same-origin" });
       if (!response.ok) { const body = await response.json().catch(() => null) as { detail?: string } | null; throw new Error(body?.detail || t("Export sa nepodarilo vytvoriť.")); }
       const blob = await response.blob(); const url = URL.createObjectURL(blob); const anchor = document.createElement("a");
-      anchor.href = url; anchor.download = `thrust-my-data.${format}`; anchor.click(); window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      anchor.href = url; anchor.download = `thrust-my-data.${format}`; anchor.click(); window.setTimeout(() => URL.revokeObjectURL(url), 1000); setMessage(t("Sťahovanie bolo spustené."));
     } catch (reason) { setMessage(reason instanceof Error ? reason.message : t("Export sa nepodarilo vytvoriť.")); }
     finally { setExporting(null); }
   }
@@ -2643,29 +2654,62 @@ function StudentDataManagement({ csrfToken, privacySection, setPrivacySection }:
     setBusy(true); setMessage("");
     try {
       const created = await request<StudentDataRequest>("/api/student/data-requests", { method: "POST", headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken }, body: JSON.stringify({ request_type: requestType, details: details.trim() || null }) });
-      setRequests((current) => [created, ...current]); setDetails(""); setMessage(t("Žiadosť bola odoslaná."));
+      setRequests((current) => [created, ...current]); setDetails(""); setRequestType(null); setMessage(t("Žiadosť bola odoslaná."));
     } catch (reason) { setMessage(reason instanceof Error ? reason.message : t("Žiadosť sa nepodarilo odoslať.")); }
     finally { setBusy(false); }
   }
   return <section className="student-data-management">
-    {privacySection === "export" && <section className="panel"><div className="eyebrow">{t("TVOJE ÚDAJE")}</div><h2>{t("Stiahnuť moje údaje")}</h2><p className="muted">{t("Export obsahuje iba údaje priradené k tvojmu účtu. ZIP obsahuje aj dostupné raw súbory; prihlasovacie tajomstvá a údaje iných účastníkov sa neexportujú.")}</p><div className="actions"><button className="quiet" disabled={exporting !== null} onClick={() => void download("json")}>{exporting === "json" ? t("Pripravujem…") : t("Stiahnuť JSON")}</button><button className="quiet" disabled={exporting !== null} onClick={() => void download("csv")}>{exporting === "csv" ? t("Pripravujem…") : t("Stiahnuť CSV")}</button><button className="primary" disabled={exporting !== null} onClick={() => void download("zip")}>{exporting === "zip" ? t("Pripravujem…") : t("Stiahnuť ZIP")}</button></div></section>}
+    {privacySection === "export" && <section className="panel student-export-panel">
+      <div className="eyebrow">{t("TVOJE ÚDAJE")}</div><h2>{t("Stiahnuť moje údaje")}</h2>
+      <p>{t("Tu si môžeš bez žiadosti správcovi stiahnuť kópiu údajov priradených k tvojmu účtu. Môžeš si ich skontrolovať, uložiť pre vlastnú potrebu alebo odovzdať inej službe či výskumnému pracovisku.")}</p>
+      <h3>{t("Čo obsahuje export")}</h3>
+      <ul className="student-export-contents">
+        <li>{t("Údaje účtu a účastníckeho profilu vrátane e-mailu, prezývky a vyplnených odpovedí.")}</li>
+        <li>{t("Udelené súhlasy: uložené znenie, verzia, dátum udelenia a prípadného odvolania.")}</li>
+        <li>{t("Tvoje merania: dátumy, stav, základné údaje o teste a uložené výsledky analýzy.")}</li>
+        <li>{t("V ZIP archíve aj dostupné pôvodné súbory meraní (raw), ktoré sú uložené na serveri.")}</li>
+      </ul>
+      <h3>{t("Ktorý formát si vybrať")}</h3>
+      <div className="student-export-formats">
+        <article className="student-export-format recommended"><div className="student-export-format-heading"><h4>ZIP</h4><span>{t("Odporúčané")}</span></div><p>{t("Najúplnejšia kópia na uloženie. Archív obsahuje data.json, data.csv a priečinok raw s dostupnými súbormi meraní.")}</p><p className="muted">{t("ZIP rozbalíš v bežnom správcovi súborov. Pôvodné merania môžu byť ďalej komprimované ako .gz; na čítanie ich treba rozbaliť samostatne.")}</p><button type="button" className="primary" disabled={exporting !== null} onClick={() => void download("zip")}>{exporting === "zip" ? t("Pripravujem…") : t("Stiahnuť ZIP")}</button></article>
+        <article className="student-export-format"><h4>JSON</h4><p>{t("Štruktúrované údaje pre ďalšie spracovanie v programe alebo prenos do iného systému. Zachováva aj vnorené výsledky analýzy a údaje o súhlasoch.")}</p><p className="muted">{t("Otvoríš ho v textovom editore alebo načítaš napríklad v Pythone. Obsahuje záznamy o raw súboroch, samotné súbory sú iba v ZIP.")}</p><button type="button" className="quiet" disabled={exporting !== null} onClick={() => void download("json")}>{exporting === "json" ? t("Pripravujem…") : t("Stiahnuť JSON")}</button></article>
+        <article className="student-export-format"><h4>CSV</h4><p>{t("Tabuľkový výpis pre Excel alebo LibreOffice. Každý riadok obsahuje typ záznamu, identifikátor, názov poľa a jeho hodnotu; jedno meranie preto zaberá viac riadkov.")}</p><p className="muted">{t("Pri importe zvoľ UTF-8 a oddeľovač čiarku. Zložité výsledky sú zapísané ako JSON v jednej bunke; CSV neobsahuje pôvodné raw súbory.")}</p><button type="button" className="quiet" disabled={exporting !== null} onClick={() => void download("csv")}>{exporting === "csv" ? t("Pripravujem…") : t("Stiahnuť CSV")}</button></article>
+      </div>
+      <div className="student-export-portability"><h3>{t("Ako funguje prenositeľnosť údajov")}</h3><p>{t("Prenositeľnosť znamená, že údaje môžeš získať v strojovo čitateľnej podobe a použiť ich inde. Pre vlastný prenos si stiahni JSON alebo ZIP a poskytni ho vybranému príjemcovi; prijímajúci systém musí vedieť tento formát spracovať.")}</p><p className="muted">{t("Ak potrebuješ priamy prenos od nás inému prevádzkovateľovi, napíš správcovi, komu a ktoré údaje chceš odovzdať. Správca posúdi rozsah a technickú možnosť prenosu.")}</p><button type="button" className="quiet compact" onClick={() => openAssistance("portability")}>{t("Požiadať o priamy prenos")}</button></div>
+      <p className="muted">{t("Stiahnutie údaje nemení ani nemaže a neodvoláva súhlasy. Export neobsahuje heslá, prihlasovacie tokeny ani údaje iných účastníkov.")}</p>
+      <p className="muted">{t("Súbor môže obsahovať osobné údaje. Ulož ho na bezpečné miesto a zdieľaj ho len s príjemcom, ktorého si vyberieš.")}</p>
+      <div className="actions"><button type="button" className="quiet compact" onClick={() => openAssistance()}>{t("Chýbajú údaje alebo sťahovanie nefunguje?")}</button><button type="button" className="quiet compact" onClick={onEditProfile}>{t("Opraviť údaje v profile")}</button></div>
+    </section>}
     {privacySection === "information" && <section className="panel"><div className="eyebrow">{t("OCHRANA OSOBNÝCH ÚDAJOV")}</div><h2>{t("Informácie o spracúvaní")}</h2>{privacyError && <p className="error">{privacyError}</p>}{privacyInformation ? <><dl className="privacy-info-list">{[
       [t("Prevádzkovateľ a kontaktné údaje"), [privacyInformation.controller_name, privacyInformation.controller_address, privacyInformation.controller_email, privacyInformation.dpo_contact].filter(Boolean).join(" · ")],
       [t("Účely a právne základy spracúvania"), privacyInformation.purposes],
       [t("Príjemcovia a sprostredkovatelia"), privacyInformation.recipients],
     ].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value || t("Bude doplnené po dohode s DPO.")}</dd></div>)}</dl><h3>{t("Lehoty uchovávania")}</h3><dl className="privacy-info-list privacy-retention-list">{privacyInformation.retention.map((item) => <div key={item.key}><dt>{item.label}</dt><dd>{item.period || t("Lehota sa doplní po dohode s DPO.")}</dd></div>)}</dl></> : !privacyError && <p className="muted">{t("Načítavam…")}</p>}</section>}
-    {privacySection === "requests" && <section className="panel"><div className="eyebrow">{t("TVOJE PRÁVA")}</div><h2>{t("Požiadať o vybavenie žiadosti")}</h2><p className="muted">{t("Vyber oblasť žiadosti. Pred odoslaním si môžeš prečítať, čo žiadosť znamená a aké môže mať dôsledky.")}</p>
-      {requestType === null ? <div className="data-request-options">{dataRequestOptions.map((option) => <button type="button" className={`data-request-option data-request-option-${option.type}`} key={option.type} onClick={() => { setRequestType(option.type); setMessage(""); }}><span className="eyebrow">{t(option.tag)}</span><strong>{dataRequestTypeLabel(option.type)}</strong><span>{t(option.summary)}</span><small>{t(option.consequence)}</small><span className="data-request-option-cta">{t("Vybrať žiadosť")} →</span></button>)}</div> : <div className="data-request-selected"><button type="button" className="quiet compact data-request-back" onClick={() => setRequestType(null)}>← {t("Späť na možnosti")}</button><div className="data-request-guidance"><div className="eyebrow">{t("ČO ŽIADOSŤ ZNAMENÁ")}</div><h3>{dataRequestTypeLabel(requestType)}</h3><p>{t(dataRequestOptions.find((option) => option.type === requestType)!.summary)}</p><p className="muted">{t(dataRequestOptions.find((option) => option.type === requestType)!.consequence)}</p></div><form className="data-request-form" onSubmit={submitRequest}><label>{t("Poznámka (nepovinné)")}<textarea rows={3} maxLength={4000} value={details} onChange={(event) => setDetails(event.target.value)} placeholder={t("Uveď, ktorých údajov alebo meraní sa žiadosť týka.")} /></label><div className="actions"><button className="primary compact" disabled={busy}>{busy ? t("Odosielam…") : t("Odoslať žiadosť")}</button></div></form></div>}
-      {message && <p className="notice">{message}</p>}<div className="data-request-list"><h3>{t("Moje žiadosti")}</h3>{requests.length ? requests.map((item) => <article key={item.id}><div><strong>{dataRequestTypeLabel(item.request_type)}</strong><small>{formatDateTime(item.created_at)}</small></div><span className={`request-status request-status-${item.status}`}>{dataRequestStatusLabel(item.status)}</span>{item.details && <p>{item.details}</p>}{item.response_note && <p className="muted">{t("Odpoveď správcu:")} {item.response_note}</p>}</article>) : <p className="muted">{t("Zatiaľ nemáš odoslané žiadosti.")}</p>}</div></section>}
+    {privacySection === "requests" && <section className="panel"><div className="eyebrow">{t("TVOJE PRÁVA")}</div><h2>{t("Požiadať o vybavenie žiadosti")}</h2>
+      {requestType === null ? <>
+        <p className="muted">{t("Údaje si môžeš stiahnuť a profil opraviť samostatne. Žiadosť pošli, keď potrebuješ zásah správcu.")}</p>
+        <div className="student-data-self-service"><button type="button" className="quiet" onClick={() => { setMessage(""); setPrivacySection("export"); }}>{t("Stiahnuť moje údaje")}</button><button type="button" className="quiet" onClick={onEditProfile}>{t("Opraviť údaje v profile")}</button></div>
+        <div className="data-request-options student-primary-requests">{dataRequestOptions.filter((option) => option.type === "erasure" || option.type === "restriction" || option.type === "objection").map((option) => <button type="button" className={`data-request-option data-request-option-${option.type}`} key={option.type} onClick={() => selectRequest(option.type)}><span className="eyebrow">{t(option.tag)}</span><strong>{dataRequestTypeLabel(option.type)}</strong><span>{t(option.summary)}</span><small>{t(option.consequence)}</small><span className="data-request-option-cta">{t("Vybrať žiadosť")} →</span></button>)}</div>
+        <div className="student-data-assistance"><p className="muted">{t("Chýba údaj v exporte, potrebuješ opraviť meranie alebo dohodnúť priamy prenos inému prevádzkovateľovi? Napíš správcovi cez pomoc s údajmi.")}</p><button type="button" className="quiet compact" onClick={() => openAssistance()}>{t("Potrebujem pomoc s údajmi")}</button></div>
+      </> : selectedOption && <div className="data-request-selected">
+        <button type="button" className="quiet compact data-request-back" disabled={busy} onClick={() => { setRequestType(null); setDetails(""); setMessage(""); }}>← {t("Späť na možnosti")}</button>
+        <div className="data-request-guidance"><div className="eyebrow">{t("ČO ŽIADOSŤ ZNAMENÁ")}</div><h3>{assistanceSelected ? t("Pomoc s údajmi") : dataRequestTypeLabel(requestType)}</h3><p>{t(selectedOption.summary)}</p><p className="muted">{t(selectedOption.consequence)}</p></div>
+        <form className="data-request-form" onSubmit={submitRequest}>
+          {assistanceSelected && <label>{t("S čím potrebuješ pomôcť?")}<select value={requestType} disabled={busy} onChange={(event) => selectRequest(event.target.value as StudentDataRequest["request_type"])}><option value="access">{t("Chýbajúce údaje alebo problém so stiahnutím")}</option><option value="rectification">{t("Oprava údaja, ktorý neviem zmeniť v profile")}</option><option value="portability">{t("Priamy prenos inému prevádzkovateľovi")}</option></select></label>}
+          <label>{assistanceSelected ? t("Popíš požiadavku") : t("Poznámka (nepovinné)")}<textarea rows={3} maxLength={4000} required={assistanceSelected} disabled={busy} value={details} onChange={(event) => setDetails(event.target.value)} placeholder={requestType === "portability" ? t("Uveď príjemcu, jeho kontakt a ktoré údaje chceš preniesť.") : t("Uveď, ktorých údajov alebo meraní sa žiadosť týka.")} /></label><div className="actions"><button className="primary compact" disabled={busy || (assistanceSelected && !details.trim())}>{busy ? t("Odosielam…") : t("Odoslať žiadosť")}</button></div>
+        </form>
+      </div>}
+      <div className="data-request-list"><h3>{t("Moje žiadosti")}</h3>{requests.length ? requests.map((item) => <article key={item.id}><div><strong>{dataRequestTypeLabel(item.request_type)}</strong><small>{formatDateTime(item.created_at)}</small></div><span className={`request-status request-status-${item.status}`}>{dataRequestStatusLabel(item.status)}</span>{item.details && <p>{item.details}</p>}{item.response_note && <p className="muted">{t("Odpoveď správcu:")} {item.response_note}</p>}</article>) : <p className="muted">{t("Zatiaľ nemáš odoslané žiadosti.")}</p>}</div></section>}
+    {message && <p className="notice" role="status">{message}</p>}
   </section>;
 }
 
 const dataRequestOptions: { type: StudentDataRequest["request_type"]; tag: string; summary: string; consequence: string }[] = [
-  { type: "access", tag: "ZÍSKAŤ INFORMÁCIE", summary: "Požiadaš o potvrdenie, či spracúvame tvoje údaje, a o prístup k nim.", consequence: "Dostaneš informácie alebo kópiu dostupných údajov. Samotná žiadosť ich nemení ani nemaže." },
-  { type: "rectification", tag: "OPRAVIŤ ÚDAJE", summary: "Požiadaš o opravu alebo doplnenie údajov, ktoré sú nesprávne či neúplné.", consequence: "Správca môže potrebovať upresnenie, ktoré údaje treba opraviť. Po potvrdení sa oprava zaznamená v profile." },
+  { type: "access", tag: "ZÍSKAŤ INFORMÁCIE", summary: "Napíš, ak v stiahnutej kópii chýbajú údaje, sťahovanie nefunguje alebo potrebuješ ďalšie informácie o spracúvaní.", consequence: "Správca preverí požiadavku a poskytne dostupné údaje alebo vysvetlenie. Bežnú kópiu si môžeš stiahnuť priamo v sekcii Stiahnutie." },
+  { type: "rectification", tag: "OPRAVIŤ ÚDAJE", summary: "Požiadaj o opravu údajov, ktoré nevieš upraviť sám, napríklad chybne priradeného merania.", consequence: "E-mail, prezývku a odpovede upravíš priamo v profile. Pri inom údaji opíš chybu a požadovanú opravu; správca ju preverí." },
   { type: "erasure", tag: "VYMAZAŤ ÚDAJE", summary: "Požiadaš o odstránenie osobných údajov spojených s tvojím účtom.", consequence: "Žiadosť sa najprv posúdi. Ak sa výmaz vykoná, odstránené údaje už nemusí byť možné obnoviť; niektoré údaje môžu zostať, ak na to existuje dôvod." },
   { type: "restriction", tag: "OBMEDZIŤ SPRACÚVANIE", summary: "Požiadaš o dočasné obmedzenie používania určitých údajov počas posudzovania situácie.", consequence: "Správca žiadosť posúdi a môže ťa kontaktovať. Obmedzenie môže dočasne ovplyvniť ďalšiu účasť alebo používanie účtu." },
-  { type: "portability", tag: "PRENIESŤ ÚDAJE", summary: "Požiadaš o údaje, ktoré sa dajú poskytnúť v štruktúrovanej elektronickej podobe.", consequence: "Správca posúdi rozsah a vhodný formát. Prenos údajov sám osebe nevymaže tvoje údaje z WebDB." },
+  { type: "portability", tag: "PRENIESŤ ÚDAJE", summary: "Požiadaj o priamy prenos vybraných údajov od nás inému prevádzkovateľovi. Uveď príjemcu, kontakt a požadovaný rozsah.", consequence: "Správca posúdi podmienky a technickú možnosť prenosu a dohodne ďalší postup. Pre vlastný prenos použi JSON alebo ZIP v sekcii Stiahnutie. Prenos údaje z WebDB nemaže." },
   { type: "objection", tag: "VZNIESŤ NÁMIETKU", summary: "Požiadaš o posúdenie námietky voči určitému spracúvaniu tvojich údajov.", consequence: "Uveď, ktorého spracúvania sa námietka týka. Správca ju individuálne posúdi a oznámi ďalší postup." },
 ];
 
