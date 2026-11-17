@@ -73,3 +73,18 @@ Do not commit `.env`, certificates, database dumps, participant mappings, access
 ## License
 
 Copyright © 2026 Zoltán Szőke. Source code is licensed under the [MIT License](LICENSE). Third-party assets and dependencies retain their own applicable terms.
+
+### Optional LF DS Hub reverse proxy
+
+Use this overlay with the HTTPS deployment to serve LF DS Hub at `/dronesoccer/`.
+Run `docker network inspect thrust_hub_proxy` and create it with
+`docker network create thrust_hub_proxy` if missing. Start the hub with its
+`compose.thrust.yml` overlay, then apply the THRUST configuration:
+
+```sh
+docker compose -f docker-compose.yml -f docker-compose.https.yml -f docker-compose.lf-ds-hub.yml up -d --no-deps frontend
+```
+
+Keep the overlay in future HTTPS operations. To remove the route, recreate the
+frontend using only `docker-compose.yml` and `docker-compose.https.yml`. The
+hub is looked up at request time, so it can restart independently of THRUST.
