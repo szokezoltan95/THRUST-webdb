@@ -74,17 +74,17 @@ Do not commit `.env`, certificates, database dumps, participant mappings, access
 
 Copyright © 2026 Zoltán Szőke. Source code is licensed under the [MIT License](LICENSE). Third-party assets and dependencies retain their own applicable terms.
 
-### Optional LF DS Hub reverse proxy
+### LF DS Hub reverse proxy
 
-Use this overlay with the HTTPS deployment to serve LF DS Hub at `/dronesoccer/`.
-Run `docker network inspect thrust_hub_proxy` and create it with
-`docker network create thrust_hub_proxy` if missing. Start the hub with its
-`compose.thrust.yml` overlay, then apply the THRUST configuration:
+The HTTPS configuration includes the route at `/dronesoccer/` and creates the
+`thrust_webdb_hub_proxy` network. Apply the change to a running installation with:
 
 ```sh
-docker compose -f docker-compose.yml -f docker-compose.https.yml -f docker-compose.lf-ds-hub.yml up -d --no-deps frontend
+docker compose -f docker-compose.yml -f docker-compose.https.yml up -d --no-deps frontend
 ```
 
-Keep the overlay in future HTTPS operations. To remove the route, recreate the
-frontend using only `docker-compose.yml` and `docker-compose.https.yml`. The
-hub is looked up at request time, so it can restart independently of THRUST.
+Start LF DS Hub separately with its `compose.thrust.yml` overlay after starting
+the HTTPS frontend. The hub is resolved at request time, so WebDB can start
+before the hub and keep serving its own routes while the hub is unavailable.
+Remove `docker-compose.lf-ds-hub.yml` from any existing deployment command and
+update the hub checkout to join the new network.
